@@ -1,0 +1,620 @@
+# Harvard Graphics 3.05 file format spec
+
+Nov 24, 2026 · @William Witt
+
+## 1. Scope and how to read this spec
+
+This document describes the files read by the Harvard Graphics 3.05 (1992, DOS) Screen Show Projector, and how a viewer should present them, so that a new viewer (for example in a browser) can be written without reference to the original program code.
+
+**What it covers**
+
+- The record container shared by every Harvard Graphics 3 document file.
+- Show files (.SH3): the slide list, file references, keys and HyperShow buttons.
+- Chart files (.CH3): page setup, text, chart data for each chart type, and the drawn object layer.
+- Palette files (.PL3, .PC3): colour roles and RGB values.
+- The coordinate system, colour model, and font and bitmap dependencies.
+
+**What it does not cover**
+
+- The installer, the editor (HG3.EXE) and its own file types, and output drivers.
+- Exact pixel output of the original program. No reference renders were available, so drawing rules are given at the level the data supports.
+
+**How this spec was written**
+
+This is the clean side of a clean-room process. The analyst examined the original program and its sample files, and wrote down only behaviour and data layout, in their own words. No program code, disassembly or decompiled code appears here, and none should be sought by the implementer. Enumeration names listed here are the user-visible names the program shows in its menus.
+
+**Confidence marks**
+
+- **\[C\] Confirmed:** checked against every relevant sample file supplied (238 charts, 13 shows, the palettes), or verified by recomputing one field from another (for example a bounding box from geometry).
+- **\[I\] Inferred:** consistent with the samples but not proven; a reasonable reading that a viewer can start from and adjust.
+- **\[?\] Unknown:** the field exists and its size is known, but its meaning is not. A viewer should read and skip it.
+
+**Conventions**
+
+- All integers are little-endian. u8/u16/u32 are unsigned; i16 is signed 16-bit.
+- f32 and f64 are IEEE 754 single and double precision, little-endian.
+- A "string" is NUL-terminated 8-bit text in the IBM PC code page 437 unless noted. A "padded string\[n\]" occupies exactly n bytes, NUL-terminated, with the rest filled with NUL or spaces.
+- Offsets are in bytes from the start of the record's data, not counting its 4-byte header.
+- Tag numbers are given in decimal; sub-tags inside objects are given in hexadecimal (0x1050), because they are easier to read that way.
+
+## 2. The Projector and the files it uses
+
+The Projector (HG3SHOW) plays a screen show: it opens a show file, then displays each slide in turn, with a transition, until the show ends or the viewer quits. Each slide is normally a chart file; a slide may also be another show, a sound file or a bitmap. Keys and HyperShow buttons can jump between slides.
+
+**Files a viewer needs** \[C\]
+
+| File | What it is | Needed by a modern viewer? |
+| --- | --- | --- |
+| \*.SH3 | Show: ordered list of slides plus key and button tables | Yes |
+| \*.CH3 | Chart: one page of text, chart data and drawn objects | Yes |
+| \*.PL3 | Palette: named colour roles and their RGB values | Yes (charts name one, usually HG3.PL3) |
+| \*.PC3 | Custom palette, same layout as PL3 | Yes, if referenced |
+| HG3.FGF | Font index: maps a font key to a font file and a character table | Yes, or an equivalent built-in table |
+| BX\*.SPD | Bitstream Speedo outline fonts (Swiss 721, Dutch 801, Geo Slab 712, Monospace 821) | Yes, or substitute fonts |
+| HG?LITE.FN3, HG?BOLD.FN3 | Harvard Graphics stroke fonts (Roman, Sans serif, Script, Gothic), descended from the public-domain Hershey fonts | Yes, or substitute fonts |
+| \*.PCX, \*.PCC | ZSoft PCX bitmaps used as backgrounds, patterns and logos | Yes, if referenced |
+| \*.WAV, \*.MID | Sounds a show can play | Optional |
+| \*.SY3 | Symbol libraries for the editor | Not needed for playback (symbols are copied into charts) \[I\] |
+| \*.SC3, \*.CLR, \*.B&W, \*.IN3 | Screen drivers, screen colour setups, input-device drivers for DOS | No |
+| HG3SHOW.CF3 | Plain-text settings (work, font and data directories, memory use) | No; a viewer can take paths from its own settings |
+| HG3.ERR | Message text for errors | No; see section 7 for the error cases |
+
+File names inside documents are stored in upper or lower case without a directory. Resolve them case-insensitively, first beside the file that names them, then in a configured data directory, then in the font or palette directory. \[I\]
+
+**Font index (HG3.FGF)** \[C\]
+
+- Starts with the 4 ASCII bytes "IDXF" and a u16 entry count (22 in the sample). Entries follow immediately, at offset 6.
+- Each entry is 0x24C (588) bytes long. Within an entry:
+  - offset 0: u16 font source: 3 = Bitstream Speedo outline font, 2 = Harvard Graphics stroke font.
+  - offset 2: u16 font number (for Speedo fonts, the number in the file name BX000nnn.SPD).
+  - offset 4: u16 style word (see below).
+  - offset 6: 4 bytes of classification \[?\].
+  - offset 10: padded string\[48\], the display name, "Family|Style" (for example "Dutch 801|Bold").
+  - offset 58: padded string\[18\], the font file name.
+  - offset 76: 256 u16 values, one per character code 0 to 255, giving the font's own character identifier; 0xFFFF means the font has no glyph for that code. \[I\]
+- The style word: bit 0 set means italic; the low byte encodes weight (0x28 thin, 0x48 light, 0x58 bold for stroke fonts, 0x68 regular, 0x78 medium, 0xA8 bold); the high byte is 0x42 for Speedo fonts and 0x58 for stroke fonts. \[I for the meaning of individual bits, C that the triple identifies the entry\]
+
+A document names a font by the triple (source, number, style word), called the **font key** in this spec. A viewer finds the matching FGF entry and draws with that font. The sample charts use two keys: (3, 3, 0x4268) = Swiss 721 Roman, used almost everywhere, and (3, 13, 0x42A8) = Dutch 801 Bold. \[C\]
+
+Speedo font files follow Bitstream's published Speedo format, which open-source font libraries (for example FreeType's historical Speedo driver and the X11 Speedo rasteriser) can read. The FN3 stroke fonts start with the ASCII signature "FNTF" and a name and credit line; their glyph layout has not been documented here (see section 7).
+
+## 3. Common file structure
+
+Every Harvard Graphics 3 document (chart, show, palette) has the same outer form. This section is confirmed against all 288 document samples (238 .CH3, 13 .SH3, 32 .PL3, 5 .PC3): each one parses exactly to its last byte with the rules below. \[C\]
+
+**Signature**
+
+The first 4 bytes are ASCII:
+
+| Signature | File kind |
+| --- | --- |
+| HGB3 | Chart (.CH3) |
+| HGB1 | Show (.SH3) |
+| HGA2 | Palette (.PL3 and .PC3) |
+
+**Records**
+
+After the signature comes a sequence of records, each:
+
+| Offset | Type | Meaning |
+| --- | --- | --- |
+| 0 | u16 | Tag: what the record is |
+| 2 | u16 | Length of the data that follows, in bytes (may be 0) |
+| 4 | bytes\[length\] | Data |
+
+Read records one after another. The stream ends with a record of tag 1 and length 0, which is also the end of the file. A reader should skip any tag it does not know, using the length, so that unknown records never stop playback. \[C\]
+
+**Version record (tag 0)** \[C\]
+
+Always the first record, 4 bytes: u8 major version (0), u8 3, u8 0, u8 document type. Read the first three bytes together as "version 3.0". The document type byte says what the file holds:
+
+| Type | Document |
+| --- | --- |
+| 0x01 | XY chart (bar, line, area, high/low/close, point and their mixtures) |
+| 0x15 | Pie chart (pie, column, proportional pies) |
+| 0x1A | Organization chart |
+| 0x1F | Title chart |
+| 0x20 | Bullet (list) chart |
+| 0x21 | Table chart |
+| 0x29 | Drawing (free-form drawn objects only) |
+| 0x2E | Show |
+| 0x33 | Palette (.PL3) |
+| 0x34 | Custom palette (.PC3) |
+
+The chart type names are confirmed by which data records appear in each file and by the tutorial and gallery file names (for example PIETUT.CH3 is type 0x15 and ORGTUT.CH3 is type 0x1A). Gallery templates of other kinds (area, high/low, multiple pies) use the same codes with different style settings. \[C for the listed codes; I that no other codes exist\]
+
+**Block markers** \[C\]
+
+Some tags come in pairs that open and close a block, with no data of their own. Blocks nest. A reader can treat them as grouping only.
+
+| Open | Close | Encloses |
+| --- | --- | --- |
+| 500 | 501 | Document header (description and header data) |
+| 504 | 505 | Chart page: everything drawn on the page |
+| 508 | 509 | Chart text and chart data (inside 504/505) |
+| 516 | 517 | Drawn object layer (inside 504/505), see 5.6 |
+| 520 | 521 | Show body: the slide list |
+| 524 | 525 | Palette body |
+| 608 | 610 | A group of drawn objects (may nest) |
+
+Tag 516 is the one exception: it opens the object layer and also carries 16 bytes of data, two bounding boxes of four i16 each (x1, y1, x2, y2) \[I: the first is the extent of all objects, the second is the canvas\].
+
+**Header records (inside 500/501)**
+
+| Tag | Data | Meaning |
+| --- | --- | --- |
+| 400 | string | Document description as typed by the author; may be empty \[C\] |
+| 402 | 684 bytes | Present in charts only; all zero in every sample \[?\] |
+
+**File reference (tag 404)** \[C\]
+
+Used in charts and shows to name another file:
+
+| Offset | Type | Meaning |
+| --- | --- | --- |
+| 0 | u16 | Reference kind |
+| 2 | u16 | Index (slide number for kind 20, otherwise 0) |
+| 4 | string | File name, no directory |
+
+| Kind | Found in | Names |
+| --- | --- | --- |
+| 1 | Charts | A chart drawn as a button face \[I\] (galbutn1.ch3, galbutn2.ch3) |
+| 2 | Charts | The chart's palette file (HG3.PL3, MONOCHRW.PL3 and so on) |
+| 4 | Charts | A page-setup template chart (PORTRAIT.CH3, LANDSCAP.CH3) \[I\] |
+| 5 | Charts | A bitmap used by a drawn object, such as a background or pattern fill (.PCX, .PCC) |
+| 20 | Shows | The file for one slide; the index is the slide number |
+
+When a chart has no kind 2 reference, use HG3.PL3 as its palette. \[I\]
+
+**Number formats seen in data** \[C\]
+
+- Page coordinates and point lists: i16.
+- Chart values and text sizes: f32 in some records and f64 in others, as given per record.
+- An f64 with the bit pattern 0xFFF0000000000000 (negative infinity) means "not set; choose automatically", for example an axis minimum. \[I\]
+
+## 4. Show files (.SH3)
+
+### 4.1 Layout
+
+A show is signature HGB1, version record type 0x2E, a header block (500, 400, 501), then the show body (520 ... 521), then the end record. \[C\]
+
+The show body starts with four settings records, then one group of records per slide, in slide order:
+
+| Tag | Size | Meaning |
+| --- | --- | --- |
+| 708 | 3 | Show settings; "00 01 02" in every sample \[?\] |
+| 710 | 1941 | Show settings; mostly zero \[?\] |
+| 712 | 52 | 4 bytes \[?\], then three 16-byte text style entries (format in 5.3) \[I: styles for show-level text\] |
+| 714 | 2 | Show settings \[?\] |
+| 702 | variable | Slide entry: starts a slide's group |
+| 404 | variable | File reference, kind 20: the slide's file (optional) |
+| 704 | variable | Key table for the slide (optional) |
+| 706 | variable | Button table for the slide (optional) |
+
+A slide's group is its 702 record and every 404, 704 and 706 record after it up to the next 702 or the end of the body. \[C\]
+
+### 4.2 Slide entry (tag 702)
+
+Length is 103 bytes when the description is empty, longer otherwise. \[C\]
+
+| Offset | Type | Meaning | Mark |
+| --- | --- | --- | --- |
+| 0 | u16 | Slide number, counting from 0 in file order | C |
+| 2 | u8 | Kind of slide (table below) | C |
+| 3 | u8 | 0 or 1 \[?\] | ? |
+| 4 | u8 | 0, 3 or 255 \[?\] | ? |
+| 5 | u8 | 0, 1 or 2; may be transition speed (Slow, Medium, Fast) | I |
+| 6 | 5 bytes | Zero in samples | ? |
+| 11 | u8 | 0 to 12; transition into this slide (see 4.5) | I |
+| 12 | u8 | 0 to 18; transition, second effect (see 4.5) | I |
+| 13 | u8 | Zero in samples | ? |
+| 14 | i16 | 0xFFFF in almost all slides, 0 in a few; may be display time, with 0xFFFF meaning "wait for a key" | I |
+| 16 | u8 | Almost always 0 | ? |
+| 17 | u8 | 0, 1 or 3 | ? |
+| 18 | 84 bytes | Zero in samples | ? |
+| 102 | string | Slide description, as shown in the slide list | C |
+
+Kind of slide (offset 2):
+
+| Value | Slide holds | File reference |
+| --- | --- | --- |
+| 0x2E (46) | A show. Slide 0 is always this kind and has no file: it stands for the show itself. A later slide of this kind names a nested .SH3. | none for slide 0, .SH3 otherwise |
+| 0x2D (45) | An empty slide (a placeholder in the list) | none |
+| 0x01, 0x15, 0x1A, 0x1F, 0x20, 0x21, 0x29 | A chart of that document type (section 3) | .CH3 |
+| 0x09 | A digital sound | .WAV |
+| 0x0A | A MIDI music file | .MID |
+
+The kind of a chart slide always equals the document type in the chart file's own version record, so a viewer can trust either. One sample has value 0x9F with no file \[?\]; treat unknown kinds as empty slides. \[C for the table, from 430 slide entries\]
+
+### 4.3 Key table (tag 704)
+
+A list of 4-byte entries; the count is length / 4. \[C for the size\] Each entry assigns a key to a destination:
+
+| Offset | Type | Meaning | Mark |
+| --- | --- | --- | --- |
+| 0 | u8 | ASCII character of the key, or 0 for an extended key | I |
+| 1 | u8 | PC keyboard scan code for an extended key (0x3B = F1 through 0x44 = F10), or 0 | I |
+| 2 | u8 | Destination (4.6) | I |
+| 3 | u8 | Not meaningful (varies at random) | I |
+
+An entry of all zeros, or with first byte 0xFE, is unused. \[I\] The key table straight after slide 0 applies to the whole show; a key table after any other slide applies while that slide is showing. \[I\]
+
+Example from the gallery: keys "1" to "9" go to slides 2 to 10, F2 goes to the last slide viewed, F3 to the previous slide and F4 to the next.
+
+### 4.4 Button table (tag 706)
+
+A list of 14-byte entries; the count is length / 14. \[C for the size\]
+
+| Offset | Type | Meaning | Mark |
+| --- | --- | --- | --- |
+| 0 | padded string\[13\] | Button name (may be padded with spaces before the NUL) | C |
+| 13 | u8 | Destination (4.6) | I |
+
+A button is a drawn object in the slide's chart that carries a name (record 618, see 5.6). When the viewer clicks inside a button object, compare its name with the slide's button table, ignoring case and trailing spaces, and go to the destination. \[I\] Charts can take their buttons from a separate button chart named by a 404 kind 1 reference (the gallery uses galbutn1.ch3 and galbutn2.ch3); draw that chart's objects on top of the slide and use them as buttons. \[I\] A chart that defines buttons also lists their names in record 814 (14-byte entries, same layout). \[C\]
+
+### 4.5 Transitions
+
+The Projector offers these effects, by these names: Replace, Overlay, Wipe, Scroll, Fade, Open, Close, Blinds, Iris, Keep. Some take a direction (Left, Right, Up, Down, or In, Out) and a speed (Slow, Medium, Fast). \[C for the names, which the program shows\]
+
+The drawing editor also animates the objects of one chart, with Draw and Erase steps using Replace, Wipe, Fade, Open, Close and Blinds, and a "Wait for key" or a delay in tenths of a second between steps. \[C for the names\] How these are stored is not yet mapped (see section 7).
+
+How the slide entry encodes the effect is **not confirmed**. The values at offsets 11 and 12 (0 to 18) fit this reading: one number per effect and direction, in menu order, starting at 0: Replace, Overlay, Wipe ×4 directions, Scroll ×4, Fade, Open ×2, Close ×2, Blinds ×2, Iris ×2 (In, Out). \[I, needs checking\]
+
+Suggested drawing of each effect, for a viewer, with the old slide A and new slide B:
+
+| Effect | Behaviour |
+| --- | --- |
+| Replace | Show B at once |
+| Overlay | Draw B on top of A without clearing \[I\] |
+| Wipe (direction) | A straight edge moves across the screen in the given direction, revealing B behind it |
+| Scroll (direction) | B slides in from the opposite side, pushing A out |
+| Fade | Dissolve from A to B in small pieces |
+| Open | B is revealed from the centre line outwards |
+| Close | B is revealed from the edges inwards to the centre line |
+| Blinds | B is revealed in stripes, all stripes opening at once |
+| Iris (In, Out) | B is revealed through a growing (Out) or shrinking (In) rectangle centred on the screen \[I\] |
+| Keep | Leave A on screen; only used where the next item draws over it \[I\] |
+
+Slow, Medium and Fast are the overall duration of the effect; about 1.5 s, 0.75 s and 0.3 s are reasonable. \[I\]
+
+### 4.6 Destinations
+
+A destination byte in a key or button table means: \[I for all rows\]
+
+| Value | Go to |
+| --- | --- |
+| Below the slide count | That slide number (counting from 0) |
+| 0xF3 | The slide viewed before this one (button name "lastview") |
+| 0xF4 | The next slide ("nextpal") |
+| 0xF5 | The previous slide ("prevpal") |
+| 0xF6 | Named "edit"; leave the Projector for the editor. A viewer can ignore it. |
+| 0xF7 | Named "editcler"; as 0xF6 \[?\] |
+| 0xF8 | The top of the show ("main menu"): back to the outermost show's first slide |
+| 0x96, 0x97 | Named "home" \[?\]; treat as 0xF8 until confirmed |
+
+### 4.7 Playing a show
+
+1. Read the show. Build the slide list from the 702 groups. Slide 0 holds no picture; its key table is the show-wide key table.
+2. Start at slide 1. For each slide:
+   - Empty slide: skip it.
+   - Chart: draw it (section 5), using the transition from its entry. Wait for its display time, or for a key or click if it waits.
+   - Nested show: play that show from its slide 1, then continue with the next slide of this show. Destinations inside the nested show refer to its own slides.
+   - Sound or MIDI: start playing and continue at once to the next slide. \[I\]
+3. Keys and clicks: first check the slide's button table (for clicks) and key table, then the show-wide key table. If nothing matches, Enter, Space, right arrow or Page Down go to the next slide; Backspace, left arrow or Page Up go back; Esc ends the show. \[I: common Projector controls, not checked\]
+4. After the last slide, end the show, or loop to slide 1 if the show is set to loop (where that setting lives is not yet known).
+
+## 5. Chart files (.CH3)
+
+### 5.1 Layout
+
+Signature HGB3, version record (type = chart type), header block (500, 400, 402, 501), then the page block 504 ... 505, then the end record. Inside the page block, in this order: \[C\]
+
+1. Optional 814 (button name list, see 4.4).
+2. The object layer 516 ... 517 (5.6). Present in every chart; often empty or holding a few annotations in data charts, and holding everything in drawings.
+3. The chart block 508 ... 509: text lines (800), page areas (802 to 810), page setup (816), file references (404), colour settings (820, 822, 824), and the records of the chart type (5.4).
+
+Charts of type XY, pie, organization, title, bullet and table store **data, not pictures**: the viewer must lay out and draw the chart from the data (5.5). Drawings (type 0x29) store only objects. \[C\]
+
+### 5.2 Page records
+
+| Tag | Size | Meaning | Mark |
+| --- | --- | --- | --- |
+| 802 | 10 | Page frame area: i16 x1, y1, x2, y2, then u16 0 | C size, I meaning |
+| 804 | 10 | Title area, same layout | I |
+| 806 | 10 | Chart (plot) area, same layout | I |
+| 808 | 10 | Footnote area, same layout | I |
+| 810 | 10 | Legend area, same layout | I |
+| 816 | 10 | u8 orientation (1 landscape, 2 portrait), u8 paper size (index into the paper size list, 1 = Letter 8.5 × 11 in, 14 = screen 10 × 7.5 in), f32 page width in inches, f32 page height in inches | C |
+| 820 | 12 | 12 colour role numbers for chart parts, e.g. 02 02 02 12 01 01 12 12 12 0F 0F 0F \[?\] | ? |
+| 822 | 19 | Chart options \[?\] | ? |
+| 824 | 2 | Always 0x55, 0x00 \[?\] | ? |
+| 1700 | 8 | In drawings only; zero in samples \[?\] | ? |
+
+An area of all zeros means the chart has no such area. The areas use page coordinates (6.1). The tutorial pie chart, for example, has its title area across the top quarter of the page, its plot area below it and its footnote area in the bottom left corner. \[C for the values\]
+
+### 5.3 Text
+
+**Text line (tag 800)** \[C for the layout, from all 2,588 text lines\]
+
+| Offset | Type | Meaning | Mark |
+| --- | --- | --- | --- |
+| 0 | u16 | Text slot: which part of the chart the line belongs to (table below) | C |
+| 2 | u16 | Line or row number within the slot, from 0 | C |
+| 4 | u16 | Column number (tables), else 0 | C |
+| 6 | u8 | Varies (0 to 7); line spacing or bullet setting \[?\] | ? |
+| 7 | u8 | 0x10 to 0x12; text attributes \[?\] | ? |
+| 8 | string | The text | C |
+| then | u16 | Length of the text, not counting the NUL | C |
+| +2 | u16 | Text colour: a colour role number (6.2) | C |
+| +4 | u16 | 0 | ? |
+| +6 | u16 | Second colour role, usually equal to the text colour (shadow or fill colour \[I\]) | ? |
+| +8 | u16 | 0 | ? |
+| +10 | f32 | Text size (6.4) | C size, I unit |
+| +14 | u16 | Justification: 1 = left, 2 = centre, 3 = right \[I for 3\]; bit 0x2000 is sometimes set \[?\] | I |
+| +16 | 6 bytes | Font key (section 2) | C |
+
+Text slots: \[C for which chart types use them, I for the names\]
+
+| Slot | Used in | Holds |
+| --- | --- | --- |
+| 1 | All data charts | Title (line 0) and subtitles (lines 1, 2) |
+| 2 | Pie, organization | Footnote |
+| 3 | XY | Axis titles |
+| 4 | XY | Series names, one line per series (the row number is the series number); used in the legend |
+| 5 | Pie | Title of each pie (row = pie number) |
+| 6 | Table | Cell text (row, column) |
+| 7 | Title chart | The title chart's lines, top to bottom |
+| 8 | Bullet | The bullet list's lines, in order |
+
+The colour roles in the samples match their names: titles use role 1 (Title), subtitles role 2 (SubTitl1), footnotes role 7 (Footnote), and the default title size is 9 while subtitles are 5 and footnotes 3.5. \[C\]
+
+**Text style tables** \[C for the layout\]
+
+Tags 906 (organization), 1002 (title), 1102 (bullet), 1202 (table), 1308 (pie), 1412 (XY) and part of 712 (show) hold a list of 16-byte entries, one per text slot or level, with the defaults used for new text:
+
+| Offset | Type | Meaning |
+| --- | --- | --- |
+| 0 | f64 | Text size (0 = not used) |
+| 8 | u8 | Colour role |
+| 9 | u8 | Justification (as above) |
+| 10 | 6 bytes | Font key |
+
+A viewer should draw each 800 line with the colour, size, justification and font stored in that line, and use the style table only when a line's own values are missing. \[I\]
+
+### 5.4 Data records by chart type
+
+**Pie (type 0x15).** Up to 6 pies. \[C for the layout of 1316, I otherwise\]
+
+| Tag | Size | Meaning |
+| --- | --- | --- |
+| 1304 | 7 | Pie chart options \[?\] |
+| 1306 | 6 | Colour roles for chart parts, e.g. 02 02 0C 02 0E 14 \[?\] |
+| 1310 | 18 | One per pie: u8 pie number, then options; contains f32 30.0 and f32 100.0 (likely size and a percentage) \[?\] |
+| 1312 | 31 | One per pie: u8 pie number, then options \[?\] |
+| 1314 | 43 | One per pie: u8 pie number, then options; contains f64 1.0 \[?\] |
+| 1316 | 32 | One per slice: u8 pie number, u8 slice number, u8 \[?\], u8 colour role (21 = Series1 for the first slice, then 22 and so on), u8 \[?\], f32 value, padded string\[23\] slice label |
+
+**XY (type 0x01).** Up to 16 series; rows are the X categories. \[C for 1422 and 1424, I otherwise\]
+
+| Tag | Size | Meaning |
+| --- | --- | --- |
+| 1402 | 102 | One per series or axis: u8 number, then axis settings; holds several f64 "not set" values (axis minimum, maximum, increment chosen automatically) \[I\] |
+| 1404, 1410, 1414, 1418 | 3 to 6 | Chart-wide options \[?\] |
+| 1406 | 15 | One per series: u8 series number, then style bytes; byte 9 and byte 13 are the series colour role (21 to 26, repeating every 6 series) \[C\], byte 14 a marker or pattern number \[I\]. The series type (bar, line, area, point) is among bytes 1 to 7 \[?\] |
+| 1408 | 25 | Frame and axis placement, including f32 85.0, 50.0, 40.0, 15.0 \[?\] |
+| 1422 | 25 | One per row: u16 row number, padded string\[23\] X label |
+| 1424 | 11 | One per data value: u8 series number, u16 row number, f64 value. A missing record means no value at that point. |
+
+**Organization (type 0x1A).** \[I\]
+
+| Tag | Size | Meaning |
+| --- | --- | --- |
+| 900, 902, 904, 910, 912 | 8 to 17 | Chart options: box style, colours, levels to show |
+| 906 | 144 | Text style table |
+| 914 | 190 | One per box (person), in tree order. Starts with a u8 level or relation byte, then several text fields, each a u8 field width (18), padded string\[22\] and the 22-byte text tail of 5.3 (length, colours, size, justification, font key). Fields are name, title and comments. |
+
+The tree is given by the order of 914 records and the level byte: each box is a subordinate of the nearest earlier box one level higher. \[I\]
+
+**Title (type 0x1F) and bullet (type 0x20).**
+
+- Title charts use only text slot 7 and the style table 1002. \[C\]
+- Bullet charts use slot 8 for lines, 1102 for styles, 1106 (22 bytes, options) and 1108 (8 bytes per line: bullet shape \[I\], colour role 16 = Bullet \[C\], line number \[C\], indent level \[I\]). \[I unless marked\]
+
+**Table (type 0x21).** Slot 6 holds the cell text by row and column. 1202 is the style table; 1206, 1210 and 1212 are options; 1208 and 1214 hold f64 values that are likely column widths and row positions \[?\].
+
+### 5.5 Drawing a data chart
+
+The original lays out data charts itself; the stored areas (5.2) tell a viewer where each part goes. Until reference renders are compared, use this method: \[I for everything in 5.5\]
+
+1. Fill the page with the background colour (palette role FrameBkg) and draw the page frame (role Frame) using the frame style.
+2. Draw slot 1 text in the title area, centred lines from the top, each line's height taken from its text size.
+3. Draw slot 2 text (footnote) in the footnote area.
+4. Draw the chart in the plot area:
+   - **Pie:** add up the slice values of each pie; each slice's angle is its share of 360°. Start at 0° (3 o'clock) and go counter-clockwise, which matches the angle convention of drawn arcs (5.6). Fill each slice with its colour role, outline it with role Outlines, and place the label outside the slice on the line from the centre through the middle of the slice, with the value or percentage if the options ask for it. Several pies are spaced evenly across the plot area, each titled with its slot 5 text.
+   - **XY:** work out each axis range from the data where 1402 says "not set", choosing round tick intervals. Draw the frame, grid and tick labels (X labels from 1422, Y labels from the range). Draw each series by its type: bars side by side in each category (Cluster), stacked, or overlapping; lines through the points; areas filled down to the axis; points as markers. Use the series colour roles from 1406 and the series names (slot 4) in the legend area.
+   - **Organization:** draw one box per 914 record, top level at the top, children spread evenly below their parent, connected by lines (role Lines); write name, title and comment in the box.
+   - **Title, bullet:** stack the lines vertically in the plot area with their own sizes and justification; bullets get a marker (role Bullet) before each line.
+   - **Table:** draw a grid in the plot area with columns and rows as stored, and write each cell's text.
+5. Draw the object layer (5.6) on top.
+
+### 5.6 Object layer
+
+The object layer (between 516 and 517) is a list of drawn objects, optionally grouped with 608 ... 610. Each object is a sequence of records: \[C\]
+
+1. 616 (24 bytes): the object's transform, six f32 values a, b, c, d, e, f.
+2. Optional 618: the object's button name (string; see 4.4).
+3. Optional 614: extra data for some text objects \[?\].
+4. 612: the object itself.
+
+**Transform (616)** \[C\] Each point (x, y) inside the object is mapped to page coordinates by:
+
+- page x = a · x + c · y + e
+- page y = b · x + d · y + f
+
+This was checked by recomputing the stored bounding box of many objects from their points. All samples have b = c = 0 (no rotation or slant); a viewer should still apply the full formula.
+
+**Object record (612)** \[C for the layout\]
+
+| Offset | Type | Meaning |
+| --- | --- | --- |
+| 0 | 4 × i16 | Bounding box on the page after the transform: x1, y1, x2, y2 |
+| 8 | 8 bytes | Object flags; usually zero, first byte sometimes 1 to 5 \[?\] |
+| 16 | sub-records | Each: u16 sub-tag, u16 length, data. The list ends with sub-tag 0x1FFF. |
+
+Each object has one shape sub-record and any number of attribute sub-records.
+
+**Shape sub-records.** Point lists are i16 pairs in the object's own coordinates (before the transform). The low hex digit of the sub-tag varies (for example 0x1070, 0x1071, 0x1072, 0x1077, 0x1078); it most likely selects outline, fill or both \[I\]. Draw the shape filled if an attribute gives a fill and outlined if it gives a line.
+
+| Sub-tag | Shape | Data | Mark |
+| --- | --- | --- | --- |
+| 0x1021, 0x1022, 0x1028 | Ellipse | i16 centre x, centre y, radius x, radius y | C |
+| 0x1031 | Elliptical arc | centre x, centre y, radius x, radius y, u16 1, start angle, end angle | C |
+| 0x1041 | Elliptical band (the side of a cylinder or a 3-D pie edge): the arc from start to end angle, extruded straight down by the depth | centre x, centre y, radius x, radius y, start angle, end angle, u16 depth | C |
+| 0x1050 | Open polyline | u16 point count n, u16 1, u16 n, then n points | C |
+| 0x1061, 0x1068 | Polygon (closed) | same as 0x1050 | C |
+| 0x1070 to 0x1078 | Box | u16 box style (1 = square corners; 5, 6 = other corner styles \[I\]), u16 corner size \[I\], i16 x1, y1, x2, y2 | C for the rectangle |
+| 0x1080 | Curve through points \[I\] | same as 0x1050 | I |
+| 0x1091, 0x1098 | Closed curve \[I\] | same as 0x1050 | I |
+| 0x10A0, 0x10A1 | Curve \[I\] | u16 point count n, n points, then 6 bytes \[?\] | I |
+| 0x10B0 | Text block | see below | I |
+
+Angles are in tenths of a degree, measured counter-clockwise from the positive x axis (0 = 3 o'clock, 900 = 12 o'clock). \[C\]
+
+**Text block (0x10B0).** Starts with u16 110, then u16 (length of the sub-record − 22), then layout fields including the text box corners in object coordinates \[?\]. It ends with one text run per line, each the string followed by the 22-byte text tail of 5.3 (length, colours, size, justification, font key). Draw each run in the text box with its justification. \[I\]
+
+**Attribute sub-records** \[? unless marked\]
+
+| Sub-tag | Size | Notes |
+| --- | --- | --- |
+| 0x1100 | 4 | Line (outline) settings: byte 0 is a colour role (seen: 14 Frame, 18 Lines, 23, 26, 32 Outlines) \[I\]; byte 1 is 0 to 3 or 255, likely line width or style \[I\] |
+| 0x110B | 4 | Fill settings: colour roles \[I\] |
+| 0x110C | various | Fill settings \[?\] |
+| 0x1110 | 10 | Pattern or gradient fill, e.g. FF 00 00 20 FF 00 00 40 00 00 \[?\] |
+| 0x1120 | various | \[?\] |
+| 0x112A | 2 | u16, e.g. 90 or 63; likely a rotation angle in degrees or a number of steps \[?\] |
+| 0x112B, 0x112D, 0x112E, 0x112F | various | \[?\] |
+| 0x1140 | 8 | Bitmap fill; appears with a 404 kind 5 bitmap reference \[I\] |
+
+Until the attributes are fully decoded, a viewer can draw every closed shape filled with the colour in the first byte of 0x110B (or of 0x1100 when there is no 0x110B) and outlined with the colour in the first byte of 0x1100.
+
+## 6. Rendering model
+
+### 6.1 Page coordinates
+
+- Page coordinates are i16. The longer side of the page runs from −16383 to +16383 and the shorter side from −12287 to +12287, with (0, 0) at the centre of the page. In landscape, x is the long side; in portrait (816 orientation 2), y is. \[C: every stored area and bounding box lies in this range; the landscape and portrait template charts fill it\]
+- y increases upwards. \[C: titles have the largest y values and footnotes the smallest\]
+- The ratio 4:3 matches the default 10 × 7.5 in screen page; 32767 units span 10 in, about 3277 units per inch. For a Letter page (11 × 8.5 in) the same unit range is stretched to that page. \[I\]
+- To show a page on a screen of width W and height H pixels (landscape, 4:3): screen x = (x + 16384) · W / 32768 and screen y = (12288 − y) · H / 24576. Keep the 4:3 shape and add bars on wider screens. \[I\]
+
+### 6.2 Colours and palettes
+
+Every colour in a chart is a **colour role number**, not an RGB value. The palette file the chart names (404 kind 2, default HG3.PL3) turns roles into RGB. Changing a chart's palette recolours it completely, which is how the gallery shows the same chart in several colour schemes. \[C\]
+
+**Palette file (.PL3, .PC3)** \[C for 1551 to 1553\]
+
+Signature HGA2, version type 0x33 (.PL3) or 0x34 (.PC3), header block, palette body 524 ... 525:
+
+| Tag | Size | Meaning | Mark |
+| --- | --- | --- | --- |
+| 1551 | 2 | u16 number of colours (64) | C |
+| 1553 | 18 | One per colour: u16 index (0 to 63), padded string\[16\] name | C |
+| 1552 | 6 | One per colour: u16 index, u8 role number (index + 1), u8 red, u8 green, u8 blue, each 0 to 255 | C |
+| 1554 | 14 | Palette options \[?\] | ? |
+| 1555 | 64 | 16 entries of 4 bytes; possibly the 16 colours used on 16-colour displays \[?\] | ? |
+
+A role number r refers to palette entry r − 1. Role 0 means "none" (do not draw). \[C for r − 1, I for 0\]
+
+Entries 0 to 41 are roles with fixed meanings; their names are "colour description|role", for example "Yel  L|Title". Entries 42 to 63 are extra named colours for drawings. The role names, by role number: \[C\]
+
+| Role | Name | Role | Name |
+| --- | --- | --- | --- |
+| 1 | Title | 17 | BulletDm (dimmed bullet) |
+| 2 | SubTitl1 | 18 | Lines |
+| 3 | SubTitl2 | 19 | Shadow |
+| 4 | Text | 20 | Legend |
+| 5 | TextHigh | 21 to 26 | Series1 to Series6 |
+| 6 | TextDim | 27, 28 | GoalY1, GoalY2 |
+| 7 | Footnote | 29 to 31 | Draw1 to Draw3 |
+| 8 | XLabel | 32 | Outlines |
+| 9 | Y1Label | 33 to 42 | Range1 to Range10 |
+| 10 | Y2Label | 43 to 64 | Extra named colours |
+| 11 | XTitle |  |  |
+| 12 | Y1Title |  |  |
+| 13 | Y2Title |  |  |
+| 14 | Frame |  |  |
+| 15 | FrameBkg (page background) |  |  |
+| 16 | Bullet |  |  |
+
+Series beyond the sixth reuse Series1 to Series6 in turn. \[C from the series records\]
+
+### 6.3 Fills, patterns and bitmaps
+
+- Solid fills use a colour role (5.6). \[I\]
+- Pattern fills use the PATT\*.PCC bitmaps shipped with the program, named by a 404 kind 5 reference; gradient and "special effects" fills exist in the editor (named Gradient, Bitmap, Shadow, Emboss, Hilight) but their storage is not yet decoded. \[C for the names, ? for the storage\]
+- Backgrounds and logos are PCX bitmaps (.PCX, or .PCC for a cut-out piece) named by a 404 kind 5 reference and drawn by an object with a 0x1140 attribute, stretched to that object's bounding box. \[I\] PCX is a documented ZSoft format readable by many open-source libraries.
+
+### 6.4 Text
+
+- Each text line names its font by font key (section 2) and its size as an f32.
+- The size unit is not confirmed. Sizes of 9 (titles), 5 (subtitles), 3.5 to 4 (footnotes and labels) fit **percent of the page's shorter side**: a size-9 title on a 7.5 in page is about 0.68 in (49 points) tall. \[I\] Use that until reference renders say otherwise.
+- Justification is relative to the area the text belongs to (title area, plot area, or the text box of a text object). \[I\]
+- Characters are 8-bit codes in the IBM PC code page 437; the font index maps them to glyphs (section 2). \[I\]
+- If a font file is missing, substitute a similar modern font: Swiss 721 ≈ Helvetica or Arial, Dutch 801 ≈ Times, Geo Slab 712 ≈ Rockwell or Memphis, Monospace 821 ≈ a sans-serif monospace, HG Roman/Sans/Script/Gothic ≈ single-stroke Hershey fonts. \[I\]
+
+### 6.5 Drawing order
+
+For each chart: background, then the data chart (5.5), then the object layer in file order (later objects on top), then the button chart's objects if any. Within a group (608 ... 610), draw members in order. \[I\]
+
+## 7. Errors, open questions, samples needed and sources
+
+### 7.1 Error cases a viewer should handle
+
+| Situation | Suggested behaviour |
+| --- | --- |
+| Signature is not HGB3, HGB1 or HGA2, or the version record is not first | Reject the file: "not a Harvard Graphics 3 file". Harvard Graphics 2 files (.CHT, .SHW) are a different format. |
+| A record's length runs past the end of the file | Stop reading at that record; draw what was read and report the file as damaged. |
+| No end record (tag 1) | Treat the end of file as the end; warn. |
+| Unknown tag or sub-tag | Skip it by its length. |
+| An object's sub-record list has no 0x1FFF | Stop at the end of the 612 record. |
+| A referenced file is missing | Slide file: show an empty slide with the file name and carry on. Palette: use HG3.PL3, or a built-in copy of its colours. Bitmap: draw nothing for that fill. Font: substitute (6.4). |
+| Empty palette or role out of range | The original refuses to draw a chart with an empty palette; a viewer should fall back to the default palette. |
+| Negative pie value | The original treats this as an error; skip that slice. |
+| A show nests shows | The original allows one level of nesting only (a nested show may not contain another show). A viewer should allow nesting but guard against a show that includes itself. |
+| More than 100 buttons | The original only makes 100 buttons available; a viewer need not limit this. |
+
+The original program's limits seen in its messages: at most 10 changes of text attributes within one text line; at most 100 buttons per chart; one level of nested shows. \[C that the program states these limits\]
+
+### 7.2 Open questions
+
+In rough order of how much they matter to a viewer:
+
+1. **Transitions and timing** in the slide entry (702 offsets 3 to 17). The reading in 4.5 is a guess.
+2. **Data chart layout.** How the original places axes, tick marks, labels, legends, pie slices (start angle, direction, 3-D depth, exploded slices) and organization boxes. Section 5.5 gives a method, not the original's.
+3. **Series types and chart styles** in 1402, 1406, 1408 and the pie option records 1304 to 1314 (bar, line, area, stacked, 3-D, proportional pies and so on).
+4. **Object attributes** 0x1100 to 0x1140: line width and style, fill kinds, gradients, shadows, patterns.
+5. **Text block** 0x10B0 header fields and text record 800 offsets 6 and 7.
+6. **Text size unit** (6.4).
+7. **Animated drawings**: where the Draw/Erase animation steps of a drawing are stored.
+8. **FN3 stroke fonts**: glyph layout.
+9. The remaining small records: 402, 516 boxes, 708 to 714, 820, 822, 824, 1554, 1555, 614, 1700, and the meaning of destinations 0x96 and 0x97.
+
+### 7.3 Samples and evidence still needed
+
+- **Reference pictures from the original program** for a handful of the sample files: the tutorial charts (PIETUT, XYTUT, ORGTUT, DRAWTUT), a few gallery charts of each type, and GALLERY.SH3 played through. Screenshots taken in DOSBox at 640 × 480 are enough. These would settle chart layout, text size, line widths and fills.
+- **The show editor's slide list for GALB1.SH3 and PLAY\_ALL.SH3**, showing each slide's transition, direction, speed and time. That pins down the 702 fields.
+- **Pairs of files that differ in one setting**, made in Harvard Graphics 3 (for example the same pie with the start angle changed, or the same slide with only the transition changed). These are the fastest way to decode the remaining option bytes.
+- The Harvard Graphics 3 user manual, if available, for the meaning of options and limits.
+
+All of this can be gathered by running the original program in an emulator; nothing more is needed from its code.
+
+### 7.4 Sample set
+
+The findings here were checked against the files on the supplied Harvard Graphics 3.05 disks (projector disk and install disks 1 to 5): 238 charts of all seven chart types, 13 shows including nested shows, sound and MIDI slides and HyperShow buttons, 37 palettes, the font index and the program's own message and menu text. The installer stores its files in Knowledge Dynamics LIF archives; a viewer never needs to read those.
+
+### 7.5 Sources
+
+- Deark, by Jason Summers: its Knowledge Dynamics ("kdc") module documents the LIF installer archive header. It was used only to understand how the installer stores files, not for any Harvard Graphics document format. https://github.com/jsummers/deark
+- Bitstream Speedo font format: published by Bitstream; implemented in the X11 Speedo rasteriser and formerly in FreeType. Needed for the BX\*.SPD fonts.
+- ZSoft PCX format: widely documented; needed for backgrounds, patterns and logos.
+- Public file-format registries (PRONOM, file-extension sites) identify .CH3 and .SH3 as Harvard Graphics 3 chart and show files but give no internal layout, so nothing here is drawn from them. RECOIL, dexvert and the Just Solve wiki were not checked in detail for this version.
+- The style of this document follows William's earlier ExecuVision Picture Command specification (github.com/unamanic/execuvision-picture-command).
