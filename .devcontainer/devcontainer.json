@@ -1,0 +1,21 @@
+{
+  "name": "Harvard Web Viewer",
+  // Node 24 (current LTS) image; the devcontainers images have no "lts" tag.
+  // Yarn 4 is provided by Corepack using the version pinned in package.json
+  // ("packageManager").
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:24",
+  // Keep the container's node_modules in a volume so the macOS host's native
+  // binaries (e.g. rolldown darwin-arm64) don't shadow the Linux ones.
+  "mounts": [
+    "source=${localWorkspaceFolderBasename}-node_modules,target=${containerWorkspaceFolder}/node_modules,type=volume"
+  ],
+  "postCreateCommand": "sudo chown node:node node_modules && sudo corepack enable && yarn install",
+  // Vite dev server
+  "forwardPorts": [5173],
+  "portsAttributes": { "5173": { "label": "Vite dev server" } },
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode", "vitest.explorer"]
+    }
+  }
+}

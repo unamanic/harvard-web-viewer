@@ -1,0 +1,29 @@
+import type { Confidence, FormatParser } from "./types";
+import { hgDosParser } from "./hg-dos";
+
+/** Every known parser. Add new formats here. */
+export const parsers: readonly FormatParser[] = [hgDosParser];
+
+export interface Detection {
+  parser: FormatParser;
+  confidence: Confidence;
+}
+
+/**
+ * Pick the parser most likely to understand a file, or `null` if none
+ * claims it (confidence 0).
+ */
+export function detectFormat(
+  bytes: Uint8Array,
+  filename: string,
+  candidates: readonly FormatParser[] = parsers,
+): Detection | null {
+  let best: Detection | null = null;
+  for (const parser of candidates) {
+    const confidence = parser.detect(bytes, filename);
+    if (confidence > 0 && (!best || confidence > best.confidence)) {
+      best = { parser, confidence };
+    }
+  }
+  return best;
+}
