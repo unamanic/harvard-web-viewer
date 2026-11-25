@@ -44,6 +44,20 @@ function pieOptions(pie: number, style = 1, names = 1): RecordSpec {
   return leaf(1310, concat([pie, 1, style, 2, 2], f32(30), new Uint8Array(4), f32(100), u8(names)));
 }
 const flat1304 = leaf(1304, [2, 2, 2, 2, 1, 0x20, 0x12]);
+const linked1304 = leaf(1304, [2, 2, 1, 2, 1, 0x20, 0x12]);
+/** 1312: show percents (Yes/No), place, decimals, leading, trailing. */
+function percents(pie: number, show = 1, place = 1, decimals = 0, leading = "", trailing = ""): RecordSpec {
+  return leaf(1312, concat([pie, show, place], u16(decimals), padded(leading, 13), padded(trailing, 13)));
+}
+/** 1314: show values, place, currency, decimals (null = blank), thousands, scale, leading, trailing. */
+function values(pie: number, o: { show?: number; place?: number; currency?: number; decimals?: number | null; thousands?: number; scale?: number; leading?: string; trailing?: string } = {}): RecordSpec {
+  const dec = o.decimals === undefined || o.decimals === null ? Uint8Array.from([0, 0, 0xf0, 0xff]) : f32(o.decimals);
+  return leaf(1314, concat([pie, o.show ?? 1, o.place ?? 1, o.currency ?? 2], dec, [o.thousands ?? 2], f64(o.scale ?? 1), padded(o.leading ?? "", 13), padded(o.trailing ?? "", 13)));
+}
+/** 1310 with every byte given. */
+function pieOptionsFull(pie: number, o: { show?: number; showAs?: number; sort?: number; pointer?: number; depth?: number; angle?: number; size?: number; labels?: number } = {}): RecordSpec {
+  return leaf(1310, concat([pie, o.show ?? 1, o.showAs ?? 1, o.sort ?? 2, o.pointer ?? 2], f32(o.depth ?? 30), f32(o.angle ?? 0), f32(o.size ?? 100), u8(o.labels ?? 1)));
+}
 const threeD1304 = leaf(1304, [2, 1, 2, 2, 1, 0x20, 0x12]);
 const proportional1304 = leaf(1304, [2, 2, 2, 1, 1, 0x20, 0x12]);
 
@@ -63,7 +77,8 @@ describe("drawPieChart", () => {
     expect(deg(slices[0]!.points[1]!, slices[0]!.points[0]!)).toBeCloseTo(0, 6);
     expect(deg(slices[1]!.points[1]!, slices[1]!.points[0]!)).toBeCloseTo(180, 6);
     expect(deg(slices[2]!.points[1]!, slices[2]!.points[0]!)).toBeCloseTo(-72, 6); // 288°
-    expect(texts(elements).map((t) => t.text)).toEqual(["A", "50%", "B", "30%", "C", "20%"]);
+    // Without 1312 / 1314 the 3.05 defaults apply: name over value, no percent.
+    expect(texts(elements).map((t) => t.text)).toEqual(["A", "50", "B", "30", "C", "20"]);
     // Leaders run from the rim to 1.1 × the radius along the slice middle (90° for A).
     const leaders = paths(elements).filter((p) => !p.closed);
     expect(leaders).toHaveLength(3);
@@ -138,12 +153,14 @@ describe("drawPieChart", () => {
     expect(warnings.some((w) => /not drawn/.test(w))).toBe(true);
   });
 
-  it("draws a 1310 style 2 pie as a stacked column facing the previous pie's exploded slice", () => {
+  it("draws pie 2 shown as a column next to linked pie 1, which faces it with its cut slice", () => {
     const chart = chartWith(DocumentType.Pie, [
       PLOT,
-      flat1304,
+      linked1304,
       pieOptions(0),
       pieOptions(1, 2),
+      percents(1, 1, 2),
+      values(1, { show: 2 }),
       slice(0, 0, 75, "x"),
       slice(0, 1, 25, "y", 1),
       slice(1, 0, 40, "North"),
@@ -167,10 +184,85 @@ describe("drawPieChart", () => {
     expect(connectors[0]!.points[1]!.x).toBeCloseTo(4000, 6);
   });
 
-  it("labels with percentages only when 1310 byte 17 is 2", () => {
+  it("drops slice names when 1310 byte 17 is No (PNOLAB; GALD291 with percents only)", () => {
     const chart = chartWith(DocumentType.Pie, [PLOT, flat1304, pieOptions(0, 1, 2), slice(0, 0, 1, "A"), slice(0, 1, 2, "B")]);
-    expect(texts(draw(chart, drawPieChart).elements).map((t) => t.text)).toEqual(["33%", "67%"]);
+    expect(texts(draw(chart, drawPieChart).elements).map((t) => t.text)).toEqual(["1", "2"]);
+    const pct = chartWith(DocumentType.Pie, [PLOT, flat1304, pieOptions(0, 1, 2), percents(0), values(0, { show: 2 }), slice(0, 0, 1, "A"), slice(0, 1, 2, "B")]);
+    expect(texts(draw(pct, drawPieChart).elements).map((t) => t.text)).toEqual(["33%", "67%"]);
     expect(percentText(60 / 210)).toBe("29%");
+  });
+
+  it("writes values and percents as 1312 / 1314 say (PPCT, PVALADJ, PVCURR, PVSCALE, PPCTL, PPCTT)", () => {
+    const labelsOf = (...recs: RecordSpec[]) =>
+      texts(draw(chartWith(DocumentType.Pie, [PLOT, flat1304, pieOptions(0), ...recs, slice(0, 0, 40, "Alpha"), slice(0, 1, 60, "Beta")]), drawPieChart).elements).map((t) => t.text);
+    expect(labelsOf(percents(0), values(0))).toEqual(["Alpha", "40  40%", "Beta", "60  60%"]);
+    expect(labelsOf(percents(0, 2), values(0, { place: 2 }))).toEqual(["Alpha  40", "Beta  60"]);
+    expect(labelsOf(values(0, { currency: 1, decimals: 2 }))).toEqual(["Alpha", "$40.00", "Beta", "$60.00"]);
+    expect(labelsOf(values(0, { scale: 10, leading: "AB", trailing: "XY" }))).toEqual(["Alpha", "AB4XY", "Beta", "AB6XY"]);
+    expect(labelsOf(percents(0, 1, 1, 1, "AB", "XY"), values(0, { show: 2 }))).toEqual(["Alpha", "AB40.0XY%", "Beta", "AB60.0XY%"]);
+  });
+
+  it("centres items placed Inside at 2/3 of the radius (PVALIN, PPCTPI)", () => {
+    const chart = chartWith(DocumentType.Pie, [PLOT, flat1304, pieOptions(0), values(0, { place: 3 }), slice(0, 0, 50, "A"), slice(0, 1, 50, "B")]);
+    const { elements } = draw(chart, drawPieChart);
+    const r = Math.trunc(PIE_RADIUS * 20000);
+    const inside = texts(elements).find((t) => t.text === "50")!;
+    // A spans 0° to 180°: its middle is straight up from the centre (0, −1000).
+    expect(inside.anchor).toBe("middle");
+    expect(inside.x).toBeCloseTo(0, 6);
+    expect(texts(elements).map((t) => t.text)).toEqual(["50", "A", "50", "B"]);
+    expect(-inside.y).toBeGreaterThan(-1000 + (2 / 3) * r - 1000);
+    expect(-inside.y).toBeLessThan(-1000 + (2 / 3) * r + 1000);
+  });
+
+  it("starts at the 1310 angle, sorts largest first keeping colours, and sizes by area (PANG45, PUNSSRT, PSIZE50)", () => {
+    const chart = chartWith(DocumentType.Pie, [PLOT, flat1304, pieOptionsFull(0, { angle: 45, sort: 1, size: 50 }), slice(0, 0, 10, "a"), slice(0, 1, 40, "b"), slice(0, 2, 50, "c")]);
+    const slices = paths(draw(chart, drawPieChart).elements).filter((p) => p.closed);
+    expect(slices.map((s) => s.fill)).toEqual([role(23), role(22), role(21)]);
+    expect(deg(slices[0]!.points[1]!, slices[0]!.points[0]!)).toBeCloseTo(45, 6);
+    expect(deg(slices[1]!.points[1]!, slices[1]!.points[0]!)).toBeCloseTo(-135, 6); // 45 + 180 = 225°
+    const r = Math.trunc(PIE_RADIUS * 20000 * Math.SQRT1_2);
+    expect(Math.hypot(slices[0]!.points[1]!.x, slices[0]!.points[1]!.y - 1000)).toBeCloseTo(r, 3);
+  });
+
+  it("skips pies whose Show pie is No, and draws the slice pointer as 1310 byte 4 says (PNOPIE, PPTRN, PPTRL)", () => {
+    const hidden = chartWith(DocumentType.Pie, [PLOT, flat1304, pieOptionsFull(0, { show: 2 }), slice(0, 0, 1, "a")]);
+    expect(draw(hidden, drawPieChart).elements).toEqual([]);
+    const none = chartWith(DocumentType.Pie, [PLOT, flat1304, pieOptionsFull(0, { pointer: 1 }), slice(0, 0, 1, "a"), slice(0, 1, 1, "b")]);
+    expect(paths(draw(none, drawPieChart).elements).filter((p) => !p.closed)).toEqual([]);
+    const long = chartWith(DocumentType.Pie, [PLOT, flat1304, pieOptionsFull(0, { pointer: 4 }), slice(0, 0, 1, "a"), slice(0, 1, 1, "b")]);
+    const leaders = paths(draw(long, drawPieChart).elements).filter((p) => !p.closed);
+    const r = Math.trunc(PIE_RADIUS * 20000);
+    expect(leaders[0]!.points).toHaveLength(3);
+    // a's middle is 90°: the tail runs right, 0.3 × the radius, at the leader end's height.
+    expect(leaders[0]!.points[2]!.x - leaders[0]!.points[1]!.x).toBeCloseTo(0.3 * r, 6);
+    expect(leaders[0]!.points[2]!.y).toBeCloseTo(leaders[0]!.points[1]!.y, 6);
+  });
+
+  it("draws a lone column centred in its slot with leaders to its labels (PCOLUMN)", () => {
+    const chart = chartWith(DocumentType.Pie, [PLOT, flat1304, pieOptionsFull(0, { showAs: 2 }), slice(0, 0, 25, "A"), slice(0, 1, 75, "B")]);
+    const { elements } = draw(chart, drawPieChart);
+    const boxes = rects(elements);
+    expect(boxes).toHaveLength(2);
+    expect(boxes[0]!.x).toBeCloseTo(-4000, 6); // 0.25 × 32000 wide, centred on x = 0
+    expect(boxes[0]!.width).toBeCloseTo(8000, 6);
+    expect(boxes[0]!.height + boxes[1]!.height).toBeCloseTo(15000, 6); // 0.75 × the plot height
+    const leaders = paths(elements).filter((p) => !p.closed);
+    expect(leaders).toHaveLength(2);
+    expect(leaders[0]!.points[0]!.x).toBeCloseTo(4000, 6);
+    expect(leaders[0]!.points[1]!.x).toBeCloseTo(4800, 6); // 0.1 × the column width
+    expect(texts(elements).map((t) => t.text)).toEqual(["A", "25", "B", "75"]);
+  });
+
+  it("uses the 3.05 test-chart sizes on a Letter page (PBASE, PNOLAB, PCUT2)", () => {
+    const letter = leaf(816, concat([1, 1], f32(11), f32(8.5)));
+    const radius = (...recs: RecordSpec[]) => {
+      const tops = paths(draw(chartWith(DocumentType.Pie, [PLOT, letter, flat1304, ...recs]), drawPieChart).elements).filter((p) => p.closed);
+      return Math.max(...tops.map((t) => Math.max(...t.points.map((q) => Math.hypot(q.x - t.points[0]!.x, q.y - t.points[0]!.y)))));
+    };
+    expect(radius(pieOptions(0), slice(0, 0, 1, "a"), slice(0, 1, 1, "b"))).toBeCloseTo(Math.trunc(0.34 * 20000), 3);
+    expect(radius(pieOptions(0, 1, 2), slice(0, 0, 1, "a"), slice(0, 1, 1, "b"))).toBeCloseTo(Math.trunc(0.4 * 20000), 3);
+    expect(radius(pieOptions(0), slice(0, 0, 1, "a"), slice(0, 1, 1, "b", 1))).toBeCloseTo(Math.trunc(0.34 * 0.7 * 20000), 3);
   });
 
   it("places label boxes beside, above / below or at a corner of the leader end", () => {
@@ -181,13 +273,40 @@ describe("drawPieChart", () => {
     expect(labelBoxPosition(272, end, 1000, 400, 25)).toEqual({ left: -400, top: 50, mode: "vertical" });
     expect(labelBoxPosition(283, end, 1000, 400, 25)).toEqual({ left: 100, top: 50, mode: "corner" });
     expect(labelBoxPosition(135, end, 1000, 400, 25)).toEqual({ left: -900, top: 450, mode: "corner" });
+    // From the 3.05 test charts: 333° and 18° beside, 72° centred above, 108° and 198° at a corner.
+    expect(labelBoxPosition(333, end, 1000, 400, 25)).toMatchObject({ left: 125, top: 250, mode: "side" });
+    expect(labelBoxPosition(18, end, 1000, 400, 25)).toMatchObject({ mode: "side" });
+    expect(labelBoxPosition(27, end, 1000, 400, 25)).toEqual({ left: 100, top: 450, mode: "corner" });
+    expect(labelBoxPosition(72, end, 1000, 400, 25)).toEqual({ left: -400, top: 450, mode: "vertical" });
+    expect(labelBoxPosition(108, end, 1000, 400, 25)).toEqual({ left: -900, top: 450, mode: "corner" });
+    expect(labelBoxPosition(198, end, 1000, 400, 25)).toEqual({ left: -900, top: 50, mode: "corner" });
+    expect(labelBoxPosition(288 + 360, end, 1000, 400, 25)).toEqual({ left: 100, top: 50, mode: "corner" });
+  });
+
+  it("draws the 1306 legend in the legend area: frame, swatches and names (PLEG, PLEGL2)", () => {
+    const legend = (location: number, x1: number, y1: number, x2: number, y2: number) =>
+      draw(chartWith(DocumentType.Pie, [PLOT, area(810, x1, y1, x2, y2), flat1304, leaf(1306, [1, 2, location, 2, 14, 20]), slice(0, 0, 1, "Alpha"), slice(0, 1, 1, "Beta")]), drawPieChart).elements;
+    const column = legend(5, 10000, -5000, 16000, 2000);
+    const boxes = rects(column);
+    expect(boxes[0]).toMatchObject({ x: 10000, y: -2000, width: 6000, height: 7000, fill: role(ROLE.Legend), stroke: role(ROLE.Frame) });
+    expect(boxes.slice(1).map((b) => b.fill)).toEqual([role(21), role(22)]);
+    expect(boxes[1]!.x).toBe(boxes[2]!.x); // one above the other
+    expect(boxes[2]!.y).toBeGreaterThan(boxes[1]!.y);
+    const names = texts(column).filter((t) => t.text === "Alpha" || t.text === "Beta");
+    expect(names.slice(-2).map((t) => t.anchor)).toEqual(["start", "start"]);
+    const row = rects(legend(7, -400, -12000, 16000, -10000)).slice(1);
+    expect(row[0]!.y).toBe(row[1]!.y); // side by side
+    expect(row[1]!.x).toBeGreaterThan(row[0]!.x);
+    // Off: nothing extra.
+    const off = draw(chartWith(DocumentType.Pie, [PLOT, area(810, 0, 0, 100, 100), flat1304, leaf(1306, [2, 2, 5, 2, 14, 20]), slice(0, 0, 1, "A")]), drawPieChart).elements;
+    expect(rects(off)).toHaveLength(0);
   });
 
   it("is drawn by buildChartScene when laid out from data", () => {
     const chart = chartWith(DocumentType.Pie, [PLOT, flat1304, slice(0, 0, 1, "A")]);
     expect(notYetDrawn(chart, "always")).toEqual([]);
     const els = buildChartScene(chart, undefined, { dataLayout: "always" }).scene.elements;
-    expect(texts(els).map((t) => t.text)).toContain("100%");
+    expect(texts(els).map((t) => t.text)).toContain("1");
   });
 });
 

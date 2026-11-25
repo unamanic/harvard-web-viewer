@@ -17,7 +17,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "compare": "vitest run --config tools/compare/vitest.config.ts"
+    "compare": "vitest run --config tools/compare/vitest.config.ts",
+    "copycheck": "vitest run --config tools/copycheck/vitest.config.ts"
   },
   "dependencies": {
     "react": "^19.3.1",

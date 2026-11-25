@@ -263,6 +263,84 @@ Add entries as `- finding (sample file checked, task number)`.
   3-D bars. Copy quirks not reproduced: 3-D pyramids show a left face on
   the first bar only (more in overlapped lanes); I-bar high/low marks are
   stored twice. (all XY samples, task 17)
+- Pie fallback from the 3.05 option records (task 16; test charts in
+  samples/option-tests/pie, checked with `yarn copycheck`): records 1304
+  to 1316 are parsed as SPEC §5.4 gives them, and the layout uses the
+  starting angle, sort (largest first, ties in data order, colours kept),
+  pie size as a share of area (radius × √(size/100)), cut slices (0.5 r
+  out), show pie, show as column, slice pointer None/Short/Long, show
+  slice labels, slice values and percents (show, place, currency,
+  decimals, scale, leading and trailing text), the outline and link-line
+  roles, and the legend for locations 5 to 8. Pixel difference from the
+  drawn copy: about 4 to 20 % before, 0.2 to 1.8 % after on every test
+  chart except PFILLP/PFILLB (the copy's 0x1032 pattern arcs are not
+  drawn yet); the 10 sample pies are unchanged. Label text [C]: line 1 is
+  the name, plus Adjacent items after two spaces ("Alpha  40"); line 2
+  is the Below items joined by two spaces ("40  40%"); Inside items form
+  their own block at 2/3 r. A value is leading text, "$", value ÷ scale
+  with its decimals, trailing text; a percent is leading text, the
+  number, trailing text, then "%" ("40XY%"). 1310 byte 17 is Show slice
+  labels, not "percentages only": GALD291 shows percents because its 1312
+  says so. Long pointers add a horizontal tail 0.3 r long [C]; Medium is
+  drawn like Short [?]. Label boxes are placed by the slice middle in
+  eight sectors (beside at 333–18° and 162–198°, centred above at
+  72–108°, centred below at 260–280°, a corner at the leader end
+  otherwise) [I]. Sizes fitted to the test charts, used on Letter pages
+  only [I]: flat radius 0.34 × min(h, column) with two label lines and
+  0.40 with one, 3-D rx 0.44 h, a cut slice shrinks the pie to 0.7. The
+  10 × 7.5 in samples need 0.32, 0.42 and 0.85, so those stay for other
+  page sizes; the cause is not known. Legend [C for PLEG to PLEGL3]: the
+  box is area 810 in the 1306 byte 4 and 5 roles, one entry per slice of
+  the first pie (swatch and name), a column for locations 5 and 6, a row
+  for 7 and 8. (pie option tests, task 16)
+- XY fallback from the 3.05 option records (task 17; test charts in
+  samples/option-tests/xy): 1402 to 1418 are parsed as SPEC §5.4 gives
+  them, and X labels are read from 1426 (3.05) before 1422. Mean pixel
+  difference from the drawn copy over the 105 test charts went from
+  5.8 % to 2.6 %; over the 141 sample XY charts from 4.0 % to 3.7 %, none
+  worse. Number format [C]: labels show value ÷ scale factor with the
+  axis unchanged; percent is value × 100 then "%"; currency puts "$"
+  first; scientific is "3.500E+01" (3 decimals when blank); set decimals
+  are fixed, blank decimals use what the value needs; the thousands
+  separator is ","; leading text first and trailing text last; the minus
+  sign goes before "$" [I]. Formatted labels count at full width when the
+  frame is placed. Axes [C]: a set major increment changes only the tick
+  step; the X maximum has no effect on a category axis; major ticks are
+  0.02 × the frame width, minor 0.01, In/Out/Both as named; labels move
+  out by an outward tick; "show axis labels" No frees the room. Minor
+  ticks every fifth of the major step when blank [I]; outward major ticks
+  move the frame edge in by 299/26615 of the plot width [I, one value].
+  Dotted grids are stored as dashes 0.309 × pitch long every pitch, pitch
+  0.013542 × the page's short side, none where a frame edge is [I].
+  Frame [C]: 1404 outline role colours edges, grid, ticks and table
+  lines; the fill role fills the frame, and 1405 No leaves it unfilled.
+  Series [C]: hidden series are not drawn and give up their cluster
+  width but keep their legend row; cumulative series are running sums;
+  in a cluster Y1 bars come before Y2 bars. Data labels need both 1410
+  byte 2 and the series byte 5 [I]; the table lists a series only when
+  its byte 6 is Yes [I]. Style: byte 24 outlines bars and legend swatches
+  [C]. Data table [C]: series swatches appear in it exactly when the
+  legend is off; without them the box starts at the plot's left edge,
+  unfilled, gap 0.0225 × H under the X labels; grid 1 draws column lines,
+  grid 2 row lines; Table only fills the plot area down to 0.05 × H above
+  its bottom. The legend always sits in area 810, which the original
+  sizes from placement and location. Read from the drawn copy of a "next
+  choice" value, so [I]: frame style 2 draws only the left and bottom
+  edges (XFRST); 2D style 2 adds drop shadows 0.15 × the bar width right
+  and 0.15 × its height down in role Shadow (XS2DST); legend frame style
+  1 draws no box with items flush left (XLEGOC). (XY option tests,
+  task 17)
+- Open from the option tests: the 3.05 test charts are Letter pages
+  (11 × 8.5 in) and their text is larger than our metrics give there
+  (size 3.5 line box 1200, not 1100; digits 500 wide, not 550), while the
+  10 × 7.5 in samples fit the current metrics; the chart title is 100
+  units too high on every test chart. Fill style 2 with pattern 0 draws a
+  hollow bar with a white outline (XS6FS), not reproduced. A data table
+  with swatches is placed differently in XLEGNO (3.05) and the samples
+  (GALD317, GALD367); the sample rule is kept. The bottom-up legend
+  order still follows 1418 byte 1 = 2 with layered series, which fits
+  the samples, but byte 1 is Placement, so the real cause is open.
+  (option tests)
 - Stored-copy drawing corrections (task 13d, fixed): each text line entry
   stores the copy's own line box and em, so lines are drawn there (79
   multi-line blocks: error 240 → 0 units); HELP1's 8/9 scale is its

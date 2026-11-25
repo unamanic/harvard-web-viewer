@@ -268,8 +268,8 @@ describe("drawXYChart", () => {
     expect(swatches[0]!.width).toBeCloseTo(XY_LEGEND_SWATCH * lineBoxHeight(createChartSceneContext(clusterChart(), undefined).context, 4), 6);
   });
 
-  it("draws a data table with one row per series under the frame (1410 byte 0 = 2)", () => {
-    const { elements } = draw(clusterChart([leaf(1410, [2, 1, 2])]));
+  it("draws a data table with one row per series under the frame (1410 byte 0 = 2), with swatches when the legend is off", () => {
+    const { elements } = draw(clusterChart([leaf(1410, [2, 1, 2]), leaf(1418, [2, 2, 5, 2, 14, 20])]));
     const cells = texts(elements).map((t) => t.text);
     expect(cells).toEqual(expect.arrayContaining(["10", "28", "15", "103", "North", "South"]));
     const table = rects(elements).find((r) => r.stroke === role(ROLE.Frame) && r.fill === role(ROLE.FrameBkg))!;
@@ -305,8 +305,8 @@ describe("drawXYChart", () => {
     expect(notYetDrawn(chart)).toEqual([]);
     const { scene } = buildChartScene(chart, undefined);
     expect(texts(scene.elements).map((t) => t.text)).toEqual(expect.arrayContaining(["Q1", "120"]));
-    // A log Y1 axis (1402 byte 1 = 2) labels decades.
+    // A log Y1 axis (1402 byte 1 = 2) labels decades, with the thousands separator (byte 74 not No).
     const log = draw(clusterChart([axis(1, {}, 2)])).elements;
-    expect(texts(log).map((t) => t.text)).toEqual(expect.arrayContaining(["10", "100", "1000"]));
+    expect(texts(log).map((t) => t.text)).toEqual(expect.arrayContaining(["10", "100", "1,000"]));
   });
 });

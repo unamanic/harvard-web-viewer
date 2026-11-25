@@ -606,27 +606,12 @@ export const PIE_LINE_STYLE = 1;
 /** Leader lines run from the rim to PIE_LABEL_LEADER × the radius along the slice middle (front ones from the edge bottom in 3-D) [I]. */
 export const PIE_LABEL_LEADER = 1.1;
 
-/**
- * Label box placement by the slice middle's direction [I]:
- * - within PIE_LABEL_SIDE_DEGREES of horizontal: beside the leader end,
- *   PIE_LABEL_SIDE_GAP_EM ems away (245 for size 4), centred vertically
- *   (8.6° and 20.65° are, 25.7° and 26.8° are not);
- * - within PIE_LABEL_ABOVE_DEGREES of straight up / PIE_LABEL_BELOW_DEGREES
- *   of straight down: centred over / under the leader end (13.2° up and 6.4°
- *   down are, 12.8° down is not);
- * - otherwise the box's nearest corner at the leader end.
- * Then moved into the plot area (GALD231, GALD271 hit its left edge).
- */
+/** Box placement is PIE_LABEL_SECTORS in scene/data/pie.ts; within this many degrees of horizontal, 3-D front leaders still start at the rim, not the edge bottom [I]. */
 export const PIE_LABEL_SIDE_DEGREES = 22.5;
-export const PIE_LABEL_ABOVE_DEGREES = 15;
-export const PIE_LABEL_BELOW_DEGREES = 10;
 export const PIE_LABEL_SIDE_GAP_EM = 0.25;
 
 /** Slice labels use 1308 entry 13 + pie number (size 4, role XLabel in every sample) [I]. */
 export const PIE_LABEL_STYLE_INDEX = 13;
-
-/** 1310 byte 17 = 2: labels show only the percentage (GALD291's first pie; 1 elsewhere) [I]. */
-export const PIE_LABEL_NAMES_OFF = 2;
 
 /**
  * Stacked column (1310 byte 2 = 2, GALD231 and GALD261): from a quarter of
@@ -645,7 +630,6 @@ export const PIE_COLUMN_3D_SHADES = [1, 0.75, 0.5] as const;
 /** Label box left = column right (+ its depth in 3-D) + this many ems: 648 flat (GALD231), 588 in 3-D (GALD261) for size 4 [I]. */
 export const PIE_COLUMN_LABEL_GAP_EM = 0.66;
 export const PIE_COLUMN_3D_LABEL_GAP_EM = 0.6;
-export const PIE_COLUMN_LABEL_SEPARATOR = "  ";
 
 /**
  * 910 byte 0, org box style: 2 square (GALD711, 741), 4 rounded corners

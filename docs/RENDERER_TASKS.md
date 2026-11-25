@@ -410,6 +410,12 @@ values in `assumptions.ts`). Fill by role, outline in role 32, labels outside
 on the slice's middle line. Several pies are spaced evenly with slot 5
 titles. Negative values are skipped with a warning (§7.1).
 
+**3.05 options** (scene/data/pie.ts, pieLabels.ts, pieLegend.ts): starting
+angle, sort, size, cut slices, show pie, column, pointers, labels, values,
+percents, outline and link roles, legend locations 5 to 8, checked with
+`yarn copycheck` against samples/option-tests/pie (formats.md). Not yet:
+pattern fills, share pie 1 labels, other legend locations.
+
 ### 17. XY chart
 
 Split into:
@@ -428,6 +434,14 @@ curve; 3-D ribbons), areas (2-D and 3-D), high/low/close, legend, data table,
 value labels, Y2 axis, log and numeric X axes, horizontal charts; 92 of the
 141 sample XY charts match their drawn copy exactly (formats.md). Not yet:
 paired bars, horizontal 3-D (drop-shadow) bars, time-of-day X labels.
+
+**3.05 options** (scene/data/xy.ts, xyFormat.ts): X labels from 1426, axis
+scale, factor, min/max, ticks and increments, grid styles, label format,
+axis frame, series show/cumulative/Y2/labels/table flags, outline role,
+data table (with chart, table only, grid), legend show and frame style,
+checked against samples/option-tests/xy (formats.md). Not yet: goal
+ranges, markers, fill patterns, ticks on X, Y2, 3-D and horizontal
+charts, and the Letter-page text metrics.
 
 ### 18. Organisation chart
 

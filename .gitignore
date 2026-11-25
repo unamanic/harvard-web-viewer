@@ -13,3 +13,6 @@ samples-private/
 
 # Reference comparison output (private: derived from the reference renders)
 tools/compare/out/
+
+# Layout-from-data check output
+tools/copycheck/out/

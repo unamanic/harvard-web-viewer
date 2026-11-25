@@ -12,6 +12,13 @@
  *   3-D bar depth % of a depth lane, f32 at 19 3-D depth % of the frame
  *   height; 1410 byte 0 = 2 a data table, byte 2 = 1 value labels; 1418
  *   byte 1 = 2 a vertical legend listed bottom-up.
+ * - 3.05 options (SPEC §5.4, checked against the drawn copies of the test
+ *   charts in samples/option-tests/xy; rules marked at their constants):
+ *   1402 scale type, factor, min/max, grid style, tick marks, increments,
+ *   show labels and number format (xyFormat.ts); 1404/1405 axis frame;
+ *   1406 show, Y axis, cumulative, data labels, data table; 1408 2D style
+ *   2 shadows and outline role; 1410 table grid and table only; 1418 show
+ *   and frame style. X labels come from 1426 in files saved by 3.05.
  * - The frame sits in the plot area with margins of 9 % of the plot size
  *   at the right and top and 9 % plus the widest Y1 label at the left;
  *   4.5 % plus the label height at the bottom; Y2 labels and Y axis titles
@@ -55,7 +62,7 @@ import {
   lineWidthFor,
   textSizeToUnits,
 } from "../../assumptions";
-import { type XyData, type XySeries, parseXyData } from "../../data/xy";
+import { NO, type XyAxis, type XyData, type XySeries, parseXyData } from "../../data/xy";
 import type { FontKey } from "../../fontKey";
 import { ROLE } from "../../palette";
 import { Justification } from "../../text";
@@ -64,8 +71,46 @@ import { shadeCss } from "../objectLayer";
 import { toScene } from "../page";
 import { type Box, type StyledText, baselineBelow, boxOf, drawnAdvance, lineBoxHeight, pageBox, textElement } from "./text";
 import { styled } from "./textCharts";
+import { type XyNumberFormat, formatXyNumber } from "./xyFormat";
 
 const NO_FONT: FontKey = { source: 0, number: 0, style: 0 };
+
+// ---------------------------------------------------------------------------
+// Rules from the 3.05 test charts (samples/option-tests/xy), each checked
+// against the chart's own drawn copy. Page units; W, H = plot area size,
+// FW = frame width.
+// ---------------------------------------------------------------------------
+
+/** 1408 byte 13 = 2: drop shadows (XS2DST) [I: "the next choice"; the copy draws them]. */
+const STYLE_2D_SHADOW = 2;
+/** The shadow is the bar moved right by this share of its width, its top down by this share of its height, role Shadow (XS2DST) [I]. */
+export const XY_SHADOW_OFFSET = 0.15;
+/** Major / minor tick length, share of FW (XMAJIN, XMAJOUT, XMAJBOT: 416 of 20827; XMINBOT: 208) [C]. */
+export const XY_MAJOR_TICK = 0.02;
+export const XY_MINOR_TICK = 0.01;
+/** Minor ticks per major step when the minor increment is blank (XMINBOT: every 1 on a step of 5) [I]. */
+export const XY_MINOR_PER_MAJOR = 5;
+/** Outward major ticks move the frame edge in by this share of W (XMAJOUT, XMAJBOT: 299 of 26615) [I, one value]. */
+export const XY_TICK_OUT_SHIFT = 299 / 26615;
+/** Dotted grid lines are dashes this long at this pitch, from the line's start; pitch = share of the page's short side (332.8 on 10 × 7.5 in pages in the samples, 342.9 on Letter in the test charts) [I]. */
+export const XY_DOT_PITCH = 332.8 / 24576;
+export const XY_DOT_LENGTH = 0.309;
+/** Data table without swatches: name column padding each side, ems of the name size (266 = 0.3 × 886; XREV7, XDTONLY) [I]. */
+export const XY_TABLE_PAD_EM = 0.3;
+/** Data table without swatches: gap between the X labels and the table, share of H (XREV7: 475 of 21153) [C]. */
+export const XY_TABLE_GAP = 0.0225;
+/** Table only: the table fills the plot area down to this share of H above its bottom (XDTONLY: 1058 of 21153) [C]. */
+export const XY_TABLE_ONLY_BOTTOM = 0.05;
+/** 1402 byte 26 grid lines, bytes 27/28 tick marks [C]. */
+const GRID_DOTTED = 1;
+const GRID_SOLID = 2;
+const TICK_IN = 1;
+const TICK_OUT = 2;
+const TICK_BOTH = 3;
+/** 1404 byte 0 = 2: only the left and bottom frame edges (XFRST) [I]. */
+const FRAME_HALF = 2;
+/** 1418 byte 3 = 1: legend without a box, items flush left (XDTNO, XLEGOC) [I]. */
+const LEGEND_NO_FRAME = 1;
 
 // ---------------------------------------------------------------------------
 // Options
@@ -93,14 +138,35 @@ export interface XyOptions {
   barDepth: number;
   /** 3-D: depth of the frame, percent of its height. */
   depth: number;
-  /** A data table under the chart (1410 byte 0 = 2) [I]. */
+  /** A data table under the chart (1410 byte 0 = 2) [C]. */
   dataTable: boolean;
-  /** Values printed at the bars and points (1410 byte 2 = 1) [I]. */
+  /** The data table alone, without the chart (1410 byte 0 = 3) [C, XDTONLY]. */
+  tableOnly: boolean;
+  /** Table grid lines (1410 byte 1): 1 vertical, 2 horizontal [C, XDTGRID]. */
+  tableGrid: number;
+  /** Values printed at the bars and points (1410 byte 2 = 1) [C]. */
   valueLabels: boolean;
-  /** A vertical legend lists the series bottom-up (1418 byte 1 = 2) [I]. */
+  /**
+   * 1418 byte 1 = 2 (Placement Outside, the default). Kept for the sample-fitted rule that a vertical
+   * legend and the data table list layered series bottom-up [?] (see listedBottomUp).
+   */
   legendBottomUp: boolean;
   /** High/low style (1408 byte 11): 1 box, 2 band, 3 I bar [I]. */
   highLowStyle: number;
+  /** 2D style 2 (1408 byte 13): bars cast a drop shadow (XS2DST) [I]. */
+  shadow: boolean;
+  /** Bar and swatch outline colour role (1408 byte 24, 32 = Outlines) [C, XSOUT]. */
+  outlineRole: number;
+  /** Axis frame (1404, 1405): style 1 full, 2 left and bottom edges only [I, XFRST]; roles [C]. */
+  frameStyle: number;
+  frameRole: number;
+  frameFillRole: number;
+  frameFill: boolean;
+  /** Legend (1418): shown, frame style (1 none [I, XDTNO], 2 plain), frame roles [C]. */
+  legendShow: boolean;
+  legendFrameStyle: number;
+  legendOutlineRole: number;
+  legendFillRole: number;
 }
 
 function f32(d: Uint8Array, at: number): number | null {
@@ -109,9 +175,13 @@ function f32(d: Uint8Array, at: number): number | null {
   return Number.isFinite(v) ? v : null;
 }
 
-export function xyOptions(data: Pick<XyData, "raw1408" | "raw1410" | "raw1418">): XyOptions {
+type OptionRecords = Pick<XyData, "raw1408" | "raw1410" | "raw1418"> & Partial<Pick<XyData, "raw1404" | "raw1405">>;
+
+export function xyOptions(data: OptionRecords): XyOptions {
   const o = data.raw1408 ?? new Uint8Array(0);
   const t = data.raw1410 ?? new Uint8Array(0);
+  const g = data.raw1418 ?? new Uint8Array(0);
+  const fr = data.raw1404 ?? new Uint8Array(0);
   return {
     barMode: BAR_MODES[o[0] ?? 1] ?? "cluster",
     barShape: BAR_SHAPES[o[1] ?? 1] ?? "bar",
@@ -123,9 +193,21 @@ export function xyOptions(data: Pick<XyData, "raw1408" | "raw1410" | "raw1418">)
     barDepth: f32(o, 15) ?? 40,
     depth: f32(o, 19) ?? 15,
     dataTable: t[0] === 2,
+    tableOnly: t[0] === 3,
+    tableGrid: t[1] ?? 1,
     valueLabels: t[2] === 1,
-    legendBottomUp: data.raw1418?.[1] === 2,
+    legendBottomUp: g[1] === 2,
     highLowStyle: o[11] ?? 1,
+    shadow: o[13] === STYLE_2D_SHADOW,
+    outlineRole: o[24] || ROLE.Outlines,
+    frameStyle: fr[0] ?? 1,
+    frameRole: fr[1] || ROLE.Frame,
+    frameFillRole: fr[2] || ROLE.FrameBkg,
+    frameFill: data.raw1405?.[0] !== NO,
+    legendShow: g[0] !== NO,
+    legendFrameStyle: g[3] ?? 2,
+    legendOutlineRole: g[4] || ROLE.Frame,
+    legendFillRole: g[5] || ROLE.Legend,
   };
 }
 
@@ -203,9 +285,11 @@ function decimalsOf(step: number): number {
   return 6;
 }
 
-export function tickLabel(v: number, s: AxisScale): string {
+/** A tick label: plain, "N%" on a 100 % axis, else in the axis' number format (xyFormat.ts). */
+export function tickLabel(v: number, s: AxisScale, fmt: XyNumberFormat | null = null): string {
   const t = s.log ? Number(v.toPrecision(6)) : Number(v.toFixed(decimalsOf(s.step)));
-  return s.percent ? `${t}%` : String(t);
+  if (s.percent) return `${t}%`;
+  return fmt ? formatXyNumber(t, fmt) : String(t);
 }
 
 // ---------------------------------------------------------------------------
@@ -383,6 +467,11 @@ interface Layout {
   lanes: number;
   /** Set once the first 3-D bar is drawn (pyramids show a left face only there). */
   drewFirstBar?: boolean;
+  /** Axis records of the left and right value axes, and their tick marks. */
+  y1Axis: XyAxis | undefined;
+  y2Axis: XyAxis | undefined;
+  leftTicks: Ticks;
+  rightTicks: Ticks;
 }
 
 /** Fraction 0..1 along the category axis of row r's centre. */
@@ -414,14 +503,65 @@ function boxAt(l: Layout, t0: number, t1: number, f0: number, f1: number, z = 0)
 // Entry point
 // ---------------------------------------------------------------------------
 
+/** Series values with cumulative series (1406 byte 4) replaced by their running sums over the rows (XS6CU) [C]. */
+export function withCumulative(data: XyData): XyData {
+  if (!data.series.some((s) => s.cumulative)) return data;
+  const values = new Map(data.values);
+  for (const s of data.series) {
+    const m = data.values.get(s.index);
+    if (!s.cumulative || !m) continue;
+    let acc = 0;
+    const out = new Map<number, number>();
+    for (const [r, v] of [...m].sort((a, b) => a[0] - b[0])) out.set(r, (acc += v));
+    values.set(s.index, out);
+  }
+  return { ...data, values };
+}
+
+const axisOf = (data: XyData, index: number): XyAxis | undefined => data.axes.find((a) => a.index === index);
+
+/** Tick marks along one value axis edge. */
+interface Ticks {
+  major: number;
+  minor: number;
+  /** Extra room the labels need outside the edge (outward ticks). */
+  out: number;
+}
+
+function ticksOf(a: XyAxis | undefined, FW: number): Ticks {
+  const outward = (st: number | undefined, len: number) => (st === TICK_OUT || st === TICK_BOTH ? len : 0);
+  return {
+    major: a?.majorTicks ?? 4,
+    minor: a?.minorTicks ?? 4,
+    out: Math.max(outward(a?.majorTicks, XY_MAJOR_TICK * FW), outward(a?.minorTicks, XY_MINOR_TICK * FW)),
+  };
+}
+
 export function drawXYChart(ctx: ChartSceneContext): SceneElement[] {
-  const data = parseXyData(ctx.chart, []);
+  const data = withCumulative(parseXyData(ctx.chart, []));
   const opts = xyOptions(data);
-  const series = data.series.filter((s) => (data.values.get(s.index)?.size ?? 0) > 0);
+  const withData = data.series.filter((s) => (data.values.get(s.index)?.size ?? 0) > 0);
+  // Hidden series (1406 byte 1 = 2) are left out everywhere but keep their legend row (XS6SH) [C].
+  const series = withData.filter((s) => s.show);
   if (series.length === 0 || data.rowCount === 0) return [];
   const plot = ctx.chart.areas.plot ? boxOf(ctx.chart.areas.plot) : pageBox(ctx);
   const W = plot.right - plot.left;
   const H = plot.top - plot.bottom;
+  const xAxis = axisOf(data, 0);
+  const y1Axis = axisOf(data, 1);
+  const y2Axis = axisOf(data, 2);
+  const tableSeriesAll = series.filter((s) => s.dataTable);
+  // The data table lists the series bottom-up when the legend would (see listedBottomUp) [I].
+  const tableSeries = listedBottomUp(opts, series) ? [...tableSeriesAll].reverse() : tableSeriesAll;
+  // Without a legend the data table carries the series swatches (XLEGNO vs XREV7; every sample table) [C].
+  const legendShown = opts.legendShow && !!ctx.chart.areas.legend;
+  const swatches = !opts.legendShow;
+
+  if (opts.tableOnly) {
+    // Table only: no chart; the table fills the plot area (XDTONLY) [C].
+    const t = tableLayout(ctx, tableSeries, plot, H, swatches, true);
+    return drawTableOnly(ctx, opts, data, t, tableSeries, plot);
+  }
 
   // Value axes.
   const onY2 = series.filter((s) => s.axis === 2);
@@ -430,9 +570,13 @@ export function drawXYChart(ctx: ChartSceneContext): SceneElement[] {
     if (!list.length) return null;
     const r = dataRange(data, opts, list);
     if (r.percent) return { min: 0, max: 100, step: 25, percent: true };
-    const a = data.axes.find((x) => x.index === index);
-    if (a?.raw[1] === AXIS_LOG) return logScale(r.min, r.max);
-    return autoScale(r.min, r.max, a?.minimum ?? null, a?.maximum ?? null);
+    const a = axisOf(data, index);
+    if (a?.scaleType === AXIS_LOG) return logScale(r.min, r.max);
+    const sc = autoScale(r.min, r.max, a?.minimum ?? null, a?.maximum ?? null);
+    // A set major increment changes the tick step, not the range (XMAJI10: 0..35 labelled 0, 10, 20, 30) [C].
+    const inc = a?.increment ?? null;
+    if (inc !== null && inc > 0 && (sc.max - sc.min) / inc <= 1000) sc.step = inc;
+    return sc;
   };
   // A numeric X axis (1414 byte 0 = 13): rows sit at their X label's value on a scale like a value axis [I].
   const xNumbers = new Map<number, number>();
@@ -451,19 +595,25 @@ export function drawXYChart(ctx: ChartSceneContext): SceneElement[] {
     : series.some(isBar)
       ? autoScale(xMin, xMax, null, null)
       : { min: xMin, max: xMax > xMin ? xMax : xMin + 1, step: niceStep(xMax - xMin), percent: false };
+  const y1OnY2 = !onY1.length;
   const y1 = (scaleFor(onY1, 1) ?? scaleFor(onY2, 2))!;
   const y2 = onY1.length ? scaleFor(onY2, 2) : null;
+  // The axis record that formats and styles the left axis (Y2's when only Y2 has series).
+  const leftAxis = y1OnY2 ? y2Axis : y1Axis;
 
-  // Labels.
-  const y1Labels = tickValues(y1).map((v) => label(ctx, tickLabel(v, y1), tableStyle(ctx, 11, ROLE.Y1Label)));
-  const y2Labels = y2 ? tickValues(y2).map((v) => label(ctx, tickLabel(v, y2), tableStyle(ctx, 12, ROLE.Y2Label))) : [];
+  // Labels; "Show axis labels" No (1402 byte 62) leaves them out (XLBLNO) [C].
+  const y1Labels = leftAxis?.showLabels === false ? [] : tickValues(y1).map((v) => label(ctx, tickLabel(v, y1, leftAxis ?? null), tableStyle(ctx, 11, ROLE.Y1Label)));
+  const y2Labels = y2 && y2Axis?.showLabels !== false ? tickValues(y2).map((v) => label(ctx, tickLabel(v, y2, y2Axis ?? null), tableStyle(ctx, 12, ROLE.Y2Label))) : [];
   const xByRow = new Map(data.xLabels.map((x) => [x.row, x.label]));
   const xStyle = tableStyle(ctx, 10, ROLE.XLabel);
-  const xLabels = xScale ? [] : rowsOf(data).map((r) => label(ctx, xByRow.get(r) ?? "", xStyle));
-  const xTicks = xScale ? tickValues(xScale).map((v) => label(ctx, tickLabel(v, xScale), xStyle)) : [];
-  // Percent labels take the width of their number only (GALD351) [I].
-  const widthOf = (l: Label) => (l.text.endsWith("%") ? xyTextWidth(ctx, l.text.slice(0, -1), l.style.fontKey, l.style.size) : l.width);
-  const maxW = (ls: Label[]) => Math.max(0, ...ls.map(widthOf));
+  const showX = xAxis?.showLabels !== false;
+  const xLabels = xScale || !showX ? [] : rowsOf(data).map((r) => label(ctx, xByRow.get(r) ?? "", xStyle));
+  const xTicks = xScale && showX ? tickValues(xScale).map((v) => label(ctx, tickLabel(v, xScale), xStyle)) : [];
+  // Percent labels of a 100 % axis take the width of their number only (GALD351) [I]; formatted labels
+  // take their full width (XPCT) [C].
+  const widthOf = (l: Label, sc: AxisScale | null) =>
+    sc?.percent && l.text.endsWith("%") ? xyTextWidth(ctx, l.text.slice(0, -1), l.style.fontKey, l.style.size) : l.width;
+  const maxW = (ls: Label[], sc: AxisScale | null = null) => Math.max(0, ...ls.map((l) => widthOf(l, sc)));
   const maxH = (ls: Label[]) => Math.max(0, ...ls.map((l) => l.height));
 
   // Axis titles (slot 3: row 0 X, 1 Y1, 2 Y2).
@@ -475,28 +625,31 @@ export function drawXYChart(ctx: ChartSceneContext): SceneElement[] {
   const yTitleH = maxH(yTitles);
 
   // Frame: the category labels go at the left in horizontal charts, the value labels at the bottom.
-  const leftW = opts.horizontal ? maxW(xScale ? xTicks : xLabels) : maxW(y1Labels);
+  const leftW = opts.horizontal ? maxW(xScale ? xTicks : xLabels) : maxW(y1Labels, y1);
   const bottomH = opts.horizontal ? maxH(y1Labels) : xLabels.length || xTicks.length ? lineBoxHeight(ctx, xStyle.size) : 0;
   // A data table (1410 byte 0 = 2) takes the bottom of the plot area: one row per series under the frame,
-  // the series names and swatches in a column at its left.
-  const tableSeries = listedBottomUp(opts, series) ? [...series].reverse() : series;
-  const table = opts.dataTable ? tableLayout(ctx, tableSeries, plot, H) : null;
+  // the series names in a column at its left.
+  const table = opts.dataTable ? tableLayout(ctx, tableSeries, plot, H, swatches, false) : null;
+  // Tick marks (2-D vertical charts): outward major ticks move the frame edge in (XMAJOUT) [I].
+  const flat2d = !opts.threeD && !opts.horizontal;
+  const shiftFor = (a: XyAxis | undefined) => (flat2d && (a?.majorTicks === TICK_OUT || a?.majorTicks === TICK_BOTH) ? XY_TICK_OUT_SHIFT * W : 0);
   // Horizontal charts: Y2 labels above the frame, the Y1 title under the Y1 labels and the Y2 title above
   // the Y2 labels, both centred (GALD871) [I].
   const t1 = titleOf(1);
   const t2 = titleOf(2);
+  const tableBottomGap = table && !table.swatches ? XY_TABLE_GAP : XY_FRAME_BOTTOM_MARGIN;
   const outer: Box = opts.horizontal
     ? {
         left: plot.left + XY_FRAME_MARGIN * W + leftW,
         right: plot.right - XY_FRAME_MARGIN * W,
         top: plot.top - XY_FRAME_MARGIN * H - maxH(y2Labels) - (t2?.height ?? 0),
-        bottom: (table ? table.top : plot.bottom) + XY_FRAME_BOTTOM_MARGIN * H + bottomH + (t1?.height ?? 0),
+        bottom: (table ? table.top : plot.bottom) + tableBottomGap * H + bottomH + (t1?.height ?? 0),
       }
     : {
-        left: table ? table.frameLeft : plot.left + XY_FRAME_MARGIN * W + leftW,
-        right: plot.right - XY_FRAME_MARGIN * W - maxW(y2Labels),
+        left: (table ? table.frameLeft : plot.left + XY_FRAME_MARGIN * W + leftW) + shiftFor(leftAxis),
+        right: plot.right - XY_FRAME_MARGIN * W - maxW(y2Labels) - (y2 ? shiftFor(y2Axis) : 0),
         top: plot.top - XY_FRAME_MARGIN * H - yTitleH,
-        bottom: (table ? table.top : plot.bottom) + XY_FRAME_BOTTOM_MARGIN * H + bottomH,
+        bottom: (table ? table.top : plot.bottom) + tableBottomGap * H + bottomH,
       };
   // Horizontal "3-D" charts have no depth walls: their copies draw flat frames with drop-shadow bars
   // (0x1070 style 5), whose geometry is not decoded; they are drawn flat [?].
@@ -505,39 +658,61 @@ export function drawXYChart(ctx: ChartSceneContext): SceneElement[] {
   const thin = lineWidthFor(XY_LINE_STYLE);
   const barCount = series.filter(isBar).length;
   const lanes = depth > 0 ? Math.max(1, seriesGroups(series, { ...opts, threeD: true }).length) : 1;
-  const l: Layout = { ctx, data, opts, plot, outer, frame, depth, rows: data.rowCount, slots: barCount > 0 || series.some(isHighLow), y1, y2, thin, lanes, xScale, xNumbers };
   const FW = frame.right - frame.left;
   const FH = frame.top - frame.bottom;
+  const leftTicks = flat2d ? ticksOf(leftAxis, FW) : ticksOf(undefined, FW);
+  const rightTicks = flat2d && y2 ? ticksOf(y2Axis, FW) : ticksOf(undefined, FW);
+  const l: Layout = {
+    ctx,
+    data,
+    opts,
+    plot,
+    outer,
+    frame,
+    depth,
+    rows: data.rowCount,
+    slots: barCount > 0 || series.some(isHighLow),
+    y1,
+    y2,
+    thin,
+    lanes,
+    xScale,
+    xNumbers,
+    y1Axis: leftAxis,
+    y2Axis,
+    leftTicks,
+    rightTicks,
+  };
 
   const out: SceneElement[] = [];
   out.push(...drawFrame(l));
   out.push(...drawSeries(l, series));
 
   // Value labels, centred on their ticks: Y1 at the left (horizontal: below), Y2 at the right on the back plane.
-  tickValues(y1).forEach((v, i) => {
-    const lab = y1Labels[i]!;
+  y1Labels.forEach((lab, i) => {
+    const v = tickValues(y1)[i]!;
     const p = at(l, 0, valueAt(y1, v));
     if (opts.horizontal) out.push(...drawLabel(ctx, lab, p.x - lab.width / 2, frame.bottom - XY_LABEL_GAP * FW));
-    else out.push(...drawLabel(ctx, lab, frame.left - XY_LABEL_GAP * FW - lab.width, p.y + lab.height / 2));
+    else out.push(...drawLabel(ctx, lab, frame.left - XY_LABEL_GAP * FW - leftTicks.out - lab.width, p.y + lab.height / 2));
   });
   if (y2) {
-    tickValues(y2).forEach((v, i) => {
-      const lab = y2Labels[i]!;
+    y2Labels.forEach((lab, i) => {
+      const v = tickValues(y2)[i]!;
       const p = shift(at(l, 1, valueAt(y2, v)), depth);
       if (opts.horizontal) out.push(...drawLabel(ctx, lab, p.x - lab.width / 2, outer.top + XY_LABEL_GAP * FW + lab.height));
-      else out.push(...drawLabel(ctx, lab, outer.right + XY_LABEL_GAP * FW, p.y + lab.height / 2));
+      else out.push(...drawLabel(ctx, lab, outer.right + XY_LABEL_GAP * FW + rightTicks.out, p.y + lab.height / 2));
     });
   }
   if (xScale) {
-    tickValues(xScale).forEach((v, i) => {
-      const lab = xTicks[i]!;
+    xTicks.forEach((lab, i) => {
+      const v = tickValues(xScale)[i]!;
       const p = at(l, valueAt(xScale, v), 0);
       if (opts.horizontal) out.push(...drawLabel(ctx, lab, frame.left - XY_LABEL_GAP * FH - lab.width, p.y + lab.height / 2));
       else out.push(...drawLabel(ctx, lab, p.x - lab.width / 2, frame.bottom - XY_LABEL_GAP * FH));
     });
   }
   // Category labels, every nth (1402 X offset 29).
-  const every = Math.max(1, Math.round(data.axes.find((a) => a.index === 0)?.increment ?? 1));
+  const every = Math.max(1, Math.round(xAxis?.increment ?? 1));
   xLabels.forEach((lab, r) => {
     if (!lab.text || r % every !== 0) return;
     const p = at(l, rowAt(l, r), 0);
@@ -557,7 +732,7 @@ export function drawXYChart(ctx: ChartSceneContext): SceneElement[] {
   }
 
   if (table) out.push(...drawTable(l, table, tableSeries));
-  else out.push(...drawLegend(ctx, opts, series));
+  if (legendShown) out.push(...drawLegend(ctx, opts, withData));
   return out;
 }
 
@@ -565,27 +740,87 @@ export function drawXYChart(ctx: ChartSceneContext): SceneElement[] {
 // Frame and grid
 // ---------------------------------------------------------------------------
 
-function drawFrame(l: Layout): SceneElement[] {
-  const { ctx, outer, frame, depth: d, thin, y1, y2 } = l;
+/**
+ * A grid line by 1402 byte 26: dotted = dashes of XY_DOT_LENGTH × pitch
+ * every pitch from the start (the copies store each dash as a line), solid,
+ * or none [C for the styles; I for the dash geometry].
+ */
+function gridLine(l: Layout, a: Point, b: Point, style: number, stroke: string | null): SceneElement[] {
+  if (style === GRID_SOLID) return line([a, b], stroke, l.thin);
+  if (style !== GRID_DOTTED || !stroke) return [];
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  const pitch = XY_DOT_PITCH * l.ctx.page.shortSide;
+  if (!(len > 0) || !(pitch > 0)) return [];
+  const ux = (b.x - a.x) / len;
+  const uy = (b.y - a.y) / len;
   const out: SceneElement[] = [];
-  const stroke = ctx.color(ROLE.Frame);
-  const bkg = ctx.color(ROLE.FrameBkg);
+  for (let s = 0; s < len - 1e-6; s += pitch) {
+    const e = Math.min(len, s + XY_DOT_LENGTH * pitch);
+    out.push(...line([{ x: a.x + ux * s, y: a.y + uy * s }, { x: a.x + ux * e, y: a.y + uy * e }], stroke, l.thin));
+  }
+  return out;
+}
+
+/** Tick marks on a vertical value axis at x (inward = +1 to the right), 2-D only. */
+function drawTicks(l: Layout, sc: AxisScale, a: XyAxis | undefined, x: number, inward: number, t: Ticks, stroke: string | null): SceneElement[] {
+  const out: SceneElement[] = [];
+  const FW = l.frame.right - l.frame.left;
+  const mark = (f: number, style: number, len: number) => {
+    if (style !== TICK_IN && style !== TICK_OUT && style !== TICK_BOTH) return;
+    const y = at(l, 0, f).y;
+    const x0 = style === TICK_IN ? x : x - inward * len;
+    const x1 = style === TICK_OUT ? x : x + inward * len;
+    out.push(...line([{ x: x0, y }, { x: x1, y }], stroke, l.thin));
+  };
+  if (!sc.log && (t.minor === TICK_IN || t.minor === TICK_OUT || t.minor === TICK_BOTH)) {
+    // Minor ticks every minor increment (blank: a fifth of the major step), majors included (XMINBOT) [I].
+    const m = a?.minorIncrement ?? null;
+    const step = m !== null && m > 0 ? m : sc.step / XY_MINOR_PER_MAJOR;
+    const n = Math.floor((sc.max - sc.min) / step + 1e-6);
+    if (n <= 1000) for (let i = 0; i <= n; i++) mark(valueAt(sc, sc.min + i * step), t.minor, XY_MINOR_TICK * FW);
+  }
+  for (const v of tickValues(sc)) mark(valueAt(sc, v), t.major, XY_MAJOR_TICK * FW);
+  return out;
+}
+
+function drawFrame(l: Layout): SceneElement[] {
+  const { ctx, outer, frame, depth: d, thin, y1, y2, opts } = l;
+  const out: SceneElement[] = [];
+  // Frame lines, grid and ticks in the 1404 outline role, the background in its fill role (XFROC, XFRFC),
+  // none when 1405 is No (XFRSHF) [C].
+  const stroke = ctx.color(opts.frameRole);
+  const bkg = opts.frameFill ? ctx.color(opts.frameFillRole) : null;
   const ticks = (sc: AxisScale) => (sc.log ? logGrid(sc) : tickValues(sc)).map((v) => valueAt(sc, v));
-  const grids = [...ticks(y1), ...(y2 ? ticks(y2) : [])];
+  const gridStyle = (a: XyAxis | undefined) => a?.gridStyle ?? GRID_DOTTED;
+  const grids: [number, number][] = [
+    ...ticks(y1).map((f): [number, number] => [f, gridStyle(l.y1Axis)]),
+    ...(y2 ? ticks(y2).map((f): [number, number] => [f, gridStyle(l.y2Axis)]) : []),
+  ];
   if (d === 0) {
     const { left: L, right: R, top: T, bottom: B } = frame;
+    const half = opts.frameStyle === FRAME_HALF;
     out.push(...rect(frame, bkg, null, thin));
-    out.push(...line([{ x: L, y: T }, { x: R, y: T }], stroke, thin));
-    out.push(...line([{ x: L, y: T }, { x: L, y: B }], stroke, thin));
-    out.push(...line([{ x: R, y: B }, { x: L, y: B }], stroke, thin));
-    out.push(...line([{ x: R, y: T }, { x: R, y: B }], stroke, thin));
     // The category axis at the value 0 (or the axis minimum).
     const z = valueAt(y1, Math.min(Math.max(0, y1.min), y1.max));
+    // Grid lines; a dotted line is not drawn under a frame edge (the copies leave out the top one unless
+    // the edge is missing, XFRST) [C].
+    for (const [f, st] of grids) {
+      const edge = (f < 1e-9 || Math.abs(f - z) < 1e-9 || (!half && f > 1 - 1e-9)) && st === GRID_DOTTED;
+      if (!edge) out.push(...gridLine(l, at(l, 0, f), at(l, 1, f), st, stroke));
+    }
+    if (!half) out.push(...line([{ x: L, y: T }, { x: R, y: T }], stroke, thin));
+    out.push(...line([{ x: L, y: T }, { x: L, y: B }], stroke, thin));
+    out.push(...line([{ x: R, y: B }, { x: L, y: B }], stroke, thin));
+    if (!half) out.push(...line([{ x: R, y: T }, { x: R, y: B }], stroke, thin));
     out.push(...line([at(l, 0, z), at(l, 1, z)], stroke, thin));
-    for (const f of grids) out.push(...line([at(l, 0, f), at(l, 1, f)], stroke, thin));
+    if (!opts.horizontal) {
+      out.push(...drawTicks(l, y1, l.y1Axis, L, 1, l.leftTicks, stroke));
+      if (y2) out.push(...drawTicks(l, y2, l.y2Axis, R, -1, l.rightTicks, stroke));
+    }
     return out;
   }
   // 3-D: floor, left wall and back wall, their edges, then the grid on the back and left walls.
+  const wall = bkg ?? null;
   const fL = { x: frame.left, y: frame.bottom };
   const fR = { x: frame.right, y: frame.bottom };
   const fT = { x: frame.left, y: frame.top };
@@ -593,19 +828,19 @@ function drawFrame(l: Layout): SceneElement[] {
   const bR = { x: outer.right, y: frame.bottom + d };
   const bT = { x: outer.left + d, y: outer.top };
   const bTR = { x: outer.right, y: outer.top };
-  out.push(...polygon([bL, bR, fR, fL], bkg, bkg, thin));
-  out.push(...polygon([bL, fL, fT, bT], bkg, bkg, thin));
-  out.push(...rect({ left: bL.x, bottom: bL.y, right: bTR.x, top: bTR.y }, bkg, bkg, thin));
+  out.push(...polygon([bL, bR, fR, fL], wall, wall, thin));
+  out.push(...polygon([bL, fL, fT, bT], wall, wall, thin));
+  out.push(...rect({ left: bL.x, bottom: bL.y, right: bTR.x, top: bTR.y }, wall, wall, thin));
   out.push(...line([bT, bTR], stroke, thin));
   out.push(...line([fT, fL, bL, bT, fT], stroke, thin));
   out.push(...line([bTR, bR], stroke, thin));
   out.push(...line([fL, fR, bR, bL, fL], stroke, thin));
-  for (const f of grids) {
+  for (const [f, st] of grids) {
     const a = at(l, 0, f);
     const b = shift(a, d);
     const c = shift(at(l, 1, f), d);
-    out.push(...line([b, c], stroke, thin));
-    out.push(...line([a, b], stroke, thin));
+    out.push(...gridLine(l, b, c, st, stroke));
+    out.push(...gridLine(l, a, b, st, stroke));
   }
   // The left floor edge; with one depth lane per series (3-D overlapped bars) the bars draw it lane by lane.
   if (l.lanes === 1) out.push(...line([bL, fL], stroke, thin));
@@ -633,7 +868,8 @@ export function seriesGroups(series: XySeries[], opts: XyOptions): Group[] {
   const lines = series.filter((s) => !isBar(s) && !isArea(s) && !isHighLow(s)).map((s): Group => ({ kind: "line", series: [s] }));
   const hl = series.filter(isHighLow);
   const hlc: Group[] = hl.length ? [{ kind: "hlc", series: hl }] : [];
-  const bars = series.filter(isBar);
+  // Bars on Y1 come first in a cluster, then those on Y2 (XS6Y2) [C].
+  const bars = [...series.filter(isBar)].sort((a, b) => Number(a.axis === 2) - Number(b.axis === 2));
   const areas = series.filter(isArea);
   if (!opts.threeD) {
     return [
@@ -678,8 +914,8 @@ function drawSeries(l: Layout, series: XySeries[]): SceneElement[] {
   const scaleOf = (s: XySeries) => (s.axis === 2 && l.y2 ? l.y2 : l.y1);
   const val = (s: XySeries, r: number) => data.values.get(s.index)?.get(r);
   const rows = rowsOf(data);
-  const outline = ctx.color(ROLE.Outlines);
-  const frameStroke = ctx.color(ROLE.Frame);
+  const outline = ctx.color(l.opts.outlineRole);
+  const frameStroke = ctx.color(l.opts.frameRole);
   const groups = seriesGroups(series, { ...l.opts, threeD: depth > 0 });
   const tops = areaTops(l, series.filter(isArea));
   const lanes = l.lanes;
@@ -860,7 +1096,7 @@ function trendLine(l: Layout, s: XySeries, sc: AxisScale): Point[] {
 function ribbon(l: Layout, pts: Point[], fill: string | null, z0: number, z1: number): SceneElement[] {
   const { ctx, thin } = l;
   const out: SceneElement[] = [];
-  const frameStroke = ctx.color(ROLE.Frame);
+  const frameStroke = ctx.color(l.opts.frameRole);
   for (let i = 1; i < pts.length; i++) {
     const a = pts[i - 1]!;
     const b = pts[i]!;
@@ -885,7 +1121,7 @@ function drawBars(l: Layout, bars: XySeries[], outline: string | null, z: number
   const width = opts.barMode === "step" ? 1 : opts.barWidth / 100;
   const barZ = (lane * opts.barDepth) / 100;
   const zBar = z + (lane - barZ) / 2;
-  const frameStroke = ctx.color(ROLE.Frame);
+  const frameStroke = ctx.color(opts.frameRole);
   const base = valueAt(l.y1, Math.min(Math.max(l.y1.min, 0), l.y1.max));
   // In 3-D overlapped bars stand one behind the other (each in its own lane), so they do not overlap sideways.
   const overlapping = opts.barMode === "overlap" && !(depth > 0);
@@ -896,8 +1132,17 @@ function drawBars(l: Layout, bars: XySeries[], outline: string | null, z: number
     if (l.xScale) return line([at(l, (t0 + t1) / 2, f0), at(l, (t0 + t1) / 2, f1)], fill, thin);
     const b = boxAt(l, t0, t1, f0, f1, depth > 0 ? zBar : 0);
     if (depth === 0) {
-      if (opts.barShape === "pyramid") return polygon([at(l, t0, f0), at(l, t1, f0), at(l, (t0 + t1) / 2, f1)], fill, outline, thin);
-      return rect(b, fill, outline, thin);
+      // 2D style 2: a shadow box behind the bar, moved right by XY_SHADOW_OFFSET of its width and its far
+      // end in by that share of its length, filled and outlined in role Shadow (XS2DST) [I].
+      const shadow: SceneElement[] = [];
+      if (opts.shadow) {
+        const dt = XY_SHADOW_OFFSET * (t1 - t0);
+        const sb = boxAt(l, t0 + dt, t1 + dt, f0, f1 - XY_SHADOW_OFFSET * (f1 - f0));
+        const sc = ctx.color(ROLE.Shadow);
+        shadow.push(...rect(sb, sc, sc, thin));
+      }
+      if (opts.barShape === "pyramid") return [...shadow, ...polygon([at(l, t0, f0), at(l, t1, f0), at(l, (t0 + t1) / 2, f1)], fill, outline, thin)];
+      return [...shadow, ...rect(b, fill, outline, thin)];
     }
     const first = !l.drewFirstBar;
     l.drewFirstBar = true;
@@ -907,8 +1152,9 @@ function drawBars(l: Layout, bars: XySeries[], outline: string | null, z: number
   // horizontal bar (GALD319, GALD813) [I].
   const valueStyle = tableStyle(ctx, 14, ROLE.XLabel);
   const FH = l.frame.top - l.frame.bottom;
-  const valueLabel = (v: number, t0: number, t1: number, f1: number): SceneElement[] => {
-    if (!opts.valueLabels || depth > 0) return [];
+  // Only for series whose own data labels option (1406 byte 5) is Yes [I].
+  const valueLabel = (s: XySeries, v: number, t0: number, t1: number, f1: number): SceneElement[] => {
+    if (!opts.valueLabels || !s.dataLabels || depth > 0) return [];
     const lab = label(ctx, tableValue(v), valueStyle);
     const p = at(l, (t0 + t1) / 2, f1);
     if (opts.horizontal) return drawLabel(ctx, lab, p.x + 2 * XY_LABEL_GAP * FH, p.y + lab.height / 2);
@@ -941,7 +1187,7 @@ function drawBars(l: Layout, bars: XySeries[], outline: string | null, z: number
         const sc = scaleOf(s);
         const t0 = c0 + i * bw * (1 - ov);
         out.push(...shape(s, t0, t0 + bw, valueAt(sc, Math.max(sc.min, 0)), valueAt(sc, v)));
-        out.push(...valueLabel(v, t0, t0 + bw, valueAt(sc, v)));
+        out.push(...valueLabel(s, v, t0, t0 + bw, valueAt(sc, v)));
       }
     } else {
       const bw = cw / n;
@@ -950,7 +1196,7 @@ function drawBars(l: Layout, bars: XySeries[], outline: string | null, z: number
         if (v === undefined) return;
         const sc = scaleOf(s);
         out.push(...shape(s, c0 + i * bw, c0 + (i + 1) * bw, valueAt(sc, Math.max(sc.min, 0)), valueAt(sc, v)));
-        out.push(...valueLabel(v, c0 + i * bw, c0 + (i + 1) * bw, valueAt(sc, v)));
+        out.push(...valueLabel(s, v, c0 + i * bw, c0 + (i + 1) * bw, valueAt(sc, v)));
       });
     }
     out.push(...mark(r));
@@ -1025,7 +1271,7 @@ function bar3d(
 // Data table
 // ---------------------------------------------------------------------------
 
-/** Legend and data table list the series bottom-up: 1418 byte 1 = 2 and the series are layered (stacked bars, areas) [I]. */
+/** Legend and data table list the series bottom-up: 1418 byte 1 = 2 and the series are layered (stacked bars, areas) [I, see XyOptions.legendBottomUp]. */
 function listedBottomUp(opts: XyOptions, series: XySeries[]): boolean {
   return opts.legendBottomUp && (opts.barMode === "stacked" || opts.barMode === "percent" || series.some(isArea));
 }
@@ -1040,23 +1286,41 @@ interface TableLayout {
   names: Label[];
   /** Left edge of the frame and of the first value column. */
   frameLeft: number;
+  /** Left edge of the names. */
+  nameLeft: number;
+  /** Series swatches beside the names (when there is no legend). */
+  swatches: boolean;
 }
 
 /**
- * Data table geometry [I]: rows one label box high from XY_FRAME_BOTTOM_MARGIN × H
- * above the plot bottom; the name column (padding XY_TABLE_NAME_PAD × the
- * widest name each side, swatch, gap) starts XY_TABLE_LEFT × h right of the
- * plot's left edge and ends where the frame starts (GALD317, GALD367).
+ * Data table geometry. With swatches (no legend; every sample table) [I]:
+ * rows one label box high from XY_FRAME_BOTTOM_MARGIN × H above the plot
+ * bottom; the name column (padding XY_TABLE_NAME_PAD × the widest name each
+ * side, swatch, gap) starts XY_TABLE_LEFT × h right of the plot's left edge
+ * and ends where the frame starts (GALD317, GALD367). Without swatches
+ * (XREV7, XDTGRID) [C]: the box starts at the plot's left edge, the names
+ * XY_TABLE_PAD_EM ems in, the frame the same padding after the widest name
+ * (its drawn advance). Table only (XDTONLY) [C]: the table fills the plot
+ * area down to XY_TABLE_ONLY_BOTTOM × H, its rows sharing the height.
  */
-function tableLayout(ctx: ChartSceneContext, series: XySeries[], plot: Box, H: number): TableLayout {
+function tableLayout(ctx: ChartSceneContext, series: XySeries[], plot: Box, H: number, swatches: boolean, only: boolean): TableLayout {
   const names = series.map((s) => label(ctx, s.name?.text ?? "", s.name ? styled(ctx, s.name) : tableStyle(ctx, 13, ROLE.XLabel)));
   const rowH = Math.max(...names.map((n) => n.height), lineBoxHeight(ctx, tableStyle(ctx, 14, ROLE.XLabel).size));
-  const nameW = Math.max(0, ...names.map((n) => n.width));
-  const bottom = plot.bottom + XY_FRAME_BOTTOM_MARGIN * H;
-  const left = plot.left + XY_TABLE_LEFT * rowH;
-  const frameLeft = left + (1 + 2 * XY_TABLE_NAME_PAD) * nameW + (XY_LEGEND_SWATCH + XY_LEGEND_GAP) * rowH;
-  const height = (Math.max(...series.map((s) => s.index)) + 1) * rowH;
-  return { left, top: bottom + height, bottom, rowH, pitch: height / Math.max(1, series.length), names, frameLeft };
+  const rows = series.length ? Math.max(...series.map((s) => s.index)) + 1 : 1;
+  const bottom = plot.bottom + (only ? XY_TABLE_ONLY_BOTTOM : XY_FRAME_BOTTOM_MARGIN) * H;
+  if (swatches && !only) {
+    const nameW = Math.max(0, ...names.map((n) => n.width));
+    const left = plot.left + XY_TABLE_LEFT * rowH;
+    const frameLeft = left + (1 + 2 * XY_TABLE_NAME_PAD) * nameW + (XY_LEGEND_SWATCH + XY_LEGEND_GAP) * rowH;
+    const height = rows * rowH;
+    return { left, top: bottom + height, bottom, rowH, pitch: height / Math.max(1, series.length), names, frameLeft, nameLeft: left + XY_TABLE_NAME_PAD * nameW, swatches };
+  }
+  const nameW = Math.max(0, ...names.map((n) => drawnAdvance(ctx, n.text, n.style.fontKey, n.style.size)));
+  const em = Math.max(0, ...names.map((n) => textSizeToUnits(n.style.size, ctx.page.shortSide)));
+  const pad = XY_TABLE_PAD_EM * em;
+  const top = only ? plot.top : bottom + rows * rowH;
+  const pitch = (top - bottom) / Math.max(1, series.length);
+  return { left: plot.left, top, bottom, rowH, pitch, names, frameLeft: plot.left + 2 * pad + nameW, nameLeft: plot.left + pad, swatches: false };
 }
 
 /** A value as the data table prints it. */
@@ -1064,40 +1328,66 @@ export function tableValue(v: number): string {
   return String(Number(v.toFixed(4)));
 }
 
-function drawTable(l: Layout, t: TableLayout, series: XySeries[]): SceneElement[] {
-  const { ctx, data, frame, thin } = l;
+/**
+ * The table's box, values, grid and names, the value columns running from
+ * t.frameLeft to `right`. Grid lines (1410 byte 1): 1 vertical column lines,
+ * 2 horizontal row lines; both with the line after the names (XDTGRID) [C].
+ * Lines in the frame outline role (XFROC) [C].
+ */
+function tableBody(ctx: ChartSceneContext, opts: XyOptions, data: XyData, t: TableLayout, series: XySeries[], right: number, rows: number): SceneElement[] {
   const out: SceneElement[] = [];
-  const stroke = ctx.color(ROLE.Frame);
-  const right = l.outer.right;
-  out.push(...rect({ left: t.left, right, top: t.top, bottom: t.bottom }, ctx.color(ROLE.FrameBkg), stroke, thin));
+  const thin = lineWidthFor(XY_LINE_STYLE);
+  const stroke = ctx.color(opts.frameRole);
+  // The samples' tables (with swatches) are filled with FrameBkg [I]; the 3.05 tables without are not (XREV7) [C].
+  out.push(...rect({ left: t.left, right, top: t.top, bottom: t.bottom }, t.swatches ? ctx.color(ROLE.FrameBkg) : null, stroke, thin));
   const style = tableStyle(ctx, 14, ROLE.XLabel);
-  const colW = (frame.right - frame.left) / Math.max(1, l.rows);
-  for (const r of rowsOf(data)) {
-    const x0 = frame.left + r * colW;
+  const colW = (right - t.frameLeft) / Math.max(1, rows);
+  const rowTop = (i: number) => t.top - i * t.pitch - (t.pitch - t.rowH) / 2;
+  for (let r = 0; r < rows; r++) {
+    const x0 = t.frameLeft + r * colW;
     series.forEach((s, i) => {
       const v = data.values.get(s.index)?.get(r);
       if (v === undefined) return;
       const lab = label(ctx, tableValue(v), style);
-      out.push(...drawCentred(ctx, lab, x0 + colW / 2 - lab.width / 2, t.top - i * t.pitch - (t.pitch - t.rowH) / 2));
+      out.push(...drawCentred(ctx, lab, x0 + colW / 2 - lab.width / 2, rowTop(i)));
     });
   }
-  for (let r = 0; r <= l.rows; r++) {
-    const x = frame.left + r * colW;
-    out.push(...line([{ x, y: t.bottom }, { x, y: t.top }], stroke, thin));
+  // Grid 3 and 4 (Both, None in menu order [I]) are not shown by any copy; drawn as 1 [?].
+  if (opts.tableGrid === 2) {
+    for (let i = 1; i <= series.length; i++) {
+      const y = t.top - i * t.pitch;
+      out.push(...line([{ x: t.left, y }, { x: right, y }], stroke, thin));
+    }
+  } else {
+    for (let r = 0; r <= rows; r++) {
+      const x = t.frameLeft + r * colW;
+      out.push(...line([{ x, y: t.bottom }, { x, y: t.top }], stroke, thin));
+    }
   }
-  const nameW = Math.max(0, ...t.names.map((n) => n.width));
-  const outline = ctx.color(ROLE.Outlines);
+  const outline = ctx.color(opts.outlineRole);
   series.forEach((s, i) => {
-    const top = t.top - i * t.pitch - (t.pitch - t.rowH) / 2;
+    const top = rowTop(i);
     const n = t.names[i]!;
-    out.push(...drawCentred(ctx, n, t.left + XY_TABLE_NAME_PAD * nameW, top));
+    if (!t.swatches) {
+      out.push(...drawLabel(ctx, n, t.nameLeft, top));
+      return;
+    }
+    out.push(...drawCentred(ctx, n, t.nameLeft, top));
     const sw = XY_LEGEND_SWATCH * t.rowH;
-    const sl = frame.left - XY_LEGEND_GAP * t.rowH - sw;
+    const sl = t.frameLeft - XY_LEGEND_GAP * t.rowH - sw;
     const st = top - (t.rowH - sw) / 2;
-    out.push(...swatchFor(ctx, l.opts, s, { left: sl, right: sl + sw, top: st, bottom: st - sw }, outline, thin));
+    out.push(...swatchFor(ctx, opts, s, { left: sl, right: sl + sw, top: st, bottom: st - sw }, outline, thin));
   });
-  out.push(...line([{ x: t.left, y: t.bottom }, { x: t.left, y: t.top }], stroke, thin));
+  out.push(...line([{ x: t.swatches ? t.left : t.frameLeft, y: t.bottom }, { x: t.swatches ? t.left : t.frameLeft, y: t.top }], stroke, thin));
   return out;
+}
+
+function drawTable(l: Layout, t: TableLayout, series: XySeries[]): SceneElement[] {
+  return tableBody(l.ctx, l.opts, l.data, t, series, l.outer.right, l.rows);
+}
+
+function drawTableOnly(ctx: ChartSceneContext, opts: XyOptions, data: XyData, t: TableLayout, series: XySeries[], plot: Box): SceneElement[] {
+  return tableBody(ctx, opts, data, t, series, plot.right, data.rowCount);
 }
 
 // ---------------------------------------------------------------------------
@@ -1131,12 +1421,22 @@ function swatchFor(ctx: ChartSceneContext, opts: XyOptions, s: XySeries, sb: Box
   return parts;
 }
 
+/**
+ * The legend in its 810 area (which the original sizes and places by
+ * 1418 bytes 1 and 2, so a viewer needs no rule for those). Frame style 2
+ * (Plain): a box in the 1418 fill and outline roles, items XY_LEGEND_MARGIN
+ * in; style 1: no box, items flush left (XDTNO, XLEGOC) [I]. Items are
+ * listed down the box, centred; across it when the box is too low for the
+ * list. Every series with data has a row; hidden series leave theirs empty
+ * (XS6SH) [C].
+ */
 function drawLegend(ctx: ChartSceneContext, opts: XyOptions, series: XySeries[]): SceneElement[] {
   const area = ctx.chart.areas.legend;
   if (!area) return [];
   const box = boxOf(area);
   const thin = lineWidthFor(XY_LINE_STYLE);
-  const out: SceneElement[] = [...rect(box, ctx.color(ROLE.Legend), ctx.color(ROLE.Frame), thin)];
+  const framed = opts.legendFrameStyle !== LEGEND_NO_FRAME;
+  const out: SceneElement[] = framed ? [...rect(box, ctx.color(opts.legendFillRole), ctx.color(opts.legendOutlineRole), thin)] : [];
   const labels = series
     .filter((s) => s.name && s.name.text.trim())
     .map((s) => ({ s, l: label(ctx, s.name!.text, styled(ctx, s.name!)) }));
@@ -1145,31 +1445,35 @@ function drawLegend(ctx: ChartSceneContext, opts: XyOptions, series: XySeries[])
   const sw = XY_LEGEND_SWATCH * h;
   const gap = XY_LEGEND_GAP * h;
   const pitch = XY_LEGEND_PITCH * h;
-  const across = labels.length > 1 && box.top - box.bottom < 2 * pitch;
-  const outline = ctx.color(ROLE.Outlines);
+  const height = labels.length * h + (labels.length - 1) * (pitch - h);
+  // Across when the box is lower than the list (XDTNO, XS3D: a box exactly as high as two rows lists them down) [I].
+  const across = labels.length > 1 && box.top - box.bottom < height - 1;
+  const outline = ctx.color(opts.outlineRole);
   const swatch = (s: XySeries, left: number, top: number): SceneElement[] => {
     const sTop = top - XY_LEGEND_SWATCH_DROP * h;
     return swatchFor(ctx, opts, s, { left, right: left + sw, top: sTop, bottom: sTop - sw }, outline, thin);
   };
   if (across) {
-    const widths = labels.map((x) => sw + gap + x.l.width);
-    const total = widths.reduce((a, b) => a + b, 0) + 2 * gap * (labels.length - 1);
+    const shown = labels.filter((x) => x.s.show);
+    const widths = shown.map((x) => sw + gap + x.l.width);
+    const total = widths.reduce((a, b) => a + b, 0) + 2 * gap * (shown.length - 1);
     let x = (box.left + box.right) / 2 - total / 2;
     const top = (box.top + box.bottom) / 2 + h / 2;
-    labels.forEach(({ s, l }, i) => {
+    shown.forEach(({ s, l }, i) => {
       out.push(...swatch(s, x, top));
       out.push(...drawLabel(ctx, l, x + sw + gap, top));
       x += widths[i]! + 2 * gap;
     });
     return out;
   }
-  const height = labels.length * h + (labels.length - 1) * (pitch - h);
-  const left = box.left + XY_LEGEND_MARGIN * h;
+  const left = box.left + (framed ? XY_LEGEND_MARGIN * h : 0);
   let top = (box.top + box.bottom) / 2 + height / 2;
-  const ordered = listedBottomUp(opts, series) ? [...labels].reverse() : labels;
+  const ordered = listedBottomUp(opts, series.filter((s) => s.show)) ? [...labels].reverse() : labels;
   for (const { s, l } of ordered) {
-    out.push(...swatch(s, left, top));
-    out.push(...drawLabel(ctx, l, left + sw + gap, top));
+    if (s.show) {
+      out.push(...swatch(s, left, top));
+      out.push(...drawLabel(ctx, l, left + sw + gap, top));
+    }
     top -= pitch;
   }
   return out;

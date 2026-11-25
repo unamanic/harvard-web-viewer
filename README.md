@@ -101,6 +101,10 @@ Unit tests use synthetic bytes, so they need no samples. The sample regression s
 
 `yarn compare` compares the viewer's output with screenshots of the real program, which are kept in `samples-private/renders/` (made with Harvard Graphics 3.05 in DOSBox-X). It lives in [`tools/compare/`](tools/compare/README.md); `CMP_MODE=ega` or `mono` compares the other display modes. Use it when changing how anything is drawn.
 
+### Layout-from-data check
+
+`yarn copycheck` checks the fallback layout, used for charts that have no stored drawing. It draws every chart in `samples/option-tests` twice: once from its data, and once from the drawing Harvard Graphics stored in the file. It writes a report, side-by-side images and a flattened list of shapes to `tools/copycheck/out/` (git-ignored). Use `CC_DIR=<folder>` to check another folder, `CH=NAME1,NAME2` to check only some charts, and `OUT=<folder>` to write the output elsewhere. Use it when changing how charts are laid out from their data.
+
 ### Deploying
 
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) runs the tests, builds the site and publishes it to GitHub Pages on every push to `main`.
