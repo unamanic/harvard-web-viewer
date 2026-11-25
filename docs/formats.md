@@ -20,7 +20,7 @@ viewer's own code has verified so far.
 | Palettes (.PL3, .PC3) | §6.2 | Yes (task 6) | Yes: all 36 sample palettes parse with no warnings |
 | Font index (HG3.FGF) | §2 | Yes (task 7); text drawn with the original fonts or our clones (task 7f) | Yes: the sample HG3.FGF parses with no warnings |
 | Charts (.CH3) | §5 | Parsed and drawn from the object layer, embedded charts included (tasks 9, 10, 12, 13, 13b, 13c); laid out from data when they have no drawn copy (tasks 14 to 19; XY task 17) | All 238 sample charts parse and render; visually checked by type |
-| Shows (.SH3) | §4 | Parsed and played (tasks 21, 22); transitions with a guessed mapping, off by default (23); WAV sound plays, MIDI not (24); button charts drawn and clickable (20) | Yes: all 13 sample shows play to the end |
+| Shows (.SH3) | §4 | Parsed and played (tasks 21, 22); transitions decoded and drawn from the file (erase then draw, directions, speeds, timed slides); WAV sound plays, MIDI not (24); button charts drawn and clickable (20) | Yes: all 13 sample shows play to the end |
 | PCX bitmaps | §6.3 | Yes (task 8) | Yes: all 69 sample .PCX/.PCC decode with no warnings |
 | Speedo fonts (.SPD) | §2 | Reader (task 7b); draws chart text when loaded (task 7f) | Yes: all 15 sample fonts decode with no warnings |
 | FN3 stroke fonts | §7.2 item 8 | Not yet documented | No |
@@ -307,6 +307,12 @@ Add entries as `- finding (sample file checked, task number)`.
   0x112B = line style (1 dotted); 0x10A0 trailer = marker size and shape.
   Open: PLANET's sphere, bitmap tiling, PALVIEW's dot period, partly
   yellow titles in GALD721/852. (reference renders)
+- Transitions decoded (renders/transition-tests, 52 shows saved with one
+  setting changed at a time): 702 offsets 5–7 Draw effect/direction/speed,
+  8–10 Erase (plus Keep), 11/12 key and button counts, 14 display time in
+  seconds (0xFFFF wait); 708 byte 2 = HyperShow recalculation. All 52 test
+  shows decode to their README settings; the 13 sample shows use only
+  Replace (373 slides) and Overlay (44). SPEC.md §4 updated. (test shows)
 
 ### Samples
 

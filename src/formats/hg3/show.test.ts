@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DocumentType, readContainer } from "./container";
-import { decodeDestination, guessTransition, parseShow } from "./show";
+import { decodeDestination, parseShow } from "./show";
 import {
   type RecordSpec,
   block,
@@ -18,9 +18,13 @@ import {
 interface EntryOptions {
   number: number;
   kind: number;
-  speed?: number;
-  transA?: number;
-  transB?: number;
+  /** Offsets 5..7: Draw effect, direction, speed codes. */
+  draw?: [number, number, number];
+  /** Offsets 8..10: Erase effect, direction, speed codes. */
+  erase?: [number, number, number];
+  keyCount?: number;
+  buttonCount?: number;
+  /** Offset 14 (u16); 0xFFFF (the default) waits. */
   displayTime?: number;
   description?: string;
   b3?: number;
@@ -34,10 +38,11 @@ function slideEntry(o: EntryOptions): RecordSpec {
   dv.setUint16(0, o.number, true);
   fixed[2] = o.kind;
   fixed[3] = o.b3 ?? 0;
-  fixed[5] = o.speed ?? 0;
-  fixed[11] = o.transA ?? 0;
-  fixed[12] = o.transB ?? 0;
-  dv.setInt16(14, o.displayTime ?? -1, true);
+  fixed.set(o.draw ?? [0, 0, 0], 5);
+  fixed.set(o.erase ?? [0, 0, 0], 8);
+  fixed[11] = o.keyCount ?? 0;
+  fixed[12] = o.buttonCount ?? 0;
+  dv.setUint16(14, o.displayTime ?? 0xffff, true);
   fixed[17] = o.b17 ?? 0;
   return leaf(702, concat(fixed, cstr(o.description ?? "")));
 }
@@ -71,7 +76,7 @@ function show(body: RecordSpec[], description = "My show") {
 describe("parseShow", () => {
   it("reads a three-slide show", () => {
     const { show: s, warnings } = show([
-      slideEntry({ number: 0, kind: 0x2e }),
+      slideEntry({ number: 0, kind: 0x2e, keyCount: 5, draw: [1, 0, 0] }),
       keyTable([
         [0x31, 0, 2, 0x55],
         [0, 0x3c, 0xf3, 0x12],
@@ -79,7 +84,15 @@ describe("parseShow", () => {
         [0xfe, 0, 1, 0],
         [0, 0, 1, 0x33],
       ]),
-      slideEntry({ number: 1, kind: 0x15, speed: 2, transA: 3, transB: 11, displayTime: 50, description: "Pie" }),
+      slideEntry({
+        number: 1,
+        kind: 0x15,
+        draw: [9, 6, 3],
+        erase: [10, 1, 1],
+        buttonCount: 2,
+        displayTime: 50,
+        description: "Pie",
+      }),
       slideRef(1, "PIE.CH3"),
       buttonTable([
         ["next  ", 0xf4],
@@ -114,33 +127,130 @@ describe("parseShow", () => {
       chartTypeName: "Pie",
       fileName: "PIE.CH3",
       fileRefIndex: 1,
-      speed: 2,
-      transitionA: 3,
-      transitionB: 11,
-      displayTime: 50,
+      draw: { effect: "iris", direction: "out", speed: "fast" },
+      erase: { effect: "keep", direction: "left", speed: "slow" },
+      keyCount: 0,
+      buttonCount: 2,
+      displaySeconds: 50,
       description: "Pie",
       keys: [],
     });
     expect(s1.raw702.length).toBe(106);
     expect(s1.raw.b18to101.length).toBe(84);
-    expect(s1.raw.b6to10.length).toBe(5);
+    expect(s1.raw.b5to10).toEqual(Uint8Array.of(9, 6, 3, 10, 1, 1));
+    expect(s1.raw.b12).toBe(2);
+    expect(s.defaultDraw).toBe("replace");
+    expect(s.settings.recalculate).toBe(false);
     expect(s1.buttons).toEqual([
       { name: "next", destination: { kind: "next", raw: 0xf4 } },
       { name: "home", destination: { kind: "top", raw: 0xf8 } },
     ]);
 
-    expect(s2).toMatchObject({ kindName: "empty", fileName: null, displayTime: null, description: "" });
+    expect(s2).toMatchObject({
+      kindName: "empty",
+      fileName: null,
+      displaySeconds: null,
+      description: "",
+      draw: { effect: null, direction: null, speed: null },
+      erase: { effect: null, direction: null, speed: null },
+    });
   });
 
-  it("decodes display time: 0xFFFF is null (wait for key), other values numbers", () => {
+  it("decodes display time in seconds: 0xFFFF is null (wait for a key), 0 at once", () => {
     const { show: s } = show([
       slideEntry({ number: 0, kind: 0x2e }),
-      slideEntry({ number: 1, kind: 0x2d, displayTime: -1 }),
+      slideEntry({ number: 1, kind: 0x2d, displayTime: 0xffff }),
       slideEntry({ number: 2, kind: 0x2d, displayTime: 0 }),
-      slideEntry({ number: 3, kind: 0x2d, displayTime: 30 }),
+      slideEntry({ number: 3, kind: 0x2d, displayTime: 5 }),
+      slideEntry({ number: 4, kind: 0x2d, displayTime: 90 }),
+      slideEntry({ number: 5, kind: 0x2d, displayTime: 359 }),
     ]);
-    expect(s.slides.map((x) => x.displayTime)).toEqual([null, null, 0, 30]);
+    expect(s.slides.map((x) => x.displaySeconds)).toEqual([null, null, 0, 5, 90, 359]);
     expect(s.slides[1].raw.u14).toBe(0xffff);
+  });
+
+  // Synthetic copies of the settings in the HG 3.05 test shows (one setting changed at a time).
+  describe("transition bytes (702 offsets 5..10)", () => {
+    const effects = ["replace", "overlay", "wipe", "scroll", "fade", "open", "close", "blinds", "iris"];
+    const directions = ["left", "right", "up", "down", "in", "out"];
+    const speeds = ["slow", "medium", "fast"];
+    const slide2 = (o: Partial<EntryOptions>) => {
+      const { show: s, warnings } = show([slideEntry({ number: 0, kind: 0x2e, draw: [1, 0, 0] }), slideEntry({ number: 1, kind: 0x2d, ...o })]);
+      return { slide: s.slides[1], warnings };
+    };
+
+    it("Draw effect codes 1..9 in the editor's order; Keep (10) is not a Draw effect", () => {
+      effects.forEach((effect, i) => expect(slide2({ draw: [i + 1, 0, 0] }).slide.draw.effect).toBe(effect));
+      const keep = slide2({ draw: [10, 0, 0] });
+      expect(keep.slide.draw.effect).toBeNull();
+      expect(keep.warnings).toEqual(["slide 1: unknown draw effect code 10; read as blank"]);
+    });
+
+    it("Draw direction and speed codes", () => {
+      directions.forEach((d, i) => expect(slide2({ draw: [9, i + 1, 0] }).slide.draw).toEqual({ effect: "iris", direction: d, speed: null }));
+      speeds.forEach((sp, i) => expect(slide2({ draw: [9, 6, i + 1] }).slide.draw).toEqual({ effect: "iris", direction: "out", speed: sp }));
+    });
+
+    it("Erase effect codes 1..10 (Keep), direction and speed", () => {
+      [...effects, "keep"].forEach((effect, i) => expect(slide2({ erase: [i + 1, 0, 0] }).slide.erase.effect).toBe(effect));
+      directions.forEach((d, i) => expect(slide2({ erase: [10, i + 1, 0] }).slide.erase.direction).toBe(d));
+      speeds.forEach((sp, i) => expect(slide2({ erase: [10, 6, i + 1] }).slide.erase.speed).toBe(sp));
+    });
+
+    it("unknown codes read as blank with a warning", () => {
+      const { slide, warnings } = slide2({ draw: [12, 7, 4], erase: [11, 0, 0] });
+      expect(slide.draw).toEqual({ effect: null, direction: null, speed: null });
+      expect(slide.erase.effect).toBeNull();
+      expect(warnings).toEqual([
+        "slide 1: unknown draw effect code 12; read as blank",
+        "slide 1: unknown draw direction code 7; read as blank",
+        "slide 1: unknown draw speed code 4; read as blank",
+        "slide 1: unknown erase effect code 11; read as blank",
+      ]);
+    });
+
+    it("the show default is slide 0's Draw effect", () => {
+      const { show: s } = show([slideEntry({ number: 0, kind: 0x2e, draw: [2, 0, 0] })]);
+      expect(s.defaultDraw).toBe("overlay");
+    });
+  });
+
+  it("reads the HyperShow automatic recalculation flag from 708 byte 2", () => {
+    const parse = (b: number) => {
+      const bytes = buildDocument("HGB1", DocumentType.Show, [
+        block(500, [leaf(400, cstr("s"))]),
+        block(520, [leaf(708, [1, 1, b]), ...settings().slice(1), slideEntry({ number: 0, kind: 0x2e })]),
+      ]);
+      return parseShow(readContainer(bytes));
+    };
+    expect(parse(1).show.settings.recalculate).toBe(true);
+    expect(parse(2).show.settings.recalculate).toBe(false);
+    const other = parse(0);
+    expect(other.show.settings.recalculate).toBeNull();
+    expect(other.warnings).toEqual(["settings record 708 byte 2 (automatic recalculation) is 0, expected 1 or 2"]);
+  });
+
+  it("checks the key and button counts against the 704 and 706 tables", () => {
+    const { warnings } = show([
+      slideEntry({ number: 0, kind: 0x2e }),
+      slideEntry({ number: 1, kind: 0x2d, keyCount: 2, buttonCount: 1 }),
+      keyTable([[0x31, 0, 0xf4, 0]]),
+      buttonTable([
+        ["a", 0xf4],
+        ["b", 0xf5],
+      ]),
+      // As in 10 sample tables: an entry naming no key is not counted.
+      slideEntry({ number: 2, kind: 0x2d, keyCount: 2 }),
+      keyTable([
+        [0x31, 0, 0xf4, 0],
+        [0, 0, 0x12, 0x34],
+        [0, 0x3b, 0xf5, 0],
+      ]),
+    ]);
+    expect(warnings).toEqual([
+      "slide 1: slide entry gives 2 key(s), the key table (704) has 1; all are used",
+      "slide 1: slide entry gives 1 button(s), the button table (706) has 2; all are used",
+    ]);
   });
 
   it("keeps raw bytes", () => {
@@ -231,17 +341,5 @@ describe("decodeDestination", () => {
     expect(decodeDestination(0xf9, 10).kind).toBe("unknown");
     // A slide-count-sized show still gives special bytes priority.
     expect(decodeDestination(0x96, 300).kind).toBe("top");
-  });
-});
-
-describe("guessTransition", () => {
-  it("maps 0..18 in menu order", () => {
-    expect(guessTransition(0)).toEqual({ effect: "replace", direction: null, variant: 0 });
-    expect(guessTransition(2)).toEqual({ effect: "wipe", direction: "left", variant: 0 });
-    expect(guessTransition(9)).toEqual({ effect: "scroll", direction: "down", variant: 0 });
-    expect(guessTransition(10)?.effect).toBe("fade");
-    expect(guessTransition(16)).toEqual({ effect: "blinds", direction: null, variant: 2 });
-    expect(guessTransition(18)).toEqual({ effect: "iris", direction: "out", variant: 0 });
-    expect(guessTransition(19)).toBeNull();
   });
 });

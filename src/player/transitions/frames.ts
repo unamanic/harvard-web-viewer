@@ -118,6 +118,15 @@ export function frameAt(t: Transition, progress: number, hasPrevious = true): Fr
   const q = 1 - p;
   switch (t.effect) {
     case "wipe": {
+      if (t.direction === "out") {
+        // From the vertical centre line out to both sides.
+        return [layer("previous"), layer("current", { clip: [{ x: q / 2, y: 0, w: p, h: 1 }] })];
+      }
+      if (t.direction === "in") {
+        // From both sides in to the vertical centre line.
+        const side = p / 2;
+        return [layer("previous"), layer("current", { clip: [{ x: 0, y: 0, w: side, h: 1 }, { x: 1 - side, y: 0, w: side, h: 1 }] })];
+      }
       // The edge moves in `direction`, revealing the new slide behind it.
       const clip: Box =
         t.direction === "right"
@@ -130,7 +139,7 @@ export function frameAt(t: Transition, progress: number, hasPrevious = true): Fr
       return [layer("previous"), layer("current", { clip: [clip] })];
     }
     case "scroll": {
-      // Both pictures move in `direction`; the new one comes from the opposite side.
+      // Both pictures move in `direction`; the new one comes from the opposite side (in/out: left).
       const [ux, uy] =
         t.direction === "right" ? [1, 0] : t.direction === "up" ? [0, -1] : t.direction === "down" ? [0, 1] : [-1, 0];
       return [
@@ -141,7 +150,7 @@ export function frameAt(t: Transition, progress: number, hasPrevious = true): Fr
     case "fade":
       return [layer("previous"), layer("current", { clip: fadeBoxes(Math.round(p * FADE_COLUMNS * FADE_ROWS)) })];
     case "open": {
-      // From the centre line outwards.
+      // From the centre line outwards (horizontal line unless left/right).
       const clip: Box = vertical(t) ? { x: q / 2, y: 0, w: p, h: 1 } : { x: 0, y: q / 2, w: 1, h: p };
       return [layer("previous"), layer("current", { clip: [clip] })];
     }
@@ -151,13 +160,17 @@ export function frameAt(t: Transition, progress: number, hasPrevious = true): Fr
       return [layer("current"), layer("previous", { clip: [clip] })];
     }
     case "blinds": {
+      // Every stripe grows at once in `direction` (down unless up/left/right).
       const n = BLINDS_STRIPES;
+      const back = t.direction === "up" || t.direction === "left";
+      const start = (k: number) => (back ? (k + q) / n : k / n);
       const clip = Array.from({ length: n }, (_, k): Box =>
-        vertical(t) ? { x: k / n, y: 0, w: p / n, h: 1 } : { x: 0, y: k / n, w: 1, h: p / n },
+        vertical(t) ? { x: start(k), y: 0, w: p / n, h: 1 } : { x: 0, y: start(k), w: 1, h: p / n },
       );
       return [layer("previous"), layer("current", { clip })];
     }
     case "iris":
+      // Growing rectangle unless "in".
       if (t.direction === "in") {
         // Shrinking rectangle: the old slide inside it, the new one around it.
         return [layer("current"), layer("previous", { clip: [{ x: p / 2, y: p / 2, w: q, h: q }] })];

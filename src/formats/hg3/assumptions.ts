@@ -12,7 +12,6 @@
  * - colour for roles above 64: palette.ts (colorForRole), task 6
  * - font style word → CSS weight, look-alike stacks: fonts.ts
  *   (STYLE_WEIGHTS, LOOK_ALIKES), task 7
- * The guessed transition table (SPEC §4.5) is in its own section below.
  */
 import { DEFAULT_STROKE_WIDTH } from "../types";
 
@@ -375,79 +374,18 @@ export const BUTTON_CHART_FITS_DATA_CHART = true;
 export const BUTTON_HIT_AREAS = true;
 
 // ---------------------------------------------------------------------------
-// Transitions (SPEC §4.5) [I]
+// Transitions (SPEC §4.5): show defaults
 // ---------------------------------------------------------------------------
 
-/** Effects of the Projector menu that the guessed numbering covers (Keep is not in it). */
-export type Hg3TransitionEffect =
-  | "replace"
-  | "overlay"
-  | "wipe"
-  | "scroll"
-  | "fade"
-  | "open"
-  | "close"
-  | "blinds"
-  | "iris";
-
-export interface TransitionGuess {
-  effect: Hg3TransitionEffect;
-  /** Direction where the menu offers one; null for Open/Close/Blinds, whose two variants are unnamed. */
-  direction: "left" | "right" | "up" | "down" | "in" | "out" | null;
-  /** 1 or 2 for the two unnamed variants of Open, Close and Blinds; 0 otherwise. */
-  variant: number;
-}
-
 /**
- * GUESS, NOT CONFIRMED (SPEC §4.5 [I, needs checking]): how a slide entry
- * (702) encodes its transition is not known. The earlier reading, kept
- * here: one number per effect and direction in Projector menu order,
- * starting at 0. The samples argue against it (offsets 11 and 12 do not
- * vary together; the most common chart-slide value, 9, reads as Scroll
- * Down). Used only by the viewer's "Guessed" transitions setting.
+ * Confirmed: slide 0's Draw effect (702 offset 5) is the show's default for
+ * slides whose own Draw effect is blank. Inferred [I]: slide 0's Draw
+ * direction and speed (offsets 6, 7) come with that default, and its Erase
+ * setting (offsets 8 to 10) is the default for slides with a blank Erase
+ * effect. Slide 0's offsets 6 to 10 are 0 in every sample, so this changes
+ * no sample show.
  */
-export const TRANSITION_MENU_ORDER: readonly TransitionGuess[] = [
-  { effect: "replace", direction: null, variant: 0 },
-  { effect: "overlay", direction: null, variant: 0 },
-  { effect: "wipe", direction: "left", variant: 0 },
-  { effect: "wipe", direction: "right", variant: 0 },
-  { effect: "wipe", direction: "up", variant: 0 },
-  { effect: "wipe", direction: "down", variant: 0 },
-  { effect: "scroll", direction: "left", variant: 0 },
-  { effect: "scroll", direction: "right", variant: 0 },
-  { effect: "scroll", direction: "up", variant: 0 },
-  { effect: "scroll", direction: "down", variant: 0 },
-  { effect: "fade", direction: null, variant: 0 },
-  { effect: "open", direction: null, variant: 1 },
-  { effect: "open", direction: null, variant: 2 },
-  { effect: "close", direction: null, variant: 1 },
-  { effect: "close", direction: null, variant: 2 },
-  { effect: "blinds", direction: null, variant: 1 },
-  { effect: "blinds", direction: null, variant: 2 },
-  { effect: "iris", direction: "in", variant: 0 },
-  { effect: "iris", direction: "out", variant: 0 },
-];
-
-/**
- * The 702 field the guess reads: offset 12 (`Slide.transitionB`), "the more
- * likely field" (SPEC §4.5). Offset 11 is not used.
- */
-export const TRANSITION_GUESS_FIELD = "transitionB" as const;
-
-/**
- * Open, Close and Blinds: variant 1 read as horizontal (centre line or
- * stripes, direction "up"), variant 2 as vertical ("left") [I].
- */
-export const TRANSITION_VARIANT_DIRECTIONS: Readonly<Record<number, "up" | "left">> = { 1: "up", 2: "left" };
-
-/**
- * 702 offset 5 read as the speed: 0 Slow, 1 Medium, 2 Fast, as overall
- * durations in ms (SPEC §4.2 [I]; §4.5: "about 1.5 s, 0.75 s and 0.3 s").
- */
-export const TRANSITION_SPEED_MS: readonly number[] = [1500, 750, 300];
-
-/** Duration for any other offset 5 value: Medium [I]. */
-export const TRANSITION_DEFAULT_MS = 750;
+export const SHOW_DEFAULT_INCLUDES_DIRECTION_SPEED_AND_ERASE = true;
 
 // ---------------------------------------------------------------------------
 // Tasks 14, 15, 19: charts laid out from their data (fallback, SPEC §5.5)

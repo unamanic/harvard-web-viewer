@@ -18,15 +18,11 @@ import type {
   PresentationSlideKind,
   ResolvedFile,
   Scene,
-  SlideTransition,
+  SlideEffect,
+  SlideEffects,
 } from "../types";
 import { LANDSCAPE_VIEW_BOX } from "../types";
-import {
-  TRANSITION_DEFAULT_MS,
-  TRANSITION_GUESS_FIELD,
-  TRANSITION_SPEED_MS,
-  TRANSITION_VARIANT_DIRECTIONS,
-} from "./assumptions";
+import { SHOW_DEFAULT_INCLUDES_DIRECTION_SPEED_AND_ERASE } from "./assumptions";
 import { chartScene } from "./chartScene";
 import { type Container, readContainer } from "./container";
 import { HG3_CHARSET } from "./charset";
@@ -34,10 +30,10 @@ import { type ResolvedPalette, resolvePaletteOverride } from "./palette";
 import {
   type ButtonEntry,
   type Destination as ShowDestination,
+  type Hg3EffectSetting,
   type KeyEntry,
   type Show,
   type Slide,
-  guessTransition,
   parseShow,
 } from "./show";
 
@@ -47,27 +43,34 @@ import {
  */
 export const MAX_NESTING_DEPTH = 8;
 
-/** The 702 fields that may hold the transition (§4.5), kept raw (see `guessSlideTransition`). */
-export interface Hg3Transition {
-  /** Offset 5 [I: speed 0..2]. */
-  speed: number;
-  /** Offset 11. */
-  transitionA: number;
-  /** Offset 12 [I: the more likely transition field]. */
-  transitionB: number;
+function effectOf(setting: Hg3EffectSetting): SlideEffect | null {
+  if (setting.effect === null) return null;
+  const out: SlideEffect = { effect: setting.effect };
+  if (setting.direction !== null) out.direction = setting.direction;
+  if (setting.speed !== null) out.speed = setting.speed;
+  return out;
 }
 
 /**
- * The guessed transition into a slide (SPEC §4.5 [I]; every guess is in
- * assumptions.ts), as the format-independent shape the player draws, or
- * undefined if the stored value is not in the guessed numbering.
+ * A slide's Draw and Erase effects (SPEC §4.5) in format-independent terms.
+ * A blank Draw effect uses the show's default (slide 0's offset 5, with its
+ * direction and speed), then Replace. A blank Erase effect uses slide 0's
+ * Erase setting [I], else there is none (the next slide is drawn over).
+ * `showSlide` is slide 0 (absent: no defaults).
  */
-export function guessSlideTransition(slide: Pick<Slide, "speed" | "transitionA" | "transitionB">): SlideTransition | undefined {
-  const guess = guessTransition(slide[TRANSITION_GUESS_FIELD]);
-  if (!guess) return undefined;
-  const durationMs = TRANSITION_SPEED_MS[slide.speed] ?? TRANSITION_DEFAULT_MS;
-  const direction = guess.direction ?? (guess.variant ? TRANSITION_VARIANT_DIRECTIONS[guess.variant] : undefined);
-  return direction ? { effect: guess.effect, direction, durationMs } : { effect: guess.effect, durationMs };
+export function slideEffects(
+  slide: Pick<Slide, "draw" | "erase">,
+  showSlide?: Pick<Slide, "draw" | "erase">,
+): SlideEffects {
+  const defaults = SHOW_DEFAULT_INCLUDES_DIRECTION_SPEED_AND_ERASE && showSlide;
+  let draw = effectOf(slide.draw);
+  if (!draw && showSlide?.draw.effect) {
+    draw = defaults ? effectOf(showSlide.draw) : { effect: showSlide.draw.effect };
+  }
+  const out: SlideEffects = { draw: draw ?? { effect: "replace" } };
+  const erase = effectOf(slide.erase) ?? (defaults ? effectOf(showSlide.erase) : null);
+  if (erase) out.erase = erase;
+  return out;
 }
 
 /** PC scan codes of extended keys (§4.3) → `KeyboardEvent.key` names. */
@@ -213,7 +216,13 @@ function contextAt(context: ParseContext, path: string): ParseContext {
   return out;
 }
 
-function buildSlide(slide: Slide, context: ParseContext, options: BuildOptions, warnings: string[]): PresentationSlide {
+function buildSlide(
+  slide: Slide,
+  showSlide: Slide | undefined,
+  context: ParseContext,
+  options: BuildOptions,
+  warnings: string[],
+): PresentationSlide {
   const kind = slideKind(slide);
   const where = `slide ${slide.number}`;
   const slideWarnings: string[] = [];
@@ -286,15 +295,12 @@ function buildSlide(slide: Slide, context: ParseContext, options: BuildOptions, 
     warnings: () => slideWarnings,
     keys: slide.number === 0 ? [] : convertKeys(slide.keys, where, warnings),
     buttons: convertButtons(slide.buttons),
-    // 702 offset 14: 0xFFFF waits for a key, 0 continues at once (§4.2) [I].
-    waitForKey: slide.displayTime === null,
-    transition: { speed: slide.speed, transitionA: slide.transitionA, transitionB: slide.transitionB } satisfies Hg3Transition,
+    // 702 offset 14: 0xFFFF waits for a key or click; otherwise seconds (0: at once).
+    waitForKey: slide.displaySeconds === null,
+    effects: slideEffects(slide, showSlide),
   };
-  const transitionGuess = guessSlideTransition(slide);
-  if (transitionGuess) out.transitionGuess = transitionGuess;
   if (kind === "nested") out.nested = nested;
-  // Units of other display times are unknown; only 0 ("at once") is understood.
-  if (slide.displayTime === 0) out.displaySeconds = 0;
+  if (slide.displaySeconds !== null) out.displaySeconds = slide.displaySeconds;
   return out;
 }
 
@@ -324,7 +330,7 @@ export function showToPresentation(
   return {
     id: context.path,
     title: show.description,
-    slides: show.slides.map((s) => buildSlide(s, context, options, warnings)),
+    slides: show.slides.map((s) => buildSlide(s, show.slides[0], context, options, warnings)),
     firstSlide: 1,
     globalKeys: convertKeys(show.globalKeys, "show-wide key table", warnings),
   };

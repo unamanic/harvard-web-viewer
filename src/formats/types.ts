@@ -419,21 +419,39 @@ export interface PresentationSlide {
   buttons: ButtonBinding[];
   /** True: stay until a key or click. False: continue on by itself. */
   waitForKey: boolean;
-  /** For slides that do not wait: seconds before moving on, if known. */
+  /** For slides that do not wait: seconds before moving on (0 = at once), if known. */
   displaySeconds?: number;
-  /** Raw, format-specific transition information, as stored (for inspection). */
-  transition?: unknown;
   /**
-   * The parser's unconfirmed reading of `transition` (e.g. HG3, SPEC §4.5
-   * [I]), or absent if it has none. The player uses it only when the viewer
-   * is set to draw guessed transitions.
+   * How the slide is drawn and erased, as the file sets it (defaults already
+   * filled in), or absent if the format stores none (drawn with Replace).
    */
-  transitionGuess?: SlideTransition;
+  effects?: SlideEffects;
+}
+
+/** Slide transition speeds (SPEC §4.5); the player turns them into durations. */
+export type SlideTransitionSpeed = "slow" | "medium" | "fast";
+
+/** One Draw or Erase effect of a slide. A missing direction or speed is the effect's default. */
+export interface SlideEffect {
+  effect: SlideTransitionEffect;
+  direction?: SlideTransitionDirection;
+  speed?: SlideTransitionSpeed;
 }
 
 /**
- * Format-independent slide transition effects (SPEC §4.5). `keep` leaves the
- * previous picture under the new one.
+ * A slide's effects (SPEC §4.5): when the show moves on from a slide, the
+ * slide is erased with its `erase` effect (to the black screen; `keep`
+ * leaves it, as does an absent `erase`), then the next slide is drawn with
+ * its own `draw` effect.
+ */
+export interface SlideEffects {
+  draw: SlideEffect;
+  erase?: SlideEffect;
+}
+
+/**
+ * Format-independent slide transition effects (SPEC §4.5). `keep` (an
+ * erase effect) leaves the old picture for the next slide to be drawn over.
  */
 export type SlideTransitionEffect =
   | "replace"
@@ -448,14 +466,24 @@ export type SlideTransitionEffect =
   | "keep";
 
 /**
- * - wipe, scroll: the direction the edge / the pictures move.
- * - open, close, blinds: "up"/"down" (or none) = horizontal centre line or
- *   stripes; "left"/"right" = vertical ones.
- * - iris: "out" = growing rectangle (default), "in" = shrinking.
+ * Geometry per effect (src/player/transitions/frames.ts; the default is the
+ * first one listed):
+ * - wipe: left/right/up/down = the direction the edge moves; out = from the
+ *   vertical centre line to both sides; in = from both sides to the centre.
+ * - scroll: left/right/up/down = the direction the pictures move; in/out
+ *   are drawn as the default (left).
+ * - open, close: up/down (default, in, out) = horizontal centre line;
+ *   left/right = vertical centre line.
+ * - blinds: down (default, in, out) / up = horizontal stripes growing
+ *   downwards / upwards; right / left = vertical stripes growing rightwards
+ *   / leftwards.
+ * - iris: out (default, and left/right/up/down) = growing rectangle,
+ *   in = shrinking.
+ * - fade, replace, overlay, keep: no direction.
  */
 export type SlideTransitionDirection = "left" | "right" | "up" | "down" | "in" | "out";
 
-/** How a slide comes in (drawn by src/player/transitions). */
+/** One effect as the player draws it (src/player/transitions): the old picture changing into the new one. */
 export interface SlideTransition {
   effect: SlideTransitionEffect;
   direction?: SlideTransitionDirection;

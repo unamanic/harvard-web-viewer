@@ -4,17 +4,29 @@ import { clickButton, currentSlide, navigate, pressKey, startPlayer } from "../.
 import type { ParseContext, Presentation, ResolvedFile, Scene, TextElement } from "../types";
 import { DocumentType } from "./container";
 import { hg3Parser } from "./index";
-import { guessSlideTransition, keyName } from "./presentation";
+import { keyName, slideEffects } from "./presentation";
+import type { Hg3EffectSetting } from "./show";
 import { type RecordSpec, block, buildDocument, concat, cstr, leaf, padded, u16, u8 } from "./testing/bytes";
 
-/** A 702 slide entry (SPEC §4.2). */
-function slideEntry(number: number, kind: number, description = "", displayTime = -1): RecordSpec {
+interface EntryExtras {
+  /** Offsets 5..7 and 8..10 (effect, direction, speed codes). */
+  draw?: [number, number, number];
+  erase?: [number, number, number];
+  keyCount?: number;
+  buttonCount?: number;
+}
+
+/** A 702 slide entry (SPEC §4.2); displayTime 0xFFFF waits for a key. */
+function slideEntry(number: number, kind: number, description = "", displayTime = 0xffff, extras: EntryExtras = {}): RecordSpec {
   const fixed = new Uint8Array(102);
   const dv = new DataView(fixed.buffer);
   dv.setUint16(0, number, true);
   fixed[2] = kind;
-  fixed[12] = 9;
-  dv.setInt16(14, displayTime, true);
+  fixed.set(extras.draw ?? [0, 0, 0], 5);
+  fixed.set(extras.erase ?? [0, 0, 0], 8);
+  fixed[11] = extras.keyCount ?? 0;
+  fixed[12] = extras.buttonCount ?? 0;
+  dv.setUint16(14, displayTime, true);
   return leaf(702, concat(fixed, cstr(description)));
 }
 const slideRef = (index: number, name: string): RecordSpec => leaf(404, concat(u16(20), u16(index), cstr(name)));
@@ -64,7 +76,7 @@ const texts = (scene: Scene | null) =>
 
 describe("show → presentation", () => {
   const main = showBytes("Main show", [
-    slideEntry(0, 0x2e),
+    slideEntry(0, 0x2e, "", 0xffff, { draw: [2, 0, 0], keyCount: 5 }),
     keyTable([
       [0x31, 0, 2, 0x55], // "1" → slide 2
       [0, 0x3d, 0xf5, 0], // F3 → previous
@@ -72,13 +84,13 @@ describe("show → presentation", () => {
       [0x0d, 0, 0xf8, 0], // Enter → top
       [0, 0, 0, 0], // unused
     ]),
-    slideEntry(1, DocumentType.Drawing, "First chart"),
+    slideEntry(1, DocumentType.Drawing, "First chart", 0xffff, { draw: [3, 2, 3], erase: [5, 0, 1], buttonCount: 2 }),
     slideRef(1, "C:\\HG3\\DATA\\ONE.CH3"),
     buttonTable([
       ["NEXTPAL      ", 0xf4],
       ["lastview", 0xf3],
     ]),
-    slideEntry(2, DocumentType.Drawing),
+    slideEntry(2, DocumentType.Drawing, "", 90),
     slideRef(2, "GONE.CH3"),
     slideEntry(3, 0x2d, "placeholder"),
     slideEntry(4, 0x09, "", 0),
@@ -126,9 +138,16 @@ describe("show → presentation", () => {
       { name: "lastview", destination: { kind: "lastView" } },
     ]);
     expect(p.slides[1].waitForKey).toBe(true);
-    expect(p.slides[4].waitForKey).toBe(false);
-    expect(p.slides[1].transition).toEqual({ speed: 0, transitionA: 0, transitionB: 9 });
-    expect(p.slides[1].transitionGuess).toEqual({ effect: "scroll", direction: "down", durationMs: 1500 });
+    expect(p.slides[1].displaySeconds).toBeUndefined();
+    expect(p.slides[2]).toMatchObject({ waitForKey: false, displaySeconds: 90 });
+    expect(p.slides[4]).toMatchObject({ waitForKey: false, displaySeconds: 0 });
+    expect(p.slides[1].effects).toEqual({
+      draw: { effect: "wipe", direction: "right", speed: "fast" },
+      erase: { effect: "fade", speed: "slow" },
+    });
+    // Blank Draw effect: the show default from slide 0 (Overlay here).
+    expect(p.slides[2].effects).toEqual({ draw: { effect: "overlay" } });
+    expect(doc.warnings.filter((w) => /key\(s\)|button\(s\)|unknown/.test(w))).toEqual([]);
     // Files are looked up at once (so missing ones are listed), charts not yet parsed.
     expect(set.missing).toEqual(["GONE.CH3 (slide)"]);
     expect(doc.warnings).toContain("slide 2: file GONE.CH3 was not opened; shown as an empty slide");
@@ -204,32 +223,36 @@ describe("keyName", () => {
   });
 });
 
-describe("guessSlideTransition (SPEC §4.5 guess, assumptions.ts)", () => {
-  it("reads offset 12 in menu order and offset 5 as speed", () => {
-    expect(guessSlideTransition({ speed: 2, transitionA: 1, transitionB: 3 })).toEqual({
-      effect: "wipe",
-      direction: "right",
-      durationMs: 300,
-    });
-    expect(guessSlideTransition({ speed: 0, transitionA: 0, transitionB: 9 })).toEqual({
-      effect: "scroll",
-      direction: "down",
-      durationMs: 1500,
-    });
-    expect(guessSlideTransition({ speed: 7, transitionA: 0, transitionB: 10 })).toEqual({ effect: "fade", durationMs: 750 });
-    expect(guessSlideTransition({ speed: 1, transitionA: 0, transitionB: 18 })).toEqual({
-      effect: "iris",
-      direction: "out",
-      durationMs: 750,
+describe("slideEffects (SPEC §4.5)", () => {
+  const setting = (effect: Hg3EffectSetting["effect"], direction: Hg3EffectSetting["direction"] = null, speed: Hg3EffectSetting["speed"] = null): Hg3EffectSetting => ({
+    effect,
+    direction,
+    speed,
+  });
+  const blank = setting(null);
+
+  it("uses the slide's own Draw and Erase settings", () => {
+    expect(slideEffects({ draw: setting("iris", "out", "fast"), erase: setting("keep", "left") }, { draw: setting("replace"), erase: blank })).toEqual({
+      draw: { effect: "iris", direction: "out", speed: "fast" },
+      erase: { effect: "keep", direction: "left" },
     });
   });
 
-  it("maps the unnamed Open/Close/Blinds variants to horizontal, then vertical", () => {
-    expect(guessSlideTransition({ speed: 1, transitionA: 0, transitionB: 11 })).toMatchObject({ effect: "open", direction: "up" });
-    expect(guessSlideTransition({ speed: 1, transitionA: 0, transitionB: 16 })).toMatchObject({ effect: "blinds", direction: "left" });
+  it("a blank Draw effect falls back to slide 0's, then Replace; a set effect keeps its blank direction", () => {
+    expect(slideEffects({ draw: blank, erase: blank }, { draw: setting("fade", null, "slow"), erase: blank })).toEqual({
+      draw: { effect: "fade", speed: "slow" },
+    });
+    expect(slideEffects({ draw: setting("wipe"), erase: blank }, { draw: setting("scroll", "up", "slow"), erase: blank })).toEqual({
+      draw: { effect: "wipe" },
+    });
+    expect(slideEffects({ draw: blank, erase: blank }, { draw: blank, erase: blank })).toEqual({ draw: { effect: "replace" } });
+    expect(slideEffects({ draw: blank, erase: blank })).toEqual({ draw: { effect: "replace" } });
   });
 
-  it("is undefined outside the table; offset 11 is ignored", () => {
-    expect(guessSlideTransition({ speed: 0, transitionA: 3, transitionB: 19 })).toBeUndefined();
+  it("a blank Erase effect falls back to slide 0's [I], else none", () => {
+    expect(slideEffects({ draw: blank, erase: blank }, { draw: setting("replace"), erase: setting("wipe", "down") })).toEqual({
+      draw: { effect: "replace" },
+      erase: { effect: "wipe", direction: "down" },
+    });
   });
 });

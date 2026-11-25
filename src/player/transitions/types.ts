@@ -1,18 +1,23 @@
 /**
- * Format-independent slide transitions (SPEC §4.5). A parser keeps whatever
- * its file stores in `PresentationSlide.transition` and may offer a reading
- * of it as `PresentationSlide.transitionGuess`; `transitionForSlide` picks
- * the `Transition` to draw by the viewer's setting, and the stage draws it.
+ * Format-independent slide transitions (SPEC §4.5). A parser gives each
+ * slide's Draw and Erase effects as `PresentationSlide.effects`;
+ * `transitionPlan` picks the `Transition`s to draw by the viewer's setting,
+ * and the stage draws them.
  */
-import type { SlideTransition, SlideTransitionDirection, SlideTransitionEffect } from "../../formats/types";
+import type {
+  SlideTransition,
+  SlideTransitionDirection,
+  SlideTransitionEffect,
+  SlideTransitionSpeed,
+} from "../../formats/types";
 
-/** The shapes are defined beside `PresentationSlide.transitionGuess`. */
+/** The shapes are defined beside `PresentationSlide.effects`. */
 export type TransitionEffect = SlideTransitionEffect;
 export type TransitionDirection = SlideTransitionDirection;
 export type Transition = SlideTransition;
 
 /** Slow, Medium, Fast (§4.5: "about 1.5 s, 0.75 s and 0.3 s") [I]. */
-export const SPEED_MS = { slow: 1500, medium: 750, fast: 300 } as const;
+export const SPEED_MS: Readonly<Record<SlideTransitionSpeed, number>> = { slow: 1500, medium: 750, fast: 300 };
 
 export const REPLACE: Transition = { effect: "replace", durationMs: 0 };
 

@@ -7,7 +7,7 @@ import { addedSummary, placeAddedFiles, providedNames } from "./addFiles";
 import { exportChoices, exportFileName, heightFor, standaloneSvg } from "./exportImage";
 import { chartFacts, formatBytes, paletteText, summariseFonts } from "./fileFacts";
 import { missingSentence, noticeItems, noticeTitle } from "./notice";
-import { transitionLabel } from "./transitionLabel";
+import { transitionLabel, transitionPlanLabel } from "./transitionLabel";
 
 const bytes = (n = 1) => new Uint8Array(n);
 
@@ -171,5 +171,15 @@ describe("transitionLabel", () => {
     expect(transitionLabel({ effect: "fade" })).toBe("fade");
     expect(transitionLabel({ effect: "replace" })).toBeNull();
     expect(transitionLabel(null)).toBeNull();
+  });
+
+  it("names a slide change: the old slide's erase, then the new slide's draw", () => {
+    const iris = { effect: "iris", direction: "out" };
+    expect(transitionPlanLabel({ erase: { effect: "fade" }, draw: iris })).toBe("erase fade, then iris out");
+    expect(transitionPlanLabel({ erase: null, draw: iris })).toBe("iris out");
+    expect(transitionPlanLabel({ erase: { effect: "replace" }, draw: iris })).toBe("iris out");
+    expect(transitionPlanLabel({ erase: { effect: "wipe", direction: "down" }, draw: { effect: "replace" } })).toBe("erase wipe down");
+    expect(transitionPlanLabel({ erase: null, draw: { effect: "replace" } })).toBeNull();
+    expect(transitionPlanLabel(null)).toBeNull();
   });
 });

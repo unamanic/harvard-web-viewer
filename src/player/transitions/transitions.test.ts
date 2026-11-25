@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { PresentationSlide } from "../../formats/types";
+import type { PresentationSlide, SlideEffects } from "../../formats/types";
 import {
   BLINDS_STRIPES,
   FADE_COLUMNS,
@@ -14,14 +14,30 @@ import {
 import {
   DEFAULT_TRANSITION_MODE,
   DEMO_TRANSITIONS,
+  REPLACE_PLAN,
+  TRANSITION_MODES,
+  effectTransition,
   loadTransitionMode,
   saveTransitionMode,
-  transitionForSlide,
+  transitionPlan,
 } from "./mode";
-import { INITIAL_RUN, finishRun, interruptRun, isAnimating, shownProgress, startRun } from "./run";
+import {
+  INITIAL_RUN,
+  endRun,
+  finishRun,
+  finishStage,
+  hasErasePhase,
+  interruptRun,
+  isAnimating,
+  phaseTransition,
+  runPhase,
+  shownProgress,
+  stageRunId,
+  startRun,
+} from "./run";
 import { REPLACE, SPEED_MS, type Transition, effectiveTransition, isInstant } from "./types";
 
-function slide(transition?: unknown, transitionGuess?: Transition): PresentationSlide {
+function slide(effects?: SlideEffects): PresentationSlide {
   const out: PresentationSlide = {
     label: "s",
     kind: "picture",
@@ -31,9 +47,8 @@ function slide(transition?: unknown, transitionGuess?: Transition): Presentation
     keys: [],
     buttons: [],
     waitForKey: true,
-    transition,
   };
-  if (transitionGuess) out.transitionGuess = transitionGuess;
+  if (effects) out.effects = effects;
   return out;
 }
 
@@ -43,34 +58,53 @@ const t = (effect: Transition["effect"], direction?: Transition["direction"]): T
 const area = (boxes: Box[]) => boxes.reduce((a, b) => a + b.w * b.h, 0);
 const summary = (f: Frame) => f.map((l) => l.which).join(",");
 
-describe("transitionForSlide", () => {
-  const hg3 = { speed: 2, transitionA: 1, transitionB: 3 };
+describe("transitionPlan", () => {
+  const from = slide({ draw: { effect: "replace" }, erase: { effect: "fade", speed: "slow" } });
+  const to = slide({ draw: { effect: "iris", direction: "out", speed: "fast" } });
 
-  it("off: always replace (and is the default)", () => {
-    expect(DEFAULT_TRANSITION_MODE).toBe("off");
-    expect(transitionForSlide(slide(hg3), "off")).toEqual(REPLACE);
+  it("file: the old slide's erase, then the new slide's draw (and is the default)", () => {
+    expect(DEFAULT_TRANSITION_MODE).toBe("file");
+    expect(TRANSITION_MODES.map((m) => m.mode)).toEqual(["file", "off", "demo"]);
+    expect(TRANSITION_MODES[0].label).toBe("From the file");
+    expect(transitionPlan(from, to, "file")).toEqual({
+      erase: { effect: "fade", durationMs: SPEED_MS.slow },
+      draw: { effect: "iris", direction: "out", durationMs: SPEED_MS.fast },
+    });
   });
 
-  it("guessed: draws the parser's transitionGuess, not the raw value", () => {
-    const guess: Transition = { effect: "wipe", direction: "right", durationMs: SPEED_MS.fast };
-    expect(transitionForSlide(slide(hg3, guess), "guessed")).toEqual(guess);
-    expect(transitionForSlide(slide(hg3, guess), "off")).toEqual(REPLACE);
+  it("file: speeds map to durations, a blank speed is Medium", () => {
+    expect(effectTransition({ effect: "wipe", direction: "left" })).toEqual({ effect: "wipe", direction: "left", durationMs: SPEED_MS.medium });
+    expect(effectTransition({ effect: "wipe", speed: "slow" }).durationMs).toBe(1500);
+    expect(effectTransition({ effect: "wipe", speed: "fast" }).durationMs).toBe(300);
   });
 
-  it("guessed: replace when the parser offers no guess", () => {
-    expect(transitionForSlide(slide(hg3), "guessed")).toEqual(REPLACE);
-    expect(transitionForSlide(slide(undefined), "guessed")).toEqual(REPLACE);
-    expect(transitionForSlide(slide("wipe"), "guessed")).toEqual(REPLACE);
+  it("file: no erase at the start, without an erase effect, or for Keep; Overlay erases at once", () => {
+    expect(transitionPlan(null, to, "file").erase).toBeNull();
+    expect(transitionPlan(slide({ draw: { effect: "replace" } }), to, "file").erase).toBeNull();
+    expect(transitionPlan(slide({ draw: { effect: "replace" }, erase: { effect: "keep", direction: "out" } }), to, "file").erase).toBeNull();
+    expect(transitionPlan(slide({ draw: { effect: "replace" }, erase: { effect: "overlay" } }), to, "file").erase).toEqual(REPLACE);
+    expect(transitionPlan(slide({ draw: { effect: "replace" }, erase: { effect: "replace" } }), to, "file").erase).toEqual({
+      effect: "replace",
+      durationMs: SPEED_MS.medium,
+    });
   });
 
-  it("demo: cycles through every effect", () => {
+  it("file: a slide without effects is drawn with Replace", () => {
+    expect(transitionPlan(slide(), slide(), "file")).toEqual(REPLACE_PLAN);
+  });
+
+  it("off: always replace", () => {
+    expect(transitionPlan(from, to, "off")).toEqual(REPLACE_PLAN);
+  });
+
+  it("demo: cycles through every effect (draw only)", () => {
     const seen = new Set<string>();
-    for (let step = 1; step <= DEMO_TRANSITIONS.length; step++) seen.add(transitionForSlide(slide(), "demo", step).effect);
+    for (let step = 1; step <= DEMO_TRANSITIONS.length; step++) seen.add(transitionPlan(from, slide(), "demo", step).draw.effect);
     expect([...seen].sort()).toEqual(
       ["replace", "overlay", "wipe", "scroll", "fade", "open", "close", "blinds", "iris", "keep"].sort(),
     );
-    expect(transitionForSlide(slide(), "demo", 1)).toEqual(DEMO_TRANSITIONS[0]);
-    expect(transitionForSlide(slide(), "demo", DEMO_TRANSITIONS.length + 3)).toEqual(DEMO_TRANSITIONS[2]);
+    expect(transitionPlan(from, slide(), "demo", 1)).toEqual({ erase: null, draw: DEMO_TRANSITIONS[0] });
+    expect(transitionPlan(from, slide(), "demo", DEMO_TRANSITIONS.length + 3).draw).toEqual(DEMO_TRANSITIONS[2]);
   });
 
   describe("persistence", () => {
@@ -79,11 +113,20 @@ describe("transitionForSlide", () => {
     it("remembers the mode and falls back to the default", () => {
       const store = new Map<string, string>();
       vi.stubGlobal("localStorage", { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v) });
-      expect(loadTransitionMode()).toBe("off");
+      expect(loadTransitionMode()).toBe("file");
       saveTransitionMode("demo");
       expect(loadTransitionMode()).toBe("demo");
-      store.set("hwv.transitions", "bogus");
+      saveTransitionMode("off");
       expect(loadTransitionMode()).toBe("off");
+      store.set("hwv.transitions", "bogus");
+      expect(loadTransitionMode()).toBe("file");
+    });
+
+    it("migrates the old \"guessed\" setting to \"From the file\"", () => {
+      const store = new Map<string, string>([["hwv.transitions", "guessed"]]);
+      vi.stubGlobal("localStorage", { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v) });
+      expect(loadTransitionMode()).toBe("file");
+      expect(store.get("hwv.transitions")).toBe("file");
     });
 
     it("survives blocked storage", () => {
@@ -96,7 +139,7 @@ describe("transitionForSlide", () => {
         },
       });
       expect(() => saveTransitionMode("demo")).not.toThrow();
-      expect(loadTransitionMode()).toBe("off");
+      expect(loadTransitionMode()).toBe("file");
     });
   });
 });
@@ -129,6 +172,15 @@ describe("frameAt", () => {
     expect(frameAt(t("wipe", "up"), 0.25)[1].clip).toEqual([{ x: 0, y: 0.75, w: 1, h: 0.25 }]);
     expect(frameAt(t("wipe", "down"), 0.25)[1].clip).toEqual([{ x: 0, y: 0, w: 1, h: 0.25 }]);
     expect(layerCss(frameAt(t("wipe", "left"), 0)[1])).toEqual({ clipPath: "inset(0% 0% 0% 100%)" });
+  });
+
+  it("wipe out grows from the vertical centre line; wipe in closes from both sides", () => {
+    expect(frameAt(t("wipe", "out"), 0.5)[1].clip).toEqual([{ x: 0.25, y: 0, w: 0.5, h: 1 }]);
+    expect(frameAt(t("wipe", "in"), 0.5)[1].clip).toEqual([
+      { x: 0, y: 0, w: 0.25, h: 1 },
+      { x: 0.75, y: 0, w: 0.25, h: 1 },
+    ]);
+    expect(area(frameAt(t("wipe", "in"), 0.3)[1].clip!)).toBeCloseTo(0.3);
   });
 
   it("scroll pushes the old slide out as the new one comes in", () => {
@@ -166,16 +218,21 @@ describe("frameAt", () => {
   });
 
   it("blinds opens every stripe at once", () => {
-    const clip = frameAt(t("blinds", "up"), 0.5)[1].clip!;
+    const clip = frameAt(t("blinds"), 0.5)[1].clip!;
     expect(clip).toHaveLength(BLINDS_STRIPES);
     expect(clip[1]).toEqual({ x: 0, y: 0.1, w: 1, h: 0.05 });
     expect(area(clip)).toBeCloseTo(0.5);
-    expect(frameAt(t("blinds", "left"), 0.5)[1].clip![0]).toEqual({ x: 0, y: 0, w: 0.05, h: 1 });
-    expect(layerCss(frameAt(t("blinds", "up"), 0.5)[1]).clipPath).toMatch(/^polygon\(0 0, 0% 0%, 100% 0%, 100% 5%, 0% 5%, 0% 0%, 0 0, 0% 10%/);
+    expect(frameAt(t("blinds", "down"), 0.5)[1].clip![1]).toEqual(clip[1]);
+    expect(frameAt(t("blinds", "right"), 0.5)[1].clip![0]).toEqual({ x: 0, y: 0, w: 0.05, h: 1 });
+    // Up / left: each stripe grows from its far edge back.
+    expect(frameAt(t("blinds", "up"), 0.5)[1].clip![1]).toEqual({ x: 0, y: 0.15, w: 1, h: 0.05 });
+    expect(frameAt(t("blinds", "left"), 0.5)[1].clip![0]).toEqual({ x: 0.05, y: 0, w: 0.05, h: 1 });
+    expect(layerCss(frameAt(t("blinds"), 0.5)[1]).clipPath).toMatch(/^polygon\(0 0, 0% 0%, 100% 0%, 100% 5%, 0% 5%, 0% 0%, 0 0, 0% 10%/);
   });
 
   it("iris out grows a centred rectangle; iris in shrinks the old slide", () => {
     expect(frameAt(t("iris", "out"), 0.5)[1].clip).toEqual([{ x: 0.25, y: 0.25, w: 0.5, h: 0.5 }]);
+    for (const d of [undefined, "left", "right", "up", "down"] as const) expect(frameAt(t("iris", d), 0.5)).toEqual(frameAt(t("iris", "out"), 0.5));
     const iin = frameAt(t("iris", "in"), 0.5);
     expect(summary(iin)).toBe("current,previous");
     expect(iin[1].clip).toEqual([{ x: 0.25, y: 0.25, w: 0.5, h: 0.5 }]);
@@ -205,12 +262,54 @@ describe("transition run", () => {
   it("starts on each slide change and finishes when the stage says so", () => {
     expect(isAnimating(INITIAL_RUN, wipe, true)).toBe(false);
     const run = startRun(INITIAL_RUN);
-    expect(run).toEqual({ id: 1, finished: false });
+    expect(run).toEqual({ id: 1, phase: "erase", finished: false });
     expect(isAnimating(run, wipe, true)).toBe(true);
     expect(isAnimating(run, wipe, false)).toBe(false);
     expect(isAnimating(run, REPLACE, true)).toBe(false);
     expect(finishRun(run, 0)).toBe(run); // stale id
-    expect(finishRun(run, 1)).toEqual({ id: 1, finished: true });
+    expect(finishRun(run, 1)).toEqual({ id: 1, phase: "draw", finished: true });
+  });
+
+  it("erases the old slide, then draws the new one", () => {
+    const plan = { erase: t("fade"), draw: t("iris", "out") };
+    let run = startRun(INITIAL_RUN);
+    expect(hasErasePhase(plan, true)).toBe(true);
+    expect(runPhase(run, plan, true)).toBe("erase");
+    expect(phaseTransition(run, plan, true)).toEqual(plan.erase);
+    // The stage reports the end of each phase by its id.
+    const eraseId = stageRunId(run, "erase");
+    expect(finishStage(run, stageRunId(run, "draw") - 2)).toBe(run); // the previous run's draw: stale
+    run = finishStage(run, eraseId);
+    expect(run).toEqual({ id: 1, phase: "draw", finished: false });
+    expect(runPhase(run, plan, true)).toBe("draw");
+    expect(phaseTransition(run, plan, true)).toEqual(plan.draw);
+    expect(finishStage(run, eraseId)).toBe(run); // repeated: ignored
+    run = finishStage(run, stageRunId(run, "draw"));
+    expect(run.finished).toBe(true);
+  });
+
+  it("skips the erase phase without an animated erase or an old picture", () => {
+    const run = startRun(INITIAL_RUN);
+    for (const plan of [
+      { erase: null, draw: t("wipe", "left") },
+      { erase: REPLACE, draw: t("wipe", "left") },
+    ]) {
+      expect(runPhase(run, plan, true)).toBe("draw");
+      expect(phaseTransition(run, plan, true)).toEqual(plan.draw);
+    }
+    expect(runPhase(run, { erase: t("fade"), draw: REPLACE }, false)).toBe("draw");
+    // The draw phase ending finishes the run even though the erase was skipped.
+    expect(finishStage(run, stageRunId(run, "draw")).finished).toBe(true);
+  });
+
+  it("a key during the erase ends the whole run", () => {
+    const plan = { erase: t("wipe", "down"), draw: t("fade") };
+    const run = startRun(INITIAL_RUN);
+    const { run: after, consumed } = interruptRun(run, phaseTransition(run, plan, true), true);
+    expect(consumed).toBe(true);
+    expect(after).toEqual({ id: 1, phase: "draw", finished: true });
+    expect(endRun(after)).toBe(after);
+    expect(runPhase(after, plan, true)).toBe("draw");
   });
 
   it("a key mid-transition jumps to the end state and is consumed", () => {

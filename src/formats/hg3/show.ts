@@ -9,9 +9,11 @@
  *
  * This module only reads the structure; it does not resolve files or play
  * anything. Unknown records and the 702 bytes whose meaning is not known are
- * kept raw. Fields marked [I] are tentative readings from SPEC §4.2.
+ * kept raw. Fields marked [I] are tentative readings from SPEC §4.2. The
+ * transition and timing bytes (702 offsets 5 to 12 and 14, 708 byte 2) were
+ * decoded from test shows saved by Harvard Graphics 3.05, one setting
+ * changed at a time.
  */
-import { TRANSITION_MENU_ORDER, type TransitionGuess } from "./assumptions";
 import { ByteReader } from "./ByteReader";
 import {
   type Container,
@@ -100,9 +102,61 @@ export const DestinationByte = {
   Home2: 0x97,
 } as const;
 
+/**
+ * Effect codes of 702 offsets 5 (Draw) and 8 (Erase), in the order of the
+ * show editor's list; 0 is blank (not set). Keep is offered only for Erase.
+ */
+export const EFFECT_CODES: readonly (Hg3Effect | null)[] = [
+  null,
+  "replace",
+  "overlay",
+  "wipe",
+  "scroll",
+  "fade",
+  "open",
+  "close",
+  "blinds",
+  "iris",
+  "keep",
+];
+/** Direction codes of 702 offsets 6 (Draw) and 9 (Erase); 0 is blank. */
+export const DIRECTION_CODES: readonly (Hg3Direction | null)[] = [null, "left", "right", "up", "down", "in", "out"];
+/** Speed codes of 702 offsets 7 (Draw) and 10 (Erase); 0 is blank. */
+export const SPEED_CODES: readonly (Hg3Speed | null)[] = [null, "slow", "medium", "fast"];
+/** 702 offset 14 value for "no display time": wait for a key or click. */
+export const DISPLAY_TIME_WAIT = 0xffff;
+/** 708 byte 2 values for HyperShow automatic recalculation. */
+export const RecalculationByte = { Yes: 1, No: 2 } as const;
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+/** Effects of the show editor's Draw and Erase lists. */
+export type Hg3Effect =
+  | "replace"
+  | "overlay"
+  | "wipe"
+  | "scroll"
+  | "fade"
+  | "open"
+  | "close"
+  | "blinds"
+  | "iris"
+  | "keep";
+export type Hg3Direction = "left" | "right" | "up" | "down" | "in" | "out";
+export type Hg3Speed = "slow" | "medium" | "fast";
+
+/**
+ * One Draw or Erase setting of a slide (702 offsets 5..7 or 8..10). Each
+ * field is null when blank (code 0) or when the code is not known (with a
+ * warning). The show editor fills in no direction or speed by itself.
+ */
+export interface Hg3EffectSetting {
+  effect: Hg3Effect | null;
+  direction: Hg3Direction | null;
+  speed: Hg3Speed | null;
+}
 
 /** "unknown" kinds should be played as empty slides (SPEC §4.2). */
 export type SlideKindName = "show" | "empty" | "chart" | "sound" | "midi" | "unknown";
@@ -152,40 +206,50 @@ export interface Slide {
   fileName: string | null;
   /** Index field of that 404 (should equal `number`), or null. */
   fileRefIndex: number | null;
-  /** Offset 5: 0, 1 or 2; maybe transition speed Slow/Medium/Fast [I]. */
-  speed: number;
-  /** Offset 11: maybe part of the transition [?] (SPEC §4.5). */
-  transitionA: number;
-  /** Offset 12: the more likely transition field [I] (SPEC §4.5; see `guessTransition`). */
-  transitionB: number;
   /**
-   * Offset 14 as i16; null for −1 (0xFFFF), read as "wait for a key". Units
-   * unknown [I].
+   * Offsets 5..7: how the slide is drawn. A blank effect on a slide uses the
+   * show's default, which slide 0 holds in its offset 5 (`Show.defaultDraw`).
    */
-  displayTime: number | null;
+  draw: Hg3EffectSetting;
+  /** Offsets 8..10: how the slide is erased before the next one is drawn. */
+  erase: Hg3EffectSetting;
+  /** Offset 11: number of HyperShow key entries (704). */
+  keyCount: number;
+  /** Offset 12: number of HyperShow button entries (706). */
+  buttonCount: number;
+  /**
+   * Offset 14 (u16): seconds the slide shows before the show moves on, or
+   * null for 0xFFFF (blank: wait for a key or click). 0 moves on at once.
+   */
+  displaySeconds: number | null;
   /** String at offset 102. */
   description: string;
   /** 704 entries (empty when the slide has none). */
   keys: KeyEntry[];
   /** 706 entries (empty when the slide has none). */
   buttons: ButtonEntry[];
-  /** Bytes whose meaning is unknown, kept as stored (SPEC §4.2). */
+  /**
+   * The fixed bytes as stored (SPEC §4.2). Offsets 3, 4, 13, 16, 17 and
+   * 18..101 have no known meaning (3 and 4 look like sound options).
+   */
   raw: {
-    /** Offset 3: 0 or 1 [?]. */
+    /** Offset 3: 0, or 1 on the sample sound slides [?]. */
     b3: number;
     /** Offset 4: 0, 3 or 255 [?]. */
     b4: number;
-    /** Offset 5 (also `speed`). */
-    b5: number;
-    /** Offsets 6..10. */
-    b6to10: Uint8Array;
+    /** Offsets 5..10 as stored (also `draw` and `erase`). */
+    b5to10: Uint8Array;
+    /** Offset 11 (also `keyCount`). */
+    b11: number;
+    /** Offset 12 (also `buttonCount`). */
+    b12: number;
     /** Offset 13. */
     b13: number;
-    /** Offsets 14..15 as u16 (also `displayTime`). */
+    /** Offsets 14..15 as u16 (also `displaySeconds`). */
     u14: number;
     /** Offset 16. */
     b16: number;
-    /** Offset 17: 0, 1 or 3 [?]. */
+    /** Offset 17: 0, 1, 3 or 128 in the samples, 0x17 in shows saved by HG 3.05 [?]. */
     b17: number;
     /** Offsets 18..101. */
     b18to101: Uint8Array;
@@ -208,6 +272,11 @@ export interface ShowSettings {
   /** 712 style entries (three in every sample) [I: show-level text styles]. */
   styles712: StyleEntry[];
   raw714: Uint8Array | null;
+  /**
+   * 708 byte 2 (file offset 0x23): HyperShow automatic recalculation, 1 Yes,
+   * 2 No; null when absent or another value.
+   */
+  recalculate: boolean | null;
 }
 
 export interface Show {
@@ -216,6 +285,12 @@ export interface Show {
   settings: ShowSettings;
   /** Slides in file order. */
   slides: Slide[];
+  /**
+   * The show's default Draw effect: slide 0's offset 5 (Replace in a new
+   * show), used by slides whose own Draw effect is blank. Null if slide 0
+   * has none.
+   */
+  defaultDraw: Hg3Effect | null;
   /** Slide 0's key table: applies to the whole show (SPEC §4.3) [I]. */
   globalKeys: KeyEntry[];
   /** Body records that belong to no slide group and are not settings. */
@@ -250,14 +325,40 @@ export function decodeDestination(byte: number, slideCount: number): Destination
   return { kind: "unknown", raw };
 }
 
-export type { TransitionGuess } from "./assumptions";
+/**
+ * Decode a Draw (`erase` false) or Erase setting from its three codes.
+ * Unknown codes (and Keep for Draw) read as blank, with a warning.
+ */
+export function decodeEffectSetting(
+  codes: readonly [number, number, number],
+  erase: boolean,
+  where: string,
+  warnings: string[],
+): Hg3EffectSetting {
+  const [e, d, s] = codes;
+  const name = erase ? "erase" : "draw";
+  const lookup = <T>(table: readonly (T | null)[], code: number, what: string, limit = table.length): T | null => {
+    if (code < limit) return table[code];
+    warnings.push(`${where}: unknown ${name} ${what} code ${code}; read as blank`);
+    return null;
+  };
+  return {
+    effect: lookup(EFFECT_CODES, e, "effect", erase ? EFFECT_CODES.length : EFFECT_CODES.length - 1),
+    direction: lookup(DIRECTION_CODES, d, "direction"),
+    speed: lookup(SPEED_CODES, s, "speed"),
+  };
+}
 
 /**
- * [I] Guessed effect for a 702 transition value (SPEC §4.5; the table and
- * which field to read are in assumptions.ts); null outside 0..18.
+ * Whether a 702 key or button count fits its table. Buttons: the count is
+ * the table length. Keys: the length, or the number of entries that name a
+ * key (character or scan code not 0): 10 sample tables each hold one entry
+ * with neither, which the count leaves out.
  */
-export function guessTransition(a: number): TransitionGuess | null {
-  return TRANSITION_MENU_ORDER[a] ?? null;
+function countFits(count: number, table: KeyEntry[] | ButtonEntry[], keys: boolean): boolean {
+  if (count === table.length) return true;
+  if (!keys) return false;
+  return count === (table as KeyEntry[]).filter((k) => k.char !== 0 || k.scanCode !== 0).length;
 }
 
 function kindInfo(kind: number): { kindName: SlideKindName; chartType: number | null; chartTypeName: string | null } {
@@ -330,10 +431,9 @@ function readSlideEntry(
   const kind = r.u8();
   const b3 = r.u8();
   const b4 = r.u8();
-  const b5 = r.u8();
-  const b6to10 = r.bytes(5);
-  const transitionA = r.u8();
-  const transitionB = r.u8();
+  const b5to10 = r.bytes(6);
+  const b11 = r.u8();
+  const b12 = r.u8();
   const b13 = r.u8();
   const u14 = r.u16();
   const b16 = r.u8();
@@ -397,20 +497,30 @@ function readSlideEntry(
     warnings.push(`${where} (${info.kindName}) names a file`);
   }
 
+  const keyList = keys ?? [];
+  const buttonList = buttons ?? [];
+  if (!countFits(b11, keyList, true)) {
+    warnings.push(`${where}: slide entry gives ${b11} key(s), the key table (704) has ${keyList.length}; all are used`);
+  }
+  if (!countFits(b12, buttonList, false)) {
+    warnings.push(`${where}: slide entry gives ${b12} button(s), the button table (706) has ${buttonList.length}; all are used`);
+  }
+
   return {
     number,
     kind,
     ...info,
     fileName,
     fileRefIndex,
-    speed: b5,
-    transitionA,
-    transitionB,
-    displayTime: u14 === 0xffff ? null : (u14 << 16) >> 16,
+    draw: decodeEffectSetting([b5to10[0], b5to10[1], b5to10[2]], false, where, warnings),
+    erase: decodeEffectSetting([b5to10[3], b5to10[4], b5to10[5]], true, where, warnings),
+    keyCount: b11,
+    buttonCount: b12,
+    displaySeconds: u14 === DISPLAY_TIME_WAIT ? null : u14,
     description,
-    keys: keys ?? [],
-    buttons: buttons ?? [],
-    raw: { b3, b4, b5, b6to10, b13, u14, b16, b17, b18to101 },
+    keys: keyList,
+    buttons: buttonList,
+    raw: { b3, b4, b5to10, b11, b12, b13, u14, b16, b17, b18to101 },
     raw702: record.data,
     offset: record.offset,
     otherRecords: others,
@@ -451,6 +561,7 @@ export function parseShow(container: Container): { show: Show; warnings: string[
     raw712Prefix: null,
     styles712: [],
     raw714: null,
+    recalculate: null,
   };
   const otherRecords: RecordNode[] = [];
 
@@ -499,6 +610,12 @@ export function parseShow(container: Container): { show: Show; warnings: string[
   for (const tag of SETTINGS_TAGS) {
     if (settings[`raw${tag}` as "raw708"] === null) warnings.push(`show has no settings record ${tag}`);
   }
+  if (settings.raw708 !== null && settings.raw708.length > 2) {
+    const flag = settings.raw708[2];
+    if (flag === RecalculationByte.Yes) settings.recalculate = true;
+    else if (flag === RecalculationByte.No) settings.recalculate = false;
+    else warnings.push(`settings record 708 byte 2 (automatic recalculation) is ${flag}, expected 1 or 2`);
+  }
   if (settings.raw712 !== null) {
     const data = settings.raw712;
     settings.raw712Prefix = data.subarray(0, Math.min(SETTINGS_712_PREFIX, data.length));
@@ -522,5 +639,6 @@ export function parseShow(container: Container): { show: Show; warnings: string[
   else if (slides[0].kindName !== "show") warnings.push(`slide 0 has kind ${hex(slides[0].kind)}, expected 0x2e (the show itself)`);
 
   const globalKeys = slides[0]?.keys ?? [];
-  return { show: { description, settings, slides, globalKeys, otherRecords }, warnings };
+  const defaultDraw = slides[0]?.draw.effect ?? null;
+  return { show: { description, settings, slides, defaultDraw, globalKeys, otherRecords }, warnings };
 }

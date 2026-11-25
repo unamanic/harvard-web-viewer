@@ -185,7 +185,7 @@ The show body starts with four settings records, then one group of records per s
 
 | Tag | Size | Meaning |
 | --- | --- | --- |
-| 708 | 3 | Show settings; "00 01 02" in 10 sample shows, "01 01 01" in 3 \[?\] |
+| 708 | 3 | Show settings. Byte 2 (file offset 0x23): HyperShow automatic recalculation, 1 = Yes, 2 = No \[C\]. Byte 0 went from 1 to 0 after the first edit of a show \[?\]; byte 1 \[?\]. "00 01 02" in 10 sample shows, "01 01 01" in 3 |
 | 710 | 1941 | Show settings; mostly zero. Non-zero only at offsets 0 to 2 (value 2) and at 4 + 323k (value 16), suggesting six 323-byte entries, 1 to 6 in use \[?\] |
 | 712 | 52 | 4 bytes (02 02 02 00 in every sample) \[?\], then three 16-byte text style entries (format in 5.3) \[I: styles for show-level text\] |
 | 714 | 2 | Show settings; 02 02 in every sample \[?\] |
@@ -206,14 +206,18 @@ Length is 103 bytes when the description is empty, longer otherwise. \[C\]
 | 2 | u8 | Kind of slide (table below) | C |
 | 3 | u8 | 0, or 1 on sound and MIDI slides \[?\] | ? |
 | 4 | u8 | 0; 3 on every slide 0 and some chart slides; 255 on sound and MIDI slides \[?\] | ? |
-| 5 | u8 | 0, 1 or 2; may be transition speed (Slow, Medium, Fast) | I |
-| 6 | 5 bytes | Zero in samples | ? |
-| 11 | u8 | 0 to 12; 1 on every nested-show, sound and MIDI slide; mostly 0 on chart slides. Does not fit the transition guess of 4.5 | ? |
-| 12 | u8 | 0 to 18; 9 on 162 chart slides, 0 on slides without a picture; the more likely transition field (4.5) | ? |
+| 5 | u8 | Draw effect (4.5). 0 = blank: use the show default, which slide 0 holds in this byte (1 = Replace in a new show) | C |
+| 6 | u8 | Draw direction: 0 blank, 1 Left, 2 Right, 3 Up, 4 Down, 5 In, 6 Out | C |
+| 7 | u8 | Draw speed: 0 blank, 1 Slow, 2 Medium, 3 Fast | C |
+| 8 | u8 | Erase effect: the Draw codes, plus 10 Keep | C |
+| 9 | u8 | Erase direction (codes as offset 6) | C |
+| 10 | u8 | Erase speed (codes as offset 7) | C |
+| 11 | u8 | Number of HyperShow key entries (704) for this slide. Equals the 704 table length, except in 10 sample tables that hold one entry with neither a character nor a scan code, which is not counted | C |
+| 12 | u8 | Number of HyperShow button entries: the 706 length / 14 in every sample | C |
 | 13 | u8 | Zero in samples | ? |
-| 14 | i16 | 0xFFFF on every slide except the 7 sound and MIDI slides, which have 0. Likely 0xFFFF = wait for a key, 0 = continue at once | I |
+| 14 | u16 | Display time in seconds (the editor shows m:ss; 0:05 = 5, 1:30 = 90, 5:59 = 359). 0xFFFF = blank: wait for a key or click. 0 = continue at once (the 7 sample sound and MIDI slides) | C |
 | 16 | u8 | Almost always 0 | ? |
-| 17 | u8 | 0; 1 on most slide 0s; 3 on sound and MIDI slides; 128 once | ? |
+| 17 | u8 | 0; 1 on most slide 0s; 3 on sound and MIDI slides; 128 once; 0x17 in shows saved by HG 3.05 \[?\] |
 | 18 | 84 bytes | Zero in samples | ? |
 | 102 | string | Slide description, as shown in the slide list | C |
 
@@ -261,7 +265,7 @@ The Projector offers these effects, by these names: Replace, Overlay, Wipe, Scro
 
 The drawing editor also animates the objects of one chart, with Draw and Erase steps using Replace, Wipe, Fade, Open, Close and Blinds, and a "Wait for key" or a delay in tenths of a second between steps. \[C for the names\] How these are stored is not yet mapped (see section 7).
 
-How the slide entry encodes the effect is **not known**. The samples do not support the reading below: offsets 11 and 12 do not vary together, offset 11 is 1 on slides without a picture, and the most common chart-slide value of offset 12 (9) would read as Scroll Down. Offset 12 alone is the more likely field. The earlier guess, kept for reference: one number per effect and direction, in menu order, starting at 0: Replace, Overlay, Wipe ×4 directions, Scroll ×4, Fade, Open ×2, Close ×2, Blinds ×2, Iris ×2 (In, Out). \[I, needs checking\]
+Each slide entry stores a Draw setting (offsets 5 to 7) and an Erase setting (offsets 8 to 10): an effect, a direction and a speed (4.2). Effect codes are 1 Replace, 2 Overlay, 3 Wipe, 4 Scroll, 5 Fade, 6 Open, 7 Close, 8 Blinds, 9 Iris, and for Erase only, 10 Keep. Directions are 1 Left, 2 Right, 3 Up, 4 Down, 5 In, 6 Out; speeds are 1 Slow, 2 Medium, 3 Fast. 0 is blank in every field. The editor offers every direction and speed for every effect and fills in none by itself. A blank Draw effect uses the show's default, which is slide 0's offset 5. \[C, from test shows saved by Harvard Graphics 3.05 with one setting changed at a time\] Whether slide 0's offsets 6 to 10 also act as defaults is not known (they are 0 in every sample). \[I\] When the show moves on, the current slide is erased with its Erase effect (Keep leaves it on screen), then the next slide is drawn with its Draw effect. \[I for the order\] In the samples, offset 5 is only ever 0, 1 or 2 (blank, Replace, Overlay) and offsets 6 to 10 are 0. \[C\]
 
 Suggested drawing of each effect, for a viewer, with the old slide A and new slide B:
 
@@ -276,7 +280,9 @@ Suggested drawing of each effect, for a viewer, with the old slide A and new sli
 | Close | B is revealed from the edges inwards to the centre line |
 | Blinds | B is revealed in stripes, all stripes opening at once |
 | Iris (In, Out) | B is revealed through a growing (Out) or shrinking (In) rectangle centred on the screen \[I\] |
-| Keep | Leave A on screen; only used where the next item draws over it \[I\] |
+| Keep (Erase only) | Leave A on screen; B is drawn over it \[I\] |
+
+Erase effects use the same drawing, changing A into the empty (black) screen; a viewer may treat Overlay as an erase like Replace. \[I\]
 
 Slow, Medium and Fast are the overall duration of the effect; about 1.5 s, 0.75 s and 0.3 s are reasonable. \[I\]
 
@@ -301,7 +307,7 @@ A destination byte in a key or button table means: \[I for all rows\]
 1. Read the show. Build the slide list from the 702 groups. Slide 0 holds no picture; its key table is the show-wide key table.
 2. Start at slide 1. For each slide:
    - Empty slide: skip it.
-   - Chart: draw it (section 5), using the transition from its entry. Wait for its display time, or for a key or click if it waits.
+   - Chart: erase the previous slide with that slide's Erase effect (4.5), then draw this one (section 5) with its Draw effect. Wait for its display time in seconds (702 offset 14), or for a key or click if it is blank (0xFFFF).
    - Nested show: play that show from its slide 1, then continue with the next slide of this show. Destinations inside the nested show refer to its own slides.
    - Sound or MIDI: start playing and continue at once to the next slide. \[I\]
 3. Keys and clicks: first check the slide's button table (for clicks) and key table, then the show-wide key table. If nothing matches, Enter, Space, right arrow or Page Down go to the next slide; Backspace, left arrow or Page Up go back; Esc ends the show. \[I: common Projector controls, not checked\]
@@ -607,7 +613,7 @@ The original program's limits seen in its messages: at most 10 changes of text a
 
 In rough order of how much they matter to a viewer:
 
-1. **Transitions and timing** in the slide entry (702 offsets 3 to 17). The reading in 4.5 is a guess.
+1. **Remaining slide-entry bytes:** 702 offsets 3, 4, 13, 16 and 17 (3 and 4 look like sound options) and 708 bytes 0 and 1. The transition and timing bytes are decoded (4.2, 4.5).
 2. **Data chart layout.** How the original places axes, tick marks, labels, legends, pie slices (start angle, direction, 3-D depth, exploded slices) and organization boxes. Section 5.5 gives a method, not the original's.
 3. **Series types and chart styles** in 1402, 1406, 1408 and the pie option records 1304 to 1314 (bar, line, area, stacked, 3-D, proportional pies and so on).
 4. **Object attributes** 0x1100 to 0x1140: line width and style, fill kinds, gradients, shadows, patterns.

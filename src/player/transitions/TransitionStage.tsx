@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { type Frame, frameAt, layerCss } from "./frames";
+import type { RunPhase } from "./run";
 import { isInstant, type Transition } from "./types";
 
 export interface TransitionLayers {
@@ -27,6 +28,24 @@ export interface TransitionStageProps {
   onFinished?: (runId: number) => void;
   /** Draw this progress (0..1) instead of animating; for tests and static frames. */
   progress?: number;
+}
+
+/**
+ * The layers of one phase of a slide change (run.ts). Erase phase: the old
+ * slide changes into `blank`. Draw phase: the new slide comes in over the
+ * old one, or over `blank` when the plan erased the old one (`erased`).
+ * Without an old slide (`old` null) there is nothing to erase or draw over.
+ */
+export function phaseLayers(
+  phase: RunPhase,
+  erased: boolean,
+  slides: { current: ReactNode; currentTransparent: ReactNode; old: ReactNode | null },
+  blank: ReactNode,
+): TransitionLayers {
+  const { current, currentTransparent, old } = slides;
+  if (old === null) return { current, currentTransparent, previous: null };
+  if (phase === "erase") return { current: blank, currentTransparent: blank, previous: old };
+  return { current, currentTransparent, previous: erased ? blank : old };
 }
 
 /** Renders the layers of a frame as stacked, absolutely positioned boxes. */

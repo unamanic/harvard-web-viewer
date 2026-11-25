@@ -27,21 +27,35 @@ import {
 } from "./player";
 import type { ResolveFile } from "./sound/controller";
 import { useShowSound } from "./sound/useShowSound";
-import { DEFAULT_TRANSITION_MODE, type TransitionMode, transitionForSlide } from "./transitions/mode";
-import { INITIAL_RUN, type TransitionRun, finishRun, interruptRun, startRun } from "./transitions/run";
-import { TransitionStage } from "./transitions/TransitionStage";
-import { REPLACE, effectiveTransition, prefersReducedMotion } from "./transitions/types";
+import { DEFAULT_TRANSITION_MODE, REPLACE_PLAN, type TransitionMode, transitionPlan } from "./transitions/mode";
+import {
+  INITIAL_RUN,
+  type TransitionRun,
+  endRun,
+  finishStage,
+  interruptRun,
+  isAnimating,
+  phaseTransition,
+  runPhase,
+  stageRunId,
+  startRun,
+} from "./transitions/run";
+import { TransitionStage, phaseLayers } from "./transitions/TransitionStage";
+import { effectiveTransition, prefersReducedMotion } from "./transitions/types";
 import { useAutoHide, useFullscreenWhile } from "../ui/hooks";
-import { transitionLabel } from "../ui/transitionLabel";
+import { transitionPlanLabel } from "../ui/transitionLabel";
 
 /** Seconds a slide that does not wait for a key stays when its time is unknown. */
 const DEFAULT_DISPLAY_SECONDS = 5;
+
+/** What an erased screen shows while the next slide is drawn: black. */
+const BLANK = <div className="transition-blank" style={{ width: "100%", height: "100%", background: "#000000" }} />;
 
 export interface ShowPlayerProps {
   presentation: Presentation;
   /** Display the slides imitate (colours only). Defaults to VGA. */
   displayMode?: DisplayMode;
-  /** How slide changes are drawn (SPEC §4.5). Defaults to "off": the new slide replaces the old. */
+  /** How slide changes are drawn (SPEC §4.5). Defaults to "file": the show's own Draw and Erase effects. */
   transitionMode?: TransitionMode;
   /** Skip animated transitions. Defaults to the browser's prefers-reduced-motion. */
   reducedMotion?: boolean;
@@ -83,12 +97,14 @@ interface State {
   player: PlayerState;
   /** Scene shown before the current one (raw, display mode not applied). */
   previous: Scene | null;
+  /** The slide `previous` belongs to (its Erase effect is drawn first). */
+  previousSlide: PresentationSlide | null;
   /** The transition into the current slide. */
   run: TransitionRun;
 }
 
 function initialState(presentation: Presentation, position?: SavedPosition | null): State {
-  return { player: restorePlayer(presentation, position), previous: null, run: INITIAL_RUN };
+  return { player: restorePlayer(presentation, position), previous: null, previousSlide: null, run: INITIAL_RUN };
 }
 
 function sceneOf(player: PlayerState): Scene | null {
@@ -131,7 +147,11 @@ export function ShowPlayer({
   const step = useCallback((update: (p: PlayerState) => PlayerState) => {
     setState((s) => {
       const player = update(s.player);
-      return player === s.player ? s : { player, previous: sceneOf(s.player) ?? s.previous, run: startRun(s.run) };
+      if (player === s.player) return s;
+      const shownScene = sceneOf(s.player);
+      return shownScene
+        ? { player, previous: shownScene, previousSlide: currentSlide(s.player), run: startRun(s.run) }
+        : { ...s, player, run: startRun(s.run) };
     });
   }, []);
   const go = useCallback((action: PlayerAction) => step((p) => navigate(p, action)), [step]);
@@ -149,12 +169,19 @@ export function ShowPlayer({
 
   const [systemReducedMotion] = useState(prefersReducedMotion);
   const reducedMotion = reducedMotionProp ?? systemReducedMotion;
-  const transition = useMemo(
-    () => effectiveTransition(slide ? transitionForSlide(slide, transitionMode, run.id) : REPLACE, reducedMotion),
-    [slide, transitionMode, run.id, reducedMotion],
-  );
+  const previousSlide = state.previousSlide;
+  const plan = useMemo(() => {
+    const p = slide ? transitionPlan(previousSlide, slide, transitionMode, run.id) : REPLACE_PLAN;
+    return {
+      erase: p.erase && effectiveTransition(p.erase, reducedMotion),
+      draw: effectiveTransition(p.draw, reducedMotion),
+    };
+  }, [slide, previousSlide, transitionMode, run.id, reducedMotion]);
+  const hasPrevious = previous !== null;
+  const phase = runPhase(run, plan, hasPrevious);
+  const transition = phaseTransition(run, plan, hasPrevious);
   const onTransitionFinished = useCallback(
-    (id: number) => setState((s) => ({ ...s, run: finishRun(s.run, id) })),
+    (stageId: number) => setState((s) => ({ ...s, run: finishStage(s.run, stageId) })),
     [],
   );
 
@@ -168,13 +195,15 @@ export function ShowPlayer({
     else if (player.ended) stopSound();
   }, [player, playSounds, stopSound]);
 
-  // Slides that do not wait for a key move on by themselves.
+  // Slides that do not wait for a key move on by themselves, their display
+  // time counted from the end of the transition that brings them in.
+  const drawing = !!scene && isAnimating(run, transition, hasPrevious);
   useEffect(() => {
-    if (!slide || slide.waitForKey) return;
+    if (!slide || slide.waitForKey || drawing) return;
     const ms = (slide.displaySeconds ?? DEFAULT_DISPLAY_SECONDS) * 1000;
     const timer = setTimeout(() => go({ kind: "next" }), ms);
     return () => clearTimeout(timer);
-  }, [slide, player, go]);
+  }, [slide, player, go, drawing]);
 
 
   // Presentation mode: controlled by the parent when it passes `presenting`.
@@ -215,10 +244,10 @@ export function ShowPlayer({
       return;
     }
     // A key during a transition only completes it.
-    const interrupted = interruptRun(run, transition, previous !== null);
+    const interrupted = interruptRun(run, transition, hasPrevious);
     if (interrupted.consumed) {
       e.preventDefault();
-      setState((s) => ({ ...s, run: finishRun(s.run, run.id) }));
+      setState((s) => (s.run.id === run.id ? { ...s, run: endRun(s.run) } : s));
       return;
     }
     const next = pressKey(player, e.key);
@@ -242,8 +271,8 @@ export function ShowPlayer({
     const wasButton = buttonClicked.current;
     buttonClicked.current = false;
     if (!presenting || wasButton || player.ended) return;
-    if (interruptRun(run, transition, previous !== null).consumed) {
-      setState((s) => ({ ...s, run: finishRun(s.run, run.id) }));
+    if (interruptRun(run, transition, hasPrevious).consumed) {
+      setState((s) => (s.run.id === run.id ? { ...s, run: endRun(s.run) } : s));
       return;
     }
     go({ kind: "next" });
@@ -252,16 +281,18 @@ export function ShowPlayer({
   useImperativeHandle(control, () => ({ jumpTo: onJump }), [onJump]);
 
   // Memoised so that animation frames only restyle the layers.
-  const layers = useMemo(
+  const erased = plan.erase !== null;
+  const slideNodes = useMemo(
     () => ({
       current: scene && <SceneRenderer scene={scene} onButtonClick={onButtonClick} />,
       currentTransparent: scene && (
         <SceneRenderer scene={{ ...scene, background: "none" }} onButtonClick={onButtonClick} />
       ),
-      previous: previous && <SceneRenderer scene={previous} />,
+      old: previous && <SceneRenderer scene={previous} />,
     }),
     [scene, previous, onButtonClick],
   );
+  const layers = useMemo(() => phaseLayers(phase, erased, slideNodes, BLANK), [phase, erased, slideNodes]);
 
   const levels = describePosition(player).map((l, depth) => {
     const first = depth === 0 ? presentation.firstSlide : player.position[depth].presentation.firstSlide;
@@ -292,7 +323,7 @@ export function ShowPlayer({
     stage = (
       <TransitionStage
         transition={transition}
-        runId={run.id}
+        runId={stageRunId(run, phase)}
         finished={run.finished}
         layers={layers}
         onFinished={onTransitionFinished}
@@ -307,7 +338,7 @@ export function ShowPlayer({
   if (!controlsShown.visible) classes.push("controls-hidden");
 
   const status = player.empty ? "No slides" : player.ended ? "Ended" : presenting ? shortCounter : counter;
-  const where = transitionLabel(slide ? transition : null);
+  const where = transitionPlanLabel(slide && hasPrevious ? plan : null);
   const soundButtons = (
     <>
       {sound.status.blocked && (
