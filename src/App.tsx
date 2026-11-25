@@ -2,12 +2,13 @@ import { useRef, useState } from "react";
 import { FileDropzone, FilePickers, useFileDrop } from "./components/FileDropzone";
 import { FileList } from "./components/FileList";
 import { Settings } from "./components/Settings";
+import { type PaletteSetting, loadPaletteSetting, paletteLoadOptions, savePaletteSetting } from "./components/paletteSetting";
 import { Viewer } from "./components/Viewer";
 import { fileSetFromBrowser, type PathedFile } from "./files/fromBrowser";
 import { loadDisplayMode, saveDisplayMode, type DisplayMode } from "./render/displayMode";
 import { loadMuted, saveMuted } from "./player/sound/controller";
 import { loadTransitionMode, saveTransitionMode, type TransitionMode } from "./player/transitions/mode";
-import { loadEntry, loadFileSet, type LoadedFile } from "./loadFile";
+import { loadEntry, loadFileSet, type LoadedFile, type LoadOptions } from "./loadFile";
 
 export interface AppProps {
   /** File shown at start (tests); normally files are opened by the user. */
@@ -25,6 +26,7 @@ export function App({ initialFile = null }: AppProps = {}) {
   const [displayMode, setDisplayMode] = useState<DisplayMode>(loadDisplayMode);
   const [transitionMode, setTransitionMode] = useState<TransitionMode>(loadTransitionMode);
   const [muted, setMuted] = useState(loadMuted);
+  const [palette, setPalette] = useState<PaletteSetting>(loadPaletteSetting);
 
   const onDisplayModeChange = (mode: DisplayMode) => {
     setDisplayMode(mode);
@@ -40,13 +42,17 @@ export function App({ initialFile = null }: AppProps = {}) {
   };
 
   // Loading is async (fonts load on demand); only the latest request may show.
+  // The latest request is kept so that changing a parse option (the palette)
+  // can repeat it with the new options.
   const request = useRef(0);
-  const load = async (work: () => Promise<LoadedFile | null>) => {
+  const lastWork = useRef<((options: LoadOptions) => Promise<LoadedFile | null>) | null>(null);
+  const load = async (work: (options: LoadOptions) => Promise<LoadedFile | null>, options = paletteLoadOptions(palette)) => {
     const id = ++request.current;
+    lastWork.current = work;
     setLoading(true);
     setLoadError(null);
     try {
-      const loaded = await work();
+      const loaded = await work(options);
       if (id !== request.current) return;
       setFile(loaded);
       if (!loaded) setLoadError("None of the chosen files could be read.");
@@ -58,7 +64,8 @@ export function App({ initialFile = null }: AppProps = {}) {
   };
 
   const onFiles = (files: PathedFile[]) => {
-    void load(async () => loadFileSet(await fileSetFromBrowser(files)));
+    const fileSet = fileSetFromBrowser(files);
+    void load(async (options) => loadFileSet(await fileSet, options));
   };
 
   const onSelect = (path: string) => {
@@ -66,7 +73,21 @@ export function App({ initialFile = null }: AppProps = {}) {
     const fileSet = file.fileSet;
     const entry = fileSet.get(path);
     if (!entry) return;
-    void load(() => loadEntry(fileSet, entry));
+    void load((options) => loadEntry(fileSet, entry, options));
+  };
+
+  // The palette changes how charts are parsed: open the file again with it.
+  // A show restarts from its first slide.
+  const onPaletteChange = (p: PaletteSetting) => {
+    setPalette(p);
+    savePaletteSetting(p);
+    let work = lastWork.current;
+    if (!work && file) {
+      const { fileSet, path } = file;
+      const entry = fileSet.get(path);
+      if (entry) work = (options) => loadEntry(fileSet, entry, options);
+    }
+    if (work) void load(work, paletteLoadOptions(p));
   };
 
   const drop = useFileDrop(onFiles);
@@ -85,9 +106,11 @@ export function App({ initialFile = null }: AppProps = {}) {
             displayMode={displayMode}
             transitionMode={transitionMode}
             muted={muted}
+            palette={palette}
             onDisplayModeChange={onDisplayModeChange}
             onTransitionModeChange={onTransitionModeChange}
             onMutedChange={onMutedChange}
+            onPaletteChange={onPaletteChange}
           />
         </div>
       </header>

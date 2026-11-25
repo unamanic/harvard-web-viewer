@@ -15,6 +15,7 @@
  * the raw 1554/1555 records are kept on the Palette for that purpose.
  */
 import { DEFAULT_PALETTE_ENTRIES } from "./defaultPalette";
+import { GREYSCALE_PALETTES } from "./greyscalePalettes";
 import { decodeHg3Text } from "./charset";
 import {
   DocumentType,
@@ -441,6 +442,11 @@ export interface ResolvedPalette {
   source: PaletteSource;
   /** Path inside the file set of the palette used; absent for built-in. */
   path?: string;
+  /**
+   * Set when the viewer's palette option replaced the chart's own palette
+   * (task 6c): the name of the palette used instead, e.g. "MONOCHRW.PL3".
+   */
+  override?: string;
   warnings: string[];
 }
 
@@ -496,4 +502,76 @@ export function resolveChartPalette(paletteRefName: string | null, ctx?: ParseCo
 
   if (name !== null) warnings.push(`using the built-in copy of ${DEFAULT_PALETTE_NAME} instead of ${name}`);
   return { palette: DEFAULT_PALETTE, source: "built-in", warnings };
+}
+
+// ---------------------------------------------------------------------------
+// Palette option (task 6c)
+// ---------------------------------------------------------------------------
+
+/**
+ * Palettes the viewer can draw every chart with in place of its own, role
+ * for role, as a 1991 user would by changing palettes: the program's
+ * greyscale palettes (docs/RENDERER_TASKS.md task 6c).
+ */
+export const GREYSCALE_PALETTE_NAMES = ["MONOCHRB.PL3", "MONOCHRW.PL3"] as const;
+
+/** A built-in copy of a palette file (generated into greyscalePalettes.ts), or null. */
+export function builtInPalette(name: string): Palette | null {
+  const key = name.trim().toUpperCase();
+  const builtIn = Object.hasOwn(GREYSCALE_PALETTES, key) ? GREYSCALE_PALETTES[key] : undefined;
+  if (!builtIn || builtIn.entries.length === 0) return null;
+  return {
+    documentType: DocumentType.Palette,
+    description: builtIn.description,
+    count: builtIn.entries.length,
+    entries: builtIn.entries.map((e) => makeEntry(e.index, e.role, e.name, e.rgb)),
+    unknownRecords: [],
+  };
+}
+
+/**
+ * The palette that replaces every chart's own when the viewer's palette
+ * option names one (ParseContext.paletteOverride):
+ *
+ * 1. The named file from the file set (`ctx.resolve(name, "palette")`).
+ * 2. Else the built-in copy, if the viewer has one (MONOCHRB.PL3,
+ *    MONOCHRW.PL3).
+ * 3. Else null: charts keep their own palette.
+ *
+ * The warnings (at most a couple: the file's parse warnings, or one line
+ * saying what was used instead) are meant to be reported once per
+ * document, not once per chart.
+ */
+export function resolvePaletteOverride(
+  name: string,
+  ctx?: ParseContext,
+): { palette: ResolvedPalette | null; warnings: string[] } {
+  const warnings: string[] = [];
+  const wanted = name.trim();
+  const file = wanted ? (ctx?.resolve(wanted, "palette") ?? null) : null;
+  if (file) {
+    try {
+      const parsed = parsePalette(file.bytes);
+      if (parsed.palette.entries.length > 0) {
+        const fileWarnings = parsed.warnings.map((w) => `${file.name}: ${w}`);
+        return {
+          palette: { palette: parsed.palette, source: "file", path: file.path, override: file.name, warnings: fileWarnings },
+          warnings: fileWarnings,
+        };
+      }
+      warnings.push(`palette ${file.name} is empty`);
+    } catch (e) {
+      warnings.push(`palette ${file.name} could not be read: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  const builtIn = builtInPalette(wanted);
+  if (builtIn) {
+    const label = wanted.toUpperCase();
+    warnings.push(
+      file ? `using the viewer's built-in copy of ${label} instead` : `${label} was not opened; using the viewer's built-in copy`,
+    );
+    return { palette: { palette: builtIn, source: "built-in", override: label, warnings: [] }, warnings };
+  }
+  warnings.push(file ? `using the chart's palette instead of ${file.name}` : `${wanted || "(no name)"} not found; using the chart's palette`);
+  return { palette: null, warnings };
 }

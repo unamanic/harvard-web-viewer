@@ -1,26 +1,32 @@
 import { DISPLAY_MODES, type DisplayMode, isDisplayMode } from "../render/displayMode";
 import { TRANSITION_MODES, type TransitionMode, isTransitionMode } from "../player/transitions/mode";
+import { PALETTE_SETTINGS, type PaletteSetting, isPaletteSetting } from "./paletteSetting";
 
 export interface SettingsValues {
   displayMode: DisplayMode;
   transitionMode: TransitionMode;
   muted: boolean;
+  /** Absent: the palette option is not offered. */
+  palette?: PaletteSetting;
 }
 
 export interface SettingsProps extends SettingsValues {
   onDisplayModeChange: (mode: DisplayMode) => void;
   onTransitionModeChange: (mode: TransitionMode) => void;
   onMutedChange: (muted: boolean) => void;
+  onPaletteChange?: (palette: PaletteSetting) => void;
 }
 
-/** Display, transitions and sound, in a small drop-down panel. Remembered in this browser. */
+/** Display, palette, transitions and sound, in a small drop-down panel. Remembered in this browser. */
 export function Settings({
   displayMode,
   transitionMode,
   muted,
+  palette,
   onDisplayModeChange,
   onTransitionModeChange,
   onMutedChange,
+  onPaletteChange,
 }: SettingsProps) {
   return (
     <details className="settings">
@@ -41,6 +47,23 @@ export function Settings({
             ))}
           </select>
         </label>
+        {palette !== undefined && (
+          <label>
+            <span>Palette</span>
+            <select
+              value={palette}
+              onChange={(e) => {
+                if (isPaletteSetting(e.target.value)) onPaletteChange?.(e.target.value);
+              }}
+            >
+              {PALETTE_SETTINGS.map(({ setting, label }) => (
+                <option key={setting} value={setting}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label>
           <span>Transitions</span>
           <select

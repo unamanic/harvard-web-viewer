@@ -417,6 +417,12 @@ export interface ParseContext {
    * missing-file list.
    */
   resolve(name: string, purpose?: string): ResolvedFile | null;
+  /**
+   * Viewer option: the file name of a palette to draw with in place of the
+   * document's own (e.g. "MONOCHRW.PL3"); absent to draw as saved. The
+   * format decides what it means and reports, once, if it cannot be used.
+   */
+  paletteOverride?: string;
 }
 
 /** Thrown when a file is recognised but cannot be decoded yet. */

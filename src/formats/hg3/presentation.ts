@@ -23,6 +23,7 @@ import { LANDSCAPE_VIEW_BOX } from "../types";
 import { chartScene } from "./chartScene";
 import { type Container, readContainer } from "./container";
 import { HG3_CHARSET } from "./charset";
+import { type ResolvedPalette, resolvePaletteOverride } from "./palette";
 import {
   type ButtonEntry,
   type Destination as ShowDestination,
@@ -172,6 +173,21 @@ interface BuildOptions {
   /** Set paths of the shows being played around this one (including it), for the self-inclusion guard. */
   ancestors: ReadonlySet<string>;
   depth: number;
+  /**
+   * The viewer's palette option (ParseContext.paletteOverride), resolved
+   * once for the outermost show and shared by every slide and nested show,
+   * so its warnings are reported once: a palette to use in place of each
+   * chart's, or null for the charts' own. Absent: resolved by
+   * showToPresentation.
+   */
+  paletteOverride?: ResolvedPalette | null;
+}
+
+/** A context for a file of the show: same file set and palette option, own path. */
+function contextAt(context: ParseContext, path: string): ParseContext {
+  const out: ParseContext = { path, resolve: (n, p) => context.resolve(n, p) };
+  if (context.paletteOverride !== undefined) out.paletteOverride = context.paletteOverride;
+  return out;
 }
 
 function buildSlide(slide: Slide, context: ParseContext, options: BuildOptions, warnings: string[]): PresentationSlide {
@@ -202,8 +218,9 @@ function buildSlide(slide: Slide, context: ParseContext, options: BuildOptions, 
     slideWarnings.push(...container.warnings.map((w) => `${fileName}: ${w}`));
     const chartWarnings: string[] = [];
     try {
-      const chartContext: ParseContext = { path: resolved.path, resolve: (n, p) => context.resolve(n, p) };
-      const result = chartScene(container, chartContext, chartWarnings);
+      const result = chartScene(container, contextAt(context, resolved.path), chartWarnings, {
+        paletteOverride: options.paletteOverride ?? null,
+      });
       slideWarnings.push(...chartWarnings.map((w) => `${fileName}: ${w}`));
       return result;
     } catch (e) {
@@ -229,9 +246,10 @@ function buildSlide(slide: Slide, context: ParseContext, options: BuildOptions, 
     }
     const parsed = parseShow(container);
     const nestedWarnings = [...container.warnings, ...parsed.warnings];
-    const result = showToPresentation(parsed.show, { path: resolved.path, resolve: (n, p) => context.resolve(n, p) }, nestedWarnings, {
+    const result = showToPresentation(parsed.show, contextAt(context, resolved.path), nestedWarnings, {
       ancestors: new Set([...options.ancestors, resolved.path]),
       depth: options.depth + 1,
+      paletteOverride: options.paletteOverride ?? null,
     });
     slideWarnings.push(...nestedWarnings.map((w) => `${fileName}: ${w}`));
     return result;
@@ -258,14 +276,26 @@ function buildSlide(slide: Slide, context: ParseContext, options: BuildOptions, 
 /**
  * Convert a parsed show. `context.path` is the show's own path (its id).
  * Problems found now go to `warnings`; problems found while building slides
- * later go to each slide's `warnings()`.
+ * later go to each slide's `warnings()`. The viewer's palette option
+ * (`context.paletteOverride`, task 6c) is resolved here, once, and applies
+ * to every slide; its warnings go to `warnings`.
  */
 export function showToPresentation(
   show: Show,
   context: ParseContext,
   warnings: string[],
-  options: BuildOptions = { ancestors: new Set([context.path]), depth: 0 },
+  buildOptions: BuildOptions = { ancestors: new Set([context.path]), depth: 0 },
 ): Presentation {
+  let options = buildOptions;
+  if (options.paletteOverride === undefined) {
+    let paletteOverride: ResolvedPalette | null = null;
+    if (context.paletteOverride) {
+      const resolved = resolvePaletteOverride(context.paletteOverride, context);
+      warnings.push(...resolved.warnings);
+      paletteOverride = resolved.palette;
+    }
+    options = { ...options, paletteOverride };
+  }
   return {
     id: context.path,
     title: show.description,

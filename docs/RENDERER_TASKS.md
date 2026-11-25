@@ -185,6 +185,11 @@ as an option.
 
 ### 6c. Greyscale palette option
 
+**Done.** Settings → Palette: as saved, MONOCHRB or MONOCHRW. Built-in
+copies of both palettes are generated like the HG3.PL3 copy. Colours stored
+as direct RGB (not roles) stay in colour; changing the palette restarts a
+show from its first slide.
+
 Draw a chart with the program's own MONOCHRW.PL3 or MONOCHRB.PL3 in place of
 its palette (role for role), as a 1991 user would by changing palettes. Falls
 back to the current palette when the files are missing.

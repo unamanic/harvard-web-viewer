@@ -23,7 +23,7 @@ import { type Chart, type PageArea, type PageAreas } from "../chart";
 import { DocumentType } from "../container";
 import { ROLE } from "../palette";
 import { TextSlot } from "../text";
-import { type ChartSceneContext, createButtonChartContext, createChartSceneContext } from "./context";
+import { type ChartSceneContext, type ChartSceneOptions, createButtonChartContext, createChartSceneContext } from "./context";
 import { drawObjectLayer, loadReferencedChart } from "./objectLayer";
 import { areaToRect } from "./page";
 
@@ -212,8 +212,12 @@ export function drawChartElements(ctx: ChartSceneContext): SceneElement[] {
  * drawing, and end with an information line naming what drew each font
  * (TextFaces.report); the chart's parse warnings are not repeated here.
  */
-export function buildChartScene(chart: Chart, ctx: ParseContext | undefined): { scene: Scene; warnings: string[] } {
-  const { context, warnings } = createChartSceneContext(chart, ctx);
+export function buildChartScene(
+  chart: Chart,
+  ctx: ParseContext | undefined,
+  options: ChartSceneOptions = {},
+): { scene: Scene; warnings: string[] } {
+  const { context, warnings } = createChartSceneContext(chart, ctx, options);
   context.drawChart = drawChartElements;
   const hitAreas: GroupElement[] = [];
   context.buttonHitAreas = hitAreas;

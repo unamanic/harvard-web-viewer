@@ -31,6 +31,7 @@ describe("App", () => {
     expect(html).toContain("Choose files");
     expect(html).toContain("Choose folder");
     expect(html).toContain("Settings");
+    expect(html).toContain("Greyscale, white background (MONOCHRW.PL3)");
     expect(html).not.toContain("Opened files");
   });
 

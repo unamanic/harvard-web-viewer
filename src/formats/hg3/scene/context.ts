@@ -11,6 +11,7 @@ import {
   type WarningSink,
   colorForRole,
   resolveChartPalette,
+  resolvePaletteOverride,
   rgbToCss,
   uniqueWarningSink,
 } from "../palette";
@@ -57,20 +58,53 @@ export interface ChartSceneContext {
   buttonHitAreas?: GroupElement[];
 }
 
+/** Options of a chart scene beyond its parse context. */
+export interface ChartSceneOptions {
+  /**
+   * The viewer's palette option (ParseContext.paletteOverride), already
+   * resolved by the caller (a show resolves it once for all its slides and
+   * reports its warnings itself): a palette to draw with in place of the
+   * chart's own, or null to use the chart's own. When absent it is resolved
+   * here from `parseContext.paletteOverride`, with its warnings added to the
+   * chart's.
+   */
+  paletteOverride?: ResolvedPalette | null;
+}
+
+/** The chart's palette: the viewer's palette option if one applies (task 6c), else its own. */
+function chartPalette(
+  chart: Chart,
+  parseContext: ParseContext | undefined,
+  options: ChartSceneOptions,
+  warn: WarningSink,
+): ResolvedPalette {
+  let override = options.paletteOverride;
+  if (override === undefined && parseContext?.paletteOverride) {
+    const resolved = resolvePaletteOverride(parseContext.paletteOverride, parseContext);
+    resolved.warnings.forEach(warn);
+    override = resolved.palette;
+  }
+  if (override) return override;
+  const own = resolveChartPalette(chart.fileRefs.paletteName, parseContext);
+  own.warnings.forEach(warn);
+  return own;
+}
+
 /**
  * Build the context and the warnings list it writes to. The palette's own
- * warnings are added first. Font resolver warnings are not in the list:
+ * warnings are added first (for a palette option resolved by the caller,
+ * none: the caller reports them). Font resolver warnings are not in the list:
  * read `fonts.warnings()` (and `faces.report()`) when the scene is done
  * (both are lazy).
  */
 export function createChartSceneContext(
   chart: Chart,
   parseContext: ParseContext | undefined,
+  options: ChartSceneOptions = {},
 ): { context: ChartSceneContext; warnings: string[] } {
   const warnings: string[] = [];
   const warn = uniqueWarningSink(warnings);
-  const palette = resolveChartPalette(chart.fileRefs.paletteName, parseContext);
-  palette.warnings.forEach(warn);
+  const palette = chartPalette(chart, parseContext, options, warn);
   const fonts = createFontResolver(parseContext);
   const context: ChartSceneContext = {
     chart,
