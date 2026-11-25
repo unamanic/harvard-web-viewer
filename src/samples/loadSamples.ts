@@ -30,6 +30,9 @@ function load(): FileSet | null {
     const rel = raw.replace(/\\/g, "/");
     // Skip dotfiles such as the folder's .gitkeep.
     if (rel.split("/").some((part) => part.startsWith("."))) continue;
+    // Skip the reference renders (and the test shows made alongside them):
+    // the suite checks the files from the original disks only.
+    if (rel.split("/")[0] === "renders") continue;
     const full = join(dir, rel);
     if (!statSync(full).isFile()) continue;
     set.add(rel, new Uint8Array(readFileSync(full))); // a copy, not a Buffer view
