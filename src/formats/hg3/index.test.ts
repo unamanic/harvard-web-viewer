@@ -33,7 +33,7 @@ describe("hg3Parser.parse", () => {
           concat(u16(1), u16(0), u16(1), u16(0), f32(9), u16(2), u16(3), u16(3), u16(0x4268)),
         ),
       );
-    const bytes = buildDocument("HGB3", DocumentType.Pie, [
+    const bytes = buildDocument("HGB3", DocumentType.XY, [
       block(500, [leaf(400, cstr("demo"))]),
       block(504, [block(516, [leaf(616, new Uint8Array(4))], new Uint8Array(16)), block(508, [textLine(1, "Title")])]),
     ]);
@@ -42,8 +42,8 @@ describe("hg3Parser.parse", () => {
     expect(doc.scenes).toHaveLength(1);
     expect(doc.scenes[0].viewBox).toEqual(LANDSCAPE_VIEW_BOX);
     // The object layer is drawn (task 13); its stray 616 adds object layer warnings first.
-    // It holds no drawn copy, so the chart is laid out from data: title text yes (task 14), pie not yet.
-    expect(doc.warnings.at(-1)).toBe("Not drawn yet: pie data.");
+    // It holds no drawn copy, so the chart is laid out from data: title text yes (task 14), XY data not yet.
+    expect(doc.warnings).toContain("Not drawn yet: XY data.");
   });
 
   it("collects chart and palette warnings and omits the info when nothing is left to draw", () => {

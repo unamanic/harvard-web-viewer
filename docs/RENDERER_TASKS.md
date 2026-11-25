@@ -357,6 +357,13 @@ Pie slices draw unfilled (only an outline circle); bullet markers draw as tiny
 dots. Find the cause in the samples (PIETUT, the GALD2xx pies, the GALD1xx
 bullets), fix it, and check every chart type visually.
 
+### 13d. Object drawing corrections from the layout work
+
+Multi-line text blocks: space lines by the stacking rule fitted in task 14
+(text box height floor(1.285 em / 100) × 100, next line overlaps by 0.15 of
+its height) instead of 1.28 × size. Box styles: 0x1070 style 5 is a drop
+shadow of the corner size, style 3 rounded.
+
 ### 13c. Embedded charts
 
 A 616 transform, a 404 kind 4 reference and an empty 608 group embed another

@@ -150,9 +150,10 @@ describe("dataLayout modes", () => {
 
   it("notYetDrawn reports nothing for charts with a copy or drawn parts", () => {
     expect(notYetDrawn(bulletChart())).toEqual([]);
-    const pie = chartOf(DocumentType.Pie, [line(1, 0, 0, "T", 1, 9, 2)]);
-    expect(notYetDrawn(pie)).toEqual(["pie data"]);
-    expect(notYetDrawn(pie, "never")).toEqual([]);
+    const xy = chartOf(DocumentType.XY, [line(1, 0, 0, "T", 1, 9, 2)]);
+    expect(notYetDrawn(xy)).toEqual(["XY data"]);
+    expect(notYetDrawn(xy, "never")).toEqual([]);
+    expect(notYetDrawn(chartOf(DocumentType.Pie, [line(1, 0, 0, "T", 1, 9, 2)]))).toEqual([]);
   });
 });
 

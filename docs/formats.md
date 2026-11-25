@@ -215,6 +215,21 @@ Add entries as `- finding (sample file checked, task number)`.
   gallery button bars start 171 units left of the page on every page size.
   Open: the 1214 table percentages on a portrait page are unverified (no
   portrait table in the samples). (tasks 14/15/19 and 12b)
+- Pie and organization charts from data (tasks 16, 18) match the stored
+  copies: slice centres, radii and angles within 1 unit / 0.1°, 3-D bands
+  exact, walls within 9 units; org boxes and connectors within 1 unit.
+  Decoded [I]: 1304 byte 5 = slice outline role, byte 6 = column connector
+  role; 1310 byte 17 = 2 shows percentages only; labels "name / NN%"; 3-D
+  wall brightness trunc(90·|cos a|) (× 0.75 on the far half), bands 50%;
+  912 = box width and height as % of the short side; 910 byte 0 = box
+  style (2 square, 4 rounded, 6 drop shadow, size 0.1 × box height),
+  bytes 1–3 fill, outline and line roles; 904 u16 at 2 = 3 boxes the last
+  level, else it is a name list. Org text uses one chart-wide size factor
+  (rule not fully known). (pie and org samples, tasks 16, 18)
+- Findings for stored-copy drawing (task 13d): lines in a multi-line text
+  block follow the stacking rule (box + 0.85 × box), not 1.28 × size, so
+  second lines are drawn about 240 units too low; box style 5 (0x1070) is a
+  drop shadow, style 3 is rounded. (tasks 16, 18)
 
 ### Samples
 

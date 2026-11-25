@@ -151,7 +151,8 @@ describe("notYetDrawn", () => {
   it("lists only the parts the chart has", () => {
     expect(notYetDrawn(chartOf(DocumentType.Drawing, []))).toEqual([]);
     expect(notYetDrawn(chartOf(DocumentType.Drawing, [], [leaf(616, new Uint8Array(4))]))).toEqual([]);
-    expect(notYetDrawn(chartOf(DocumentType.Pie, [ref(1, "BUTTONS.CH3")]))).toEqual(["pie data"]);
+    expect(notYetDrawn(chartOf(DocumentType.Pie, [ref(1, "BUTTONS.CH3")]))).toEqual([]);
+    expect(notYetDrawn(chartOf(DocumentType.XY, [ref(1, "BUTTONS.CH3")]))).toEqual(["XY data"]);
   });
 });
 

@@ -27,6 +27,8 @@ import { DocumentType } from "../container";
 import { ROLE } from "../palette";
 import { TextSlot } from "../text";
 import { type ChartSceneContext, type ChartSceneOptions, createButtonChartContext, createChartSceneContext } from "./context";
+import { drawOrgChart } from "./data/org";
+import { drawPieChart } from "./data/pie";
 import { drawTableChart } from "./data/table";
 import { drawBulletChart, drawTitleAndFootnote, drawTitleChart } from "./data/textCharts";
 import { type DataLayoutMode, drawsFromData, drawsObjectLayer } from "./dataLayout";
@@ -71,8 +73,6 @@ export type ChartPart =
  */
 const NOT_YET_DRAWN: ReadonlySet<ChartPart> = new Set<ChartPart>([
   "XY data", // task 17
-  "pie data", // task 16
-  "organization data", // task 18
 ]);
 
 const DATA_PART: ReadonlyMap<number, ChartPart> = new Map<number, ChartPart>([
@@ -136,14 +136,6 @@ function drawDebugAreas(ctx: ChartSceneContext): RectElement[] {
 
 /** Task 17. */
 function drawXYChart(_ctx: ChartSceneContext): SceneElement[] {
-  return [];
-}
-/** Task 16. */
-function drawPieChart(_ctx: ChartSceneContext): SceneElement[] {
-  return [];
-}
-/** Task 18. */
-function drawOrgChart(_ctx: ChartSceneContext): SceneElement[] {
   return [];
 }
 

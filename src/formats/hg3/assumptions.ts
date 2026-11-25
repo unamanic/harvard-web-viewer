@@ -483,3 +483,137 @@ export function pageShortSide(widthIn: number | undefined, heightIn: number | un
   const aspect = Math.min(widthIn, heightIn) / Math.max(widthIn, heightIn);
   return aspect >= PAGE_MIN_ASPECT ? PAGE_LONG_SIDE * aspect : PAGE_SHORT_SIDE;
 }
+
+// ---------------------------------------------------------------------------
+// Tasks 16, 18: pie and organization charts laid out from their data
+// ---------------------------------------------------------------------------
+//
+// Fallback layout (scene/data/pie.ts, scene/data/org.ts) for charts without
+// a drawn copy; fitted to the copies of the 10 sample pie charts
+// (GALD211-291, PIETUT) and the 7 org charts (GALD711-761, ORGTUT). Page
+// units throughout; "h" is the plot height left over by the pie titles and
+// "column" the plot width divided by the number of pies.
+
+/** First slice starts here, degrees counter-clockwise from 3 o'clock (SPEC §5.4; every sample arc) [C]. */
+export const PIE_START_DEGREES = 0;
+
+/** Flat pie radius: PIE_RADIUS × min(h, column) (6574 of 20544 in GALD211; 5163 of a 16137 column in GALD271) [I]. */
+export const PIE_RADIUS = 0.32;
+
+/**
+ * 3-D pie: rx = min(0.42 h, 0.28 column) (8628 in GALD241, 4518 in
+ * GALD281), ry = 0.6 rx, edge depth 0.15 rx, all truncated [I].
+ */
+export const PIE_3D_RADIUS_OF_HEIGHT = 0.42;
+export const PIE_3D_RADIUS_OF_WIDTH = 0.28;
+export const PIE_3D_TILT = 0.6;
+export const PIE_3D_DEPTH = 0.15;
+
+/** A pie with an exploded slice is drawn smaller: 0.85 flat (GALD221, GALD231), 0.7 in 3-D (GALD251, GALD261) [I]. */
+export const PIE_EXPLODED_SCALE = 0.85;
+export const PIE_EXPLODED_SCALE_3D = 0.7;
+
+/** An exploded slice moves out by this fraction of the radius (of rx and ry in 3-D) along its middle [I]. */
+export const PIE_EXPLODE_DISTANCE = 0.5;
+
+/**
+ * 3-D wall brightness (0x112A, percent): trunc(90 × |cos a|) for a radial
+ * wall at angle a, × 0.75 (truncated) when 0° < a < 180° as placed (11 of 11
+ * walls in GALD241, 261, 281); front bands 50 [I]. Only the visible wall of
+ * each slice edge is drawn (start walls on the right half, end walls on the
+ * left).
+ */
+export const PIE_3D_WALL_SHADE = 90;
+export const PIE_3D_BACK_WALL_SHADE = 0.75;
+export const PIE_3D_BAND_SHADE = 0.5;
+
+/** Outline width style (0x1100 byte 1) of slices, leaders, walls and column faces. */
+export const PIE_LINE_STYLE = 1;
+
+/** Leader lines run from the rim to PIE_LABEL_LEADER × the radius along the slice middle (front ones from the edge bottom in 3-D) [I]. */
+export const PIE_LABEL_LEADER = 1.1;
+
+/**
+ * Label box placement by the slice middle's direction [I]:
+ * - within PIE_LABEL_SIDE_DEGREES of horizontal: beside the leader end,
+ *   PIE_LABEL_SIDE_GAP_EM ems away (245 for size 4), centred vertically
+ *   (8.6° and 20.65° are, 25.7° and 26.8° are not);
+ * - within PIE_LABEL_ABOVE_DEGREES of straight up / PIE_LABEL_BELOW_DEGREES
+ *   of straight down: centred over / under the leader end (13.2° up and 6.4°
+ *   down are, 12.8° down is not);
+ * - otherwise the box's nearest corner at the leader end.
+ * Then moved into the plot area (GALD231, GALD271 hit its left edge).
+ */
+export const PIE_LABEL_SIDE_DEGREES = 22.5;
+export const PIE_LABEL_ABOVE_DEGREES = 15;
+export const PIE_LABEL_BELOW_DEGREES = 10;
+export const PIE_LABEL_SIDE_GAP_EM = 0.25;
+
+/** Slice labels use 1308 entry 13 + pie number (size 4, role XLabel in every sample) [I]. */
+export const PIE_LABEL_STYLE_INDEX = 13;
+
+/** 1310 byte 17 = 2: labels show only the percentage (GALD291's first pie; 1 elsewhere) [I]. */
+export const PIE_LABEL_NAMES_OFF = 2;
+
+/**
+ * Stacked column (1310 byte 2 = 2, GALD231 and GALD261): from a quarter of
+ * its column left of the column centre to the centre, 0.75 h tall centred
+ * on the pie centre; in 3-D 0.85 as wide, front 0.5954 h tall from 0.25 h
+ * below the centre, with a top and right face 0.15 × its width deep,
+ * brightness 100, 75, 50. Labels "name  NN%" right of each segment [I].
+ */
+export const PIE_COLUMN_WIDTH = 0.25;
+export const PIE_COLUMN_HEIGHT = 0.75;
+export const PIE_COLUMN_3D_WIDTH = 0.85;
+export const PIE_COLUMN_3D_HEIGHT = 0.5954;
+export const PIE_COLUMN_3D_BOTTOM = 0.25;
+export const PIE_COLUMN_3D_DEPTH = 0.15;
+export const PIE_COLUMN_3D_SHADES = [1, 0.75, 0.5] as const;
+/** Label box left = column right (+ its depth in 3-D) + this many ems: 648 flat (GALD231), 588 in 3-D (GALD261) for size 4 [I]. */
+export const PIE_COLUMN_LABEL_GAP_EM = 0.66;
+export const PIE_COLUMN_3D_LABEL_GAP_EM = 0.6;
+export const PIE_COLUMN_LABEL_SEPARATOR = "  ";
+
+/**
+ * 910 byte 0, org box style: 2 square (GALD711, 741), 4 rounded corners
+ * (0x1070 style 3: GALD731, 761), 6 shadowed (style 5: GALD721, 751,
+ * ORGTUT) [I]. The corner or shadow size is 0.1 × the box height (354, 342,
+ * 482 in the copies). A shadowed box's copy is that much narrower and
+ * lower, shifted up-left by half of it from the stored centre (formats.md:
+ * the (−d, +d) shift), and the connectors meet the middle of the freed
+ * strip: read as a drop shadow down-right of size d, drawn in role Shadow.
+ */
+export const ORG_BOX_STYLE_ROUNDED = 4;
+export const ORG_BOX_STYLE_SHADOW = 6;
+export const ORG_CORNER_OF_HEIGHT = 0.1;
+
+/** 904 u16 at 2 = 3: last level drawn as boxes (GALD741-761); 1 or 2: as a list (GALD711-731, ORGTUT) [I]. */
+export const ORG_LAST_LEVEL_BOXES = 3;
+
+/** List ticks are 1/16 of the box width long (507, 523) [I]. */
+export const ORG_LIST_TICK_OF_WIDTH = 1 / 16;
+
+/** List text starts after the box text margin plus this fraction of the tick (0.575 to 0.6 in the copies) [I]. */
+export const ORG_LIST_TEXT_OF_TICK = 0.59;
+
+/** Box text inset: 0.05 × the drawn box width, plus 0.263 × the corner size for rounded boxes [I]. */
+export const ORG_TEXT_MARGIN_OF_WIDTH = 0.05;
+export const ORG_ROUNDED_MARGIN_OF_CORNER = 0.263;
+
+/**
+ * The copies draw every org text at one factor of its tail size, a
+ * multiple of 0.01 (0.56, 0.50, 0.51, 0.39, 0.36, 0.37): the largest that
+ * fits all boxes, it seems [I]. Fit: each line within the inset width and
+ * the block within the box height less ORG_TEXT_VMARGIN_OF_HEIGHT top and
+ * bottom.
+ */
+export const ORG_TEXT_SCALE_STEP = 0.01;
+export const ORG_TEXT_SCALE_MIN = 0.1;
+export const ORG_TEXT_VMARGIN_OF_HEIGHT = 0.1;
+
+/** Outline width style of org boxes and connectors (0x1100 byte 1 = 1 in every copy). */
+export const ORG_LINE_STYLE = 1;
+
+/** Box size when 912 is missing: fractions of the smallest column / level spacing (912 gives 0.8 and 0.59 in the samples) [I]. */
+export const ORG_DEFAULT_BOX_WIDTH_OF_PITCH = 0.8;
+export const ORG_DEFAULT_BOX_HEIGHT_OF_PITCH = 0.588;
