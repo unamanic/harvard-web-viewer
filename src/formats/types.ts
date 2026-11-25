@@ -53,12 +53,16 @@ export const DEFAULT_STROKE_WIDTH = 30;
 /** Prefix of a `ShapeStyle.fill` that names an entry of `Scene.patterns`. */
 export const PATTERN_FILL_PREFIX = "pattern:";
 
+/** Prefix of a `ShapeStyle.fill` (or `Scene.background`) that names an entry of `Scene.gradients`. */
+export const GRADIENT_FILL_PREFIX = "gradient:";
+
 /** Fill and outline of a shape. `null` means "do not paint". */
 export interface ShapeStyle {
   /**
-   * CSS colour, or null for no fill. May instead be "pattern:<id>" naming an
-   * entry of `Scene.patterns` (PATTERN_FILL_PREFIX); parsers do not use
-   * this, render-side transforms (e.g. the mono display mode) do.
+   * CSS colour, or null for no fill. May instead be "gradient:<id>" naming
+   * an entry of `Scene.gradients` (GRADIENT_FILL_PREFIX), or "pattern:<id>"
+   * naming an entry of `Scene.patterns` (PATTERN_FILL_PREFIX); parsers do
+   * not use patterns, render-side transforms (e.g. the mono display mode) do.
    */
   fill: string | null;
   /**
@@ -238,21 +242,62 @@ export type SceneElement =
 export interface Scene {
   /** Visible area in scene units; the renderer letterboxes it. */
   viewBox: ViewBox;
-  /** CSS colour painted over the whole viewBox before any element. */
+  /**
+   * CSS colour painted over the whole viewBox before any element, or
+   * "gradient:<id>" (an entry of `gradients`, spanning the viewBox).
+   * Render-side transforms may also set "pattern:<id>".
+   */
   background: string;
   /** Drawn in order: later elements on top. */
   elements: SceneElement[];
   /** Fill patterns referenced by "pattern:<id>" fills (and strokes), keyed by id. Usually absent. */
   patterns?: Record<string, FillPattern>;
+  /** Gradients referenced by "gradient:<id>" fills (and the background), keyed by id. Usually absent. */
+  gradients?: Record<string, FillGradient>;
   /**
-   * The document's own 16 screen colours (CSS), if it defines them: what
-   * each of the 16 colours of the original program's 16-colour screen
-   * driver actually looked like with this document (for HG3, the palette's
-   * record 1555, as the VGA DAC showed it). Index i is the colour the
-   * driver calls i. Used by display modes that imitate that screen
-   * (src/render/vgaScreenShow.ts); absent means the standard set.
+   * The document's own 16 screen colours (CSS, as the document stores
+   * them), if it defines them: what each of the 16 colours of the original
+   * program's 16-colour screen driver was set to for this document (for
+   * HG3, the palette's record 1555, which the VGA ScreenShow driver loads
+   * into the DAC). Index i is the colour the driver calls i; the document's
+   * colours are matched against the driver's standard set, so a colour
+   * equal to standard colour i shows as screenColors[i]. Used by the
+   * display modes (src/render/displayMode.ts: the VGA screen shows them
+   * through its 6-bit DAC; Modern shows each colour's mix with its slots
+   * replaced); absent means the standard set.
    */
   screenColors?: string[];
+}
+
+/**
+ * A two-colour linear gradient. It spans the bounding box of the element
+ * that uses it (in the element's own units; the viewBox for the
+ * background): `from` at the box's extreme point against `angle`, `to` at
+ * its extreme point along it, colours interpolated linearly between.
+ */
+export interface FillGradient {
+  /** CSS colour at the start. */
+  from: string;
+  /** CSS colour at the end. */
+  to: string;
+  /**
+   * Direction from `from` to `to`, in degrees counter-clockwise from +x as
+   * seen on the page (the angle convention above: 90 = upwards).
+   */
+  angle: number;
+  /**
+   * Optional: the gradient as a screen shows it, in bands (render-side
+   * transforms only, e.g. the dithered VGA display mode). Band i covers
+   * offsets `offset` (0 = start, 1 = end) up to the next band's offset and
+   * is painted with `paint`: a CSS colour or "pattern:<id>". Offsets
+   * increase; the first is 0. Without bands the gradient is smooth.
+   */
+  bands?: GradientBand[];
+}
+
+export interface GradientBand {
+  offset: number;
+  paint: string;
 }
 
 /**

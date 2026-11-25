@@ -16,14 +16,15 @@ import { layoutEm } from "./data/text";
 const area = (tag: number, x1: number, y1: number, x2: number, y2: number) =>
   leaf(tag, concat(i16(x1), i16(y1), i16(x2), i16(y2), u16(0)));
 const ref = (kind: number, name: string) => leaf(404, concat(u16(kind), u16(0), cstr(name)));
-const pageSetup = (orientation: number) => leaf(816, concat(u8(orientation), u8(1), f32(10), f32(7.5)));
+const pageSetup = (orientation: number, paper = 14) => leaf(816, concat(u8(orientation), u8(paper), f32(10), f32(7.5)));
 
 /** Entry i gets RGB (i, 2i, 3i) and the role i + 1. */
-function paletteFile(count: number): Uint8Array {
+function paletteFile(count: number, extra: RecordSpec[] = []): Uint8Array {
   const body: RecordSpec[] = [leaf(1551, u16(count))];
   for (let i = 0; i < count; i++) {
     body.push(leaf(1553, concat(u16(i), padded(`C${i}`, 16))), leaf(1552, concat(u16(i), [i + 1, i, 2 * i, 3 * i])));
   }
+  body.push(...extra);
   return buildDocument("HGA2", DocumentType.Palette, [block(500, [leaf(400, cstr(""))]), block(524, body)]);
 }
 
@@ -71,6 +72,11 @@ describe("buildChartScene: page", () => {
     expect(port.scene.viewBox).toEqual(PORTRAIT_VIEW_BOX);
   });
 
+  it("shows the paper's page area: Letter paper with a 10 × 7.5 in page (PAPER_SIZES_IN, the tutorial charts)", () => {
+    const { scene } = buildChartScene(chartOf(DocumentType.Drawing, [pageSetup(1, 1)]), undefined);
+    expect(scene.viewBox).toEqual({ minX: -16384, minY: -12660, width: 32768, height: 25320 });
+  });
+
   it("defaults to landscape when there is no 816", () => {
     expect(buildChartScene(chartOf(DocumentType.Drawing, []), undefined).scene.viewBox).toEqual(LANDSCAPE_VIEW_BOX);
   });
@@ -90,9 +96,35 @@ describe("buildChartScene: colours", () => {
     expect(scene.background).toBe("#0e1c2a");
   });
 
+  it("takes a plain background from the palette's record 1554 (colour 1), over role 15", () => {
+    const rec = leaf(1554, concat(u16(1), [0xff, 65, 65, 65, 0xff, 1, 2, 3], u16(90), u16(12)));
+    const { scene } = buildChartScene(pieWithAreas([ref(2, "MINE.PL3")]), fakeContext({ "MINE.PL3": paletteFile(64, [rec]) }));
+    expect(scene.background).toBe("#414141");
+    expect(scene.gradients).toBeUndefined();
+  });
+
+  it("takes a shaded background from 1554 as a gradient, colour 1 at the top", () => {
+    const rec = leaf(1554, concat(u16(2), [0xff, 0, 0, 64, 0xff, 0, 0, 5], u16(90), u16(12)));
+    const { scene } = buildChartScene(pieWithAreas([ref(2, "MINE.PL3")]), fakeContext({ "MINE.PL3": paletteFile(64, [rec]) }));
+    expect(scene.background).toMatch(/^gradient:/);
+    const g = scene.gradients?.[scene.background.slice("gradient:".length)];
+    // Colour 1 → colour 2 runs downwards (page angle 270).
+    expect(g).toEqual({ from: "#000040", to: "#000005", angle: 270 });
+  });
+
+  it("passes the palette's 16 screen colours (1555) on as Scene.screenColors", () => {
+    const dac = Array.from({ length: 16 }, (_, i) => [0xff, i, i, i === 12 ? 85 : i]).flat();
+    const { scene } = buildChartScene(pieWithAreas([ref(2, "MINE.PL3")]), fakeContext({ "MINE.PL3": paletteFile(64, [leaf(1555, dac)]) }));
+    expect(scene.screenColors).toHaveLength(16);
+    expect(scene.screenColors?.[12]).toBe("#0c0c55");
+    // Without 1555: none.
+    expect(buildChartScene(pieWithAreas([ref(2, "MINE.PL3")]), fakeContext({ "MINE.PL3": paletteFile(64) })).scene.screenColors).toBeUndefined();
+  });
+
   it("falls back to the built-in palette, with a warning, when the palette file is missing", () => {
     const { scene, warnings } = buildChartScene(pieWithAreas([ref(2, "12.PL3")]), fakeContext({}));
-    expect(scene.background).toBe(rgbToCss(colorForRole(DEFAULT_PALETTE, ROLE.FrameBkg)!));
+    // The built-in HG3.PL3 has a plain black 1554 background.
+    expect(scene.background).toBe("#000000");
     expect(warnings).toContain("palette file 12.PL3 not found");
     expect(warnings).toContain("using the built-in copy of HG3.PL3 instead of 12.PL3");
   });

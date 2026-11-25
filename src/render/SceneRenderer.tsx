@@ -1,7 +1,9 @@
 import { useId, type ReactNode } from "react";
 import {
   DEFAULT_STROKE_WIDTH,
+  GRADIENT_FILL_PREFIX,
   PATTERN_FILL_PREFIX,
+  type FillGradient,
   type FillPattern,
   type GlyphsElement,
   type RectElement,
@@ -12,10 +14,14 @@ import {
 import {
   arcPath,
   bandPath,
+  gradientSpan,
+  gradientStripPoints,
   normalizeBox,
   polylinePath,
   roundedRectPath,
+  shapeBounds,
   smoothPath,
+  spanPoint,
 } from "./geometry";
 
 export interface SceneRendererProps {
@@ -35,7 +41,20 @@ export function SceneRenderer({ scene, onButtonClick }: SceneRendererProps) {
   // Pattern ids must be unique in the page (several scenes may be shown).
   const idPrefix = "p" + useId().replace(/[^A-Za-z0-9_-]/g, "") + "-";
   const patterns = Object.entries(scene.patterns ?? {});
-  const ctx: RenderContext = { onButtonClick, patternUrl: (fill) => resolveFill(fill, scene, idPrefix) };
+  const defs: ReactNode[] = [];
+  const ctx: RenderContext = {
+    onButtonClick,
+    patternUrl: (fill) => resolveFill(fill, scene, idPrefix),
+    gradient: (fill) => {
+      if (!fill.startsWith(GRADIENT_FILL_PREFIX)) return undefined;
+      const id = fill.slice(GRADIENT_FILL_PREFIX.length);
+      return scene.gradients && Object.hasOwn(scene.gradients, id) ? scene.gradients[id] : undefined;
+    },
+    defs,
+    newId: () => `${idPrefix}d${defs.length}`,
+  };
+  const background: RectElement = { kind: "rect", x: minX, y: minY, width, height, fill: scene.background, stroke: null };
+  const body = [renderElement(background, -1, ctx), ...renderElements(scene.elements, ctx)];
   return (
     <svg
       viewBox={`${minX} ${minY} ${width} ${height}`}
@@ -47,11 +66,13 @@ export function SceneRenderer({ scene, onButtonClick }: SceneRendererProps) {
       role="img"
       aria-label="Rendered slide"
     >
-      {patterns.length > 0 && (
-        <defs>{patterns.map(([id, p]) => renderPattern(idPrefix + id, p))}</defs>
+      {(patterns.length > 0 || defs.length > 0) && (
+        <defs>
+          {patterns.map(([id, p]) => renderPattern(idPrefix + id, p))}
+          {defs}
+        </defs>
       )}
-      <rect x={minX} y={minY} width={width} height={height} fill={scene.background} />
-      {renderElements(scene.elements, ctx)}
+      {body}
     </svg>
   );
 }
@@ -60,6 +81,12 @@ interface RenderContext {
   onButtonClick: ((name: string) => void) | undefined;
   /** SVG paint value for a fill or stroke (resolves "pattern:<id>"). */
   patternUrl: (paint: string) => string;
+  /** The gradient a "gradient:<id>" paint names, or undefined. */
+  gradient: (paint: string) => FillGradient | undefined;
+  /** Definitions (gradients, clip paths) added while rendering; written to <defs>. */
+  defs: ReactNode[];
+  /** A fresh DOM id for a definition (call once per pushed definition, before pushing). */
+  newId: () => string;
 }
 
 /** A "pattern:<id>" fill as url(#...) ("none" if the scene lacks it); colours unchanged. */
@@ -127,21 +154,10 @@ function renderElements(elements: SceneElement[], ctx: RenderContext): ReactNode
 
 function shapeProps(s: ShapeStyle, ctx: RenderContext) {
   return {
-    fill: s.fill === null ? "none" : ctx.patternUrl(s.fill),
+    fill: s.fill === null || s.fill.startsWith(GRADIENT_FILL_PREFIX) ? "none" : ctx.patternUrl(s.fill),
     stroke: s.stroke === null ? "none" : ctx.patternUrl(s.stroke),
     strokeWidth: s.stroke ? (s.strokeWidth ?? DEFAULT_STROKE_WIDTH) : undefined,
   };
-}
-
-function renderRect(el: RectElement, key: number, ctx: RenderContext): ReactNode {
-  const box = normalizeBox(el);
-  const corners = el.corners ?? { kind: "square" };
-  switch (corners.kind) {
-    case "square":
-      return <rect key={key} {...box} {...shapeProps(el, ctx)} />;
-    case "rounded":
-      return <path key={key} d={roundedRectPath(box, corners.radius)} {...shapeProps(el, ctx)} />;
-  }
 }
 
 /**
@@ -184,33 +200,97 @@ function renderGlyphs(el: GlyphsElement, key: number, ctx: RenderContext): React
   );
 }
 
+/** Shape elements: everything a fill and outline can paint. */
+type ShapeElement = Extract<SceneElement, { kind: "path" | "ellipse" | "arc" | "band" | "rect" }>;
+
+type Paint = ReturnType<typeof shapeProps>;
+
+/** The SVG node of a shape with the given paint. */
+function shapeNode(el: ShapeElement, key: number | string, paint: Paint): ReactNode {
+  switch (el.kind) {
+    case "path": {
+      const d = el.smooth ? smoothPath(el.points, el.closed) : polylinePath(el.points, el.closed);
+      return <path key={key} d={d} strokeLinejoin="round" {...paint} />;
+    }
+    case "ellipse":
+      return <ellipse key={key} cx={el.cx} cy={el.cy} rx={el.rx} ry={el.ry} {...paint} />;
+    case "arc":
+      return <path key={key} d={arcPath(el, el.startAngle, el.endAngle)} {...paint} />;
+    case "band":
+      return <path key={key} d={bandPath(el, el.startAngle, el.endAngle, el.depth)} strokeLinejoin="round" {...paint} />;
+    case "rect": {
+      const box = normalizeBox(el);
+      const corners = el.corners ?? { kind: "square" };
+      return corners.kind === "rounded" ? (
+        <path key={key} d={roundedRectPath(box, corners.radius)} {...paint} />
+      ) : (
+        <rect key={key} {...box} {...paint} />
+      );
+    }
+  }
+}
+
+/**
+ * A shape filled with a gradient (Scene.gradients) spanning its bounding
+ * box: smooth, as an SVG linearGradient; banded (FillGradient.bands, e.g.
+ * dithered display modes), as one strip per band clipped to the shape, each
+ * strip running to the end so that no seams show. The outline goes on top.
+ */
+function renderGradientShape(el: ShapeElement, key: number, gradient: FillGradient, ctx: RenderContext): ReactNode {
+  const paint = shapeProps(el, ctx);
+  const box = shapeBounds(el);
+  if (!box) return shapeNode(el, key, paint);
+  const span = gradientSpan(box, gradient.angle);
+  const mid = (span.perpMin + span.perpMax) / 2;
+  if (!gradient.bands || gradient.bands.length === 0) {
+    const id = ctx.newId();
+    const p1 = spanPoint(span, span.start, mid);
+    const p2 = spanPoint(span, span.end, mid);
+    ctx.defs.push(
+      <linearGradient key={id} id={id} gradientUnits="userSpaceOnUse" x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}>
+        <stop offset={0} stopColor={gradient.from} />
+        <stop offset={1} stopColor={gradient.to} />
+      </linearGradient>,
+    );
+    return shapeNode(el, key, { ...paint, fill: `url(#${id})` });
+  }
+  const clipId = ctx.newId();
+  ctx.defs.push(
+    <clipPath key={clipId} id={clipId}>
+      {shapeNode(el, "c", { fill: "black", stroke: "none", strokeWidth: undefined })}
+    </clipPath>,
+  );
+  return (
+    <g key={key}>
+      <g clipPath={`url(#${clipId})`}>
+        {gradient.bands.map((band, i) => (
+          <path
+            key={i}
+            d={polylinePath(gradientStripPoints(span, band.offset, 1), true)}
+            fill={ctx.patternUrl(band.paint)}
+          />
+        ))}
+      </g>
+      {el.stroke !== null && shapeNode(el, "o", { ...paint, fill: "none" })}
+    </g>
+  );
+}
+
 function renderElement(
   el: SceneElement,
   key: number,
   ctx: RenderContext,
 ): ReactNode {
   switch (el.kind) {
-    case "path": {
-      const d = el.smooth ? smoothPath(el.points, el.closed) : polylinePath(el.points, el.closed);
-      return <path key={key} d={d} strokeLinejoin="round" {...shapeProps(el, ctx)} />;
-    }
+    case "path":
     case "ellipse":
-      return <ellipse key={key} cx={el.cx} cy={el.cy} rx={el.rx} ry={el.ry} {...shapeProps(el, ctx)} />;
     case "arc":
-      return (
-        <path key={key} d={arcPath(el, el.startAngle, el.endAngle)} {...shapeProps(el, ctx)} />
-      );
     case "band":
-      return (
-        <path
-          key={key}
-          d={bandPath(el, el.startAngle, el.endAngle, el.depth)}
-          strokeLinejoin="round"
-          {...shapeProps(el, ctx)}
-        />
-      );
-    case "rect":
-      return renderRect(el, key, ctx);
+    case "rect": {
+      const gradient = el.fill === null ? undefined : ctx.gradient(el.fill);
+      if (gradient) return renderGradientShape(el, key, gradient, ctx);
+      return shapeNode(el, key, shapeProps(el, ctx));
+    }
     case "text":
       return (
         <text

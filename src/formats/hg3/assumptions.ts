@@ -156,7 +156,7 @@ export function lineWidthFor(lineStyle: number | undefined): number {
  *   374, GALC35, GALC37, GALA1) whose floor and back wall are offset up and
  *   right the same way. Drawn as the front rectangle with a top and a right
  *   face c deep, shaded by BOX_3D_TOP_SHADE and BOX_3D_SIDE_SHADE [I];
- * - 2 (two page frames, bbox = rect): unknown, drawn rounded like 3 [?].
+ * - 2 (two page frames, bbox = rect): a double outline, see DOUBLE_BOX_STYLE.
  */
 export const SQUARE_BOX_STYLE = 1;
 export const BOX_CORNER_RADIUS_FACTOR = 1;
@@ -169,9 +169,10 @@ export const BOX_3D_SIDE_SHADE = 0.5;
 
 /**
  * Gradient fill 0x1110 (two direct colours and an angle; SPEC §5.6 [I]).
- * The scene model has no gradient element, so a gradient is drawn as a solid
- * fill in its first colour. In the samples 0x1110 never shares a display
- * list state with 0x110B.
+ * Superseded by DRAW_GRADIENTS (a real gradient, see "Colour rules from the
+ * reference renders" below); with DRAW_GRADIENTS off, true draws it as a
+ * solid fill in its first colour. In the samples 0x1110 never shares a
+ * display list state with 0x110B.
  */
 export const GRADIENT_AS_FIRST_COLOR = true;
 
@@ -490,7 +491,7 @@ export const DATA_ROW_OVERLAP = 0.15;
  */
 export const DATA_BLANK_ROW_HEIGHT = 1;
 
-/** Baseline below the top of a line's box, as a multiple of the glyph size (as OBJECT_TEXT_ASCENT). */
+/** Baseline below the top of a line's box, as a multiple of the glyph size (as OBJECT_TEXT_ASCENT). No longer read: baselines come from textAscent (OBJECT_TEXT_BASELINE_AT_ASCENT). */
 export const DATA_TEXT_ASCENT = OBJECT_TEXT_ASCENT;
 
 /**
@@ -794,3 +795,279 @@ export const XY_3D_CYLINDER_TOP_SHADE = 0.5;
 /** 3-D octagonal bar: depth radius = XY_3D_OCTAGON_Z × bar depth; top face 63 % [I]. */
 export const XY_3D_OCTAGON_Z = 0.5;
 export const XY_3D_OCTAGON_TOP_SHADE = 0.63;
+
+// ---------------------------------------------------------------------------
+// Task 20 follow-up: geometry from the HG 3.05 reference renders
+// ---------------------------------------------------------------------------
+//
+// Fitted to samples-private/renders (VGA ScreenShow, 640 × 480; private).
+// One screen pixel is 51.2 page units on a 4:3 page.
+
+/**
+ * Paper sizes (816 byte 1) in inches, long × short side [I, from the
+ * reference renders]. The screen shows the PAPER's page area, with the page
+ * units of the stated page size (816 width × height): the tutorial charts
+ * PIETUT, XYTUT and ORGTUT say paper 1 (Letter) but 10 × 7.5 in, and HG
+ * draws them at 0.971 of the size of the 10 × 7.5 in gallery charts,
+ * centred, which is 480 px / (25321 units / 51.2 units per px): a Letter
+ * shaped 32768 × 25321 area letterboxed into 640 × 480 (scaling ours by
+ * 0.971 took XYTUT 8.2 % → 1.6 %, ORGTUT 6.0 % → 1.7 %, PIETUT 5.8 % →
+ * 2.0 % different pixels). Their text stays in 10 × 7.5 in units: the
+ * stored em of a size 9 title is 2211 = 9 % of 24576, as on the gallery
+ * charts. Every other sample's paper matches its stated size (14 with
+ * 10 × 7.5 in: 217 charts; 1 with 11 × 8.5 or 8.5 × 11 in: 18). Other
+ * paper codes do not occur; they fall back to the stated size. Layout
+ * (text sizes, table percentages, embedding, button-bar fit) keeps the
+ * stated page; only the scene's viewBox (PageGeometry.screenViewBox)
+ * follows the paper.
+ */
+export const PAPER_SIZES_IN: ReadonlyMap<number, readonly [number, number]> = new Map([
+  [1, [11, 8.5]],
+  [14, [10, 7.5]],
+]);
+
+/** The VGA ScreenShow screen the references were drawn on: 640 × 480 (one pixel 51.2 page units on a 4:3 page). */
+export const SCREEN_WIDTH_PX = 640;
+export const SCREEN_HEIGHT_PX = 480;
+
+/**
+ * Refines BUTTON_CHART_FITS_DATA_CHART [I, from the reference renders]: the
+ * button bar's height is rounded to a multiple of 40 screen rows (2048 page
+ * units on a 4:3 page) before the free part is measured, and the shrunk
+ * slide's left edge is moved left onto a whole screen pixel.
+ *
+ * Evidence: the non-text edges of all 164 GALBUTN2 slides, ours against the
+ * reference in 40 px bands. Fitted to GALBUTN2's real bar bottom (10170,
+ * 41.4 rows down, scale 0.9138), the reference was 2.0 px higher at row
+ * 100 falling to 0.9 px at row 420 and 1.9 to 0.4 px further left from
+ * x 100 to 600: it is drawn at 0.917 = 440 / 480 rows, i.e. the free part
+ * starts 2048 units (row 40) below the top. With that scale every y band
+ * agrees within 0.33 px (mean −0.2) and every x band was exactly 1.0 px left
+ * of a centred page (left edge 26.67 px); flooring the left edge to 26 px
+ * leaves −0.33 px. Only GALBUTN2's 2118-unit bar occurs, so "nearest
+ * multiple of 2048" cannot be told from "40 rows" or from the buttons'
+ * own bottom (10216, 40.5 rows) rounded down.
+ */
+export const BUTTON_BAND_SNAP_ROWS = 40;
+export const BUTTON_FIT_LEFT_ON_PIXEL = true;
+
+/**
+ * Glyph advances are rounded to whole screen pixels, each glyph on its own
+ * (scene/objectLayer.ts advanceRounder), as the original lays text out on
+ * its 640 × 480 screen [I]. Evidence: the copies' text boxes are wider than
+ * the sum of the .SPD advances by about 24 page units (0.47 px) per
+ * character at every size (DATA_TEXT_CHAR_EXTRA), and in the references
+ * the same lines are wider than ours by 0.33 to 0.5 px per character
+ * (HELP1's 50-character lines by 17 to 20 px; GALBUTN2's key labels by 3 to
+ * 8 px). With ceil rounding those differences fall to −4 to +2 px (HELP1)
+ * and −3 to 0 px (key labels); rounding to nearest made 24 charts worse.
+ * The pixel is the one the text is drawn at: on a slide shrunk under a
+ * button bar 1 / 0.917 page units larger (the six GALD1x1 bullet slides
+ * 2.4 % → 1.3 % different pixels against the unshrunk pixel), but in an
+ * embedded chart (task 13c) the embedded page's own pixel, not the host's
+ * (all four embedding samples closer: PDOUBLEL 0.70 % → 0.28 %). null: no
+ * rounding.
+ */
+export const GLYPH_ADVANCE_PIXELS: ((pixels: number) => number) | null = (px) => Math.ceil(px - 1e-6);
+
+/**
+ * A text line's baseline is its box top minus the line entry's stored
+ * ascent (0x10B0 line entry i16 at 20, negated), not minus the em
+ * (OBJECT_TEXT_ASCENT) [I, from the reference renders]. The ascent is a
+ * multiple of 100 at or just below the em in almost every entry (900 for em
+ * 982, 800 for 860, 1200 for 1228, 2200 for 2211), and box height = ascent
+ * + descent. Evidence: with the baseline one em down, small text sat 1 px
+ * (often 2) lower than in the references: of 5,592 measured lines the best
+ * vertical shift was −1 px for 3,716, −2 for 637 and 0 for 1,103, all in
+ * text under 16 px tall, while lines over 22 px tall matched (206 of 234 at
+ * 0); em − ascent is 82 units (1.6 px) at size 4 but 11 units at size 9.
+ * Lines without a usable entry, and charts laid out from data, use
+ * textAscent: the em rounded down to TEXT_ASCENT_STEP (that rule gives the
+ * stored ascent for all but 51 of 3,800 sample line entries).
+ */
+export const OBJECT_TEXT_BASELINE_AT_ASCENT = true;
+export const TEXT_ASCENT_STEP = 100;
+
+/** Baseline below a line box's top for glyph size `em` (page or object units), see OBJECT_TEXT_BASELINE_AT_ASCENT. */
+export function textAscent(em: number): number {
+  if (!OBJECT_TEXT_BASELINE_AT_ASCENT || !(TEXT_ASCENT_STEP > 0)) return OBJECT_TEXT_ASCENT * em;
+  const a = Math.floor(em / TEXT_ASCENT_STEP + 1e-9) * TEXT_ASCENT_STEP;
+  return a > 0 ? a : OBJECT_TEXT_ASCENT * em;
+}
+
+/**
+ * 0x112B attribute: u16 line style, 0 solid, 1 dotted [I, from the
+ * reference renders]. In the samples 1 marks the grid lines of 142 XY
+ * charts (one multi-part 0x1050 polyline each: 170 shapes) and 7 polygons
+ * of GALD492, 26 texts and one curve; everything else has 0. The
+ * references draw those grid lines dotted where ours were solid (GALD852,
+ * GALD842, GALD812 on their 3-D walls; GALD311's 2-D grid over the plot
+ * fill). Pattern, in screen pixels at the drawn scale (so on a shrunk
+ * GALBUTN2 slide 1 / 0.917 longer in page units): dashes 2 px long, 4.5 px
+ * apart: GALD852's wall line is lit on rows 136-137 and 142-143, GALD311's
+ * horizontal grid line shows a lit pixel every 6, 6, 8, 6, 6, 6, 8 px (a
+ * 6.5 px period) through the plot's dither. Not explained: PALVIEW's
+ * dotted lines (0x1100 byte 1 = 0, a drawing at full size) repeat every
+ * 3.4 px (2 lit, 1 or 2 dark). Text, boxes and smooth curves stay solid.
+ */
+export const LINE_STYLE_SUBTAG = 0x112b;
+export const LINE_STYLE_DASHES: ReadonlyMap<number, readonly [on: number, off: number]> = new Map([[1, [2, 4.5]]]);
+
+// ---------------------------------------------------------------------------
+// Colour rules from the reference renders (palette 1554/1555, gradients)
+// ---------------------------------------------------------------------------
+// Evidence: the HG 3.05 renders in samples-private/renders (VGA ScreenShow,
+// 640 × 480), read pixel by pixel; see also src/render/vgaScreenShow.ts for
+// how the screen dithers what these rules produce.
+
+/**
+ * The page background comes from the palette's record 1554 [I, from the
+ * reference renders], not from role 15 (FrameBkg): u16 mode (1 plain,
+ * 2 shaded), colour 1, colour 2 (0xFF R G B each), u16 angle, u16 12
+ * (palette.ts `paletteBackground`). Evidence: 7.PL3 (FrameBkg black, 1554
+ * colour 1 (65,65,65)): ROCKTOP, SHADE1-3 and CYLINDER show a grey
+ * background (16/64 black + 48/64 grey 85); 1HDW (FrameBkg (22,22,22),
+ * colour 1 (255,0,255)): LOGOBKG1 and WORLD show slot 12, the palette's
+ * dark blue; 2.PL3 (37,36,68): PLAY_ALL shows black + 8/64 blue; 1SHD
+ * (shaded, (0,0,64) to (0,0,5)): LOGOBKG2, PLANET, REDLEFT and SHADE4 show
+ * 16/64 blue at the top falling to 2/64 at the bottom; 12HDW (shaded,
+ * (128,0,255) to black): FLOOR goes from solid slot 11 at the top to black.
+ * HG3.PL3 and most palettes have black there (as FrameBkg "Gry DD" shows on
+ * screen), so most charts do not change. A palette without 1554 (.PC3)
+ * falls back to FrameBkg.
+ */
+export const BACKGROUND_FROM_PALETTE_1554 = true;
+
+/**
+ * Shading direction of a mode 2 (shaded) 1554 background: colour 1 at the
+ * top and colour 2 at the bottom in all four shaded palettes the samples
+ * use (1SHD, 7SHD, 9SHD, 12HDW), all with angle 90. Read as: the angle
+ * points from colour 2 towards colour 1, degrees counter-clockwise from +x
+ * [I: only 90 is seen in a shaded palette], so the gradient (colour 1 →
+ * colour 2) runs at angle + 180.
+ */
+export const BACKGROUND_SHADE_ANGLE_OFFSET = 180;
+
+/**
+ * Gradient fill 0x1110 [I, from the reference renders]: bytes 0-3 colour 1,
+ * bytes 4-7 colour 2 (0xFF R G B, as every sample has; another byte 0 is
+ * read as a colour role), u16 at 8 the direction in tenths of a degree
+ * (0 to 1800 in the samples), counter-clockwise from "up": colour 1 → colour
+ * 2 runs towards page angle 90 + value / 10. Evidence: SHADE1 (0: colour 1
+ * at the bottom of each half), SHADE2 (its four quadrants: 0 up, 900 to the
+ * left, 1800 down), CYLINDER (900, two boxes), REDLEFT (240: the strip is
+ * yellow at the top left, dark red at the bottom right). The gradient spans
+ * the shape's bounding box.
+ */
+export const GRADIENT_SUBTAG = 0x1110;
+export const GRADIENT_ANGLE_UNIT = 0.1;
+export const GRADIENT_ANGLE_ZERO = 90;
+/** Draw 0x1110 as a gradient (true) or, as before, flat in colour 1 (GRADIENT_AS_FIRST_COLOR). */
+export const DRAW_GRADIENTS = true;
+
+/**
+ * Not reproduced: an ellipse with a gradient (PLANET's sphere, 240, (0,0,2)
+ * to (81,81,114)) is not linear in the reference: the light colour hugs
+ * the rim on the colour 2 side as a crescent and most of the disc stays
+ * near colour 1 (8x8 tiles stay at 10/64 blue from 40 px inside the rim),
+ * as if HG drew shrinking ellipses towards that side. Polygons (SHADE2's
+ * quadrants) are linear. Drawn linear here.
+ */
+export const ELLIPSE_GRADIENT_IS_LINEAR = true;
+
+/**
+ * Point markers of 0x10A0/0x10A1 data curves [I, from the reference
+ * renders]: trailer u16 at 2 = marker shape, u16 at 0 = marker size in
+ * object units (500 to 630 in the samples; markers scale with the object,
+ * so GALC44's pictures at 0.31 show 4 px markers). Drawn at every point of
+ * the curve, also when the curve itself is not drawn because the polyline
+ * before it is the line (CURVE_A_AFTER_POLYLINE_DRAWN); one-point curves are
+ * the legend's samples. Shapes, measured on GALD443 (all four, size 630 =
+ * 11.3 px on its 0.917 slide) and GALD413:
+ * - 0: none (GALD411 "Single Line", GALD421, ...);
+ * - 1: a small square, 4 px across: size / 4;
+ * - 2: an upright cross, 11 px: 5/6 of the size;
+ * - 3: an asterisk (upright cross plus diagonals to the corners of the
+ *   size square), 13 px;
+ * - 4: a square of side size, 13 × 12 px.
+ * Squares are outlined in the 0x1100 line colour and filled with the
+ * current 0x110B fill (role 15 on the plot = the plot's own fill, so the
+ * line does not show inside, as in the references; the legend's samples
+ * fill with the legend background). 1 px outlines. 0x10A1 goes with
+ * shapes 1 and 4, 0x10A0 with 0, 2 and 3: the sub-tag's low digit is the
+ * usual "filled" flag, it seems.
+ */
+export const CURVE_MARKER_SIZE_OFFSET = 0;
+export const CURVE_MARKER_SHAPE_OFFSET = 2;
+export const CURVE_MARKERS: ReadonlyMap<number, { form: "square" | "cross" | "asterisk"; size: number }> = new Map([
+  [1, { form: "square", size: 1 / 4 }],
+  [2, { form: "cross", size: 5 / 6 }],
+  [3, { form: "asterisk", size: 1 }],
+  [4, { form: "square", size: 1 }],
+] as const);
+
+/**
+ * Box style 2 (0x1070 u16 style; corner size c): a double outline, the
+ * outer one on the rectangle and an inner one c inside it [I, from the
+ * reference renders]. Only FRAME2 and FRAME2-P use it (c 172 and 177, the
+ * page frames of the 0x1070 template drawings; FRAME1 and FRAME1-P are the
+ * same boxes with style 1). FRAME2's reference shows two 1 px lines 3 px
+ * apart on every side (rows 29 and 32, 445 and 448; columns 49 and 52, 584
+ * and 587): 172 units is 3.3 px at its 52.75 units per pixel.
+ */
+export const DOUBLE_BOX_STYLE = 2;
+
+/**
+ * A button chart is drawn on the slide's screen, not in the slide's page
+ * units [I, from the reference renders]: its page is mapped onto the same
+ * 640 × 480 screen (scene/page.ts screenMapping), scaled about the centre
+ * by the ratio of the two pages' screen pixels. Only GALD181 (Letter
+ * 11 × 8.5 in, screen pixel 52.75 units) names a 10 × 7.5 in button chart
+ * (GALBUTN2, 51.2): its bar was drawn 9 px right and 5 px low, at 0.971
+ * of the size, where the reference shows it exactly as on the 4:3 slides
+ * (F1-Help at x 3). Its free part for the shrunk slide is measured after
+ * the mapping.
+ */
+export const BUTTON_CHART_ON_SCREEN = true;
+
+/**
+ * Monochrome bitmaps (1 bit, 1 plane: 65 of the 69 sample PCX files) are
+ * drawn in the object's colours [I, from the reference renders]: black
+ * pixels in the 0x110C colour, white pixels in the 0x110B colour (0xFF R G
+ * B, or a colour role; role 0 leaves them transparent). Evidence:
+ * LOGOBKG1 (0x110C (0,255,255), 0x110B (0,0,128)): the logo's letters are
+ * solid cyan and the rest of its box is the half blue / half black dither
+ * of (0,0,128), not white; PATTVIEW (0x110C (85,85,85), 0x110B
+ * (170,170,170)): the pattern swatches are light grey on dark grey, not
+ * white on black. 16-colour bitmaps (FLOOR, ROCKTOP) keep their own colours.
+ */
+export const BITMAP_MONO_COLORS = true;
+export const BITMAP_INK_SUBTAG = 0x110c;
+export const BITMAP_PAPER_SUBTAG = 0x110b;
+
+/**
+ * Not reproduced: FLOOR's 640 × 153 16-colour bitmap is drawn by HG at its
+ * own pixel size (1:1 on the 640 × 480 screen), centred vertically in its
+ * 214 px box (rows 296-448), with its last 30 rows repeated above it (rows
+ * 266-295) and black below; we stretch it to the box. Its 0x1140 data
+ * (0x0140, 0x004E = 320, 78) is about half the bitmap size, as LOGOBKG1's
+ * (60, 16) is of its 121 × 33.
+ */
+export const BITMAP_STRETCHED_TO_BOX = true;
+
+/**
+ * Box style 5 (SHADOW_BOX_STYLE) is drawn as a box extruded c right and c
+ * down, not as a flat shadow in role 19 [I, from the reference renders]:
+ * a bottom face (the box's bottom edge moved by (c, −c)) and a right face,
+ * filled with the box's own colour at BOX_SHADOW_BOTTOM_SHADE and
+ * BOX_SHADOW_SIDE_SHADE. Evidence: the horizontal 3-D bars of GALD812,
+ * GALD822, GALD842, GALD852, GALD872 (12 style 5 boxes each): under the
+ * white segment the face is 12/16 grey 85 (25 % of white), its right face
+ * the grey 85 / grey 170 checker (50 %), and under the pale yellow
+ * (255,255,128) segment 2/16 yellow on black ((64,64,32)). Harness score
+ * GALD852 5.70 % → 0.90 %; the org charts with style 5 (GALD721, GALD751,
+ * GALB7, ORGTUT) do not change measurably. SHADOW_BOX_ROLE is no longer
+ * used for object boxes.
+ */
+export const BOX_SHADOW_BOTTOM_SHADE = 0.25;
+export const BOX_SHADOW_SIDE_SHADE = 0.5;

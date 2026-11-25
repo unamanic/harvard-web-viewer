@@ -9,6 +9,8 @@ import {
   ROLE,
   ROLE_NAMES,
   colorForRole,
+  paletteBackground,
+  paletteScreenColors,
   parsePalette,
   resolveChartPalette,
   rgbToCss,
@@ -343,5 +345,40 @@ describe("defaultPalette", () => {
     });
     DEFAULT_PALETTE.entries.slice(0, 42).forEach((e, i) => expect(e.roleName).toBe(ROLE_NAMES[i]));
     expect(DEFAULT_PALETTE.entries).toHaveLength(64);
+  });
+});
+
+describe("records 1554 and 1555", () => {
+  const withRecords = (r1554?: number[], r1555?: number[]) => ({
+    ...DEFAULT_PALETTE,
+    raw1554: r1554 && Uint8Array.from(r1554),
+    raw1555: r1555 && Uint8Array.from(r1555),
+  });
+
+  it("reads 1554 as the background: mode, two colours, angle and the trailing u16", () => {
+    expect(paletteBackground(withRecords([2, 0, 0xff, 0, 0, 0x40, 0xff, 0, 0, 5, 90, 0, 12, 0]))).toEqual({
+      mode: "shaded",
+      rawMode: 2,
+      color1: [0, 0, 64],
+      color2: [0, 0, 5],
+      angle: 90,
+      raw12: 12,
+    });
+    expect(paletteBackground(withRecords([1, 0, 0xff, 65, 65, 65, 0xff, 19, 19, 19, 90, 0, 12, 0]))?.mode).toBe("plain");
+    expect(paletteBackground(withRecords([1, 0, 0, 65, 65, 65, 0xff, 19, 19, 19, 90, 0, 12, 0]))).toBeNull();
+    expect(paletteBackground(withRecords())).toBeNull();
+  });
+
+  it("reads 1555 as 16 screen colours", () => {
+    const dac = Array.from({ length: 16 }, (_, i) => [0xff, i, 2 * i, 3 * i]).flat();
+    const colors = paletteScreenColors(withRecords(undefined, dac));
+    expect(colors).toHaveLength(16);
+    expect(colors?.[5]).toEqual([5, 10, 15]);
+    expect(paletteScreenColors(withRecords(undefined, dac.slice(0, 60)))).toBeNull();
+  });
+
+  it("gives the built-in HG3.PL3 its plain black background and the standard 16 colours", () => {
+    expect(paletteBackground(DEFAULT_PALETTE)).toMatchObject({ mode: "plain", color1: [0, 0, 0] });
+    expect(paletteScreenColors(DEFAULT_PALETTE)?.[12]).toEqual([255, 0, 255]);
   });
 });

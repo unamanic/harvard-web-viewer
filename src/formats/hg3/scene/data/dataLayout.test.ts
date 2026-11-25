@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SceneElement, TextElement } from "../../../types";
-import { DATA_TEXT_ASCENT, textSizeToUnits } from "../../assumptions";
+import { textAscent, textSizeToUnits } from "../../assumptions";
 import { type Chart, parseChart } from "../../chart";
 import { DocumentType, readContainer } from "../../container";
 import { DEFAULT_PALETTE, ROLE, colorForRole, rgbToCss } from "../../palette";
@@ -192,7 +192,7 @@ describe("text layout", () => {
     const title = texts(els).find((t) => t.text === "Bullets")!;
     expect(title.anchor).toBe("middle");
     expect(title.x).toBe(0);
-    expect(title.y).toBeCloseTo(-(12000 - DATA_TEXT_ASCENT * textSizeToUnits(9)), 6);
+    expect(title.y).toBeCloseTo(-(12000 - textAscent(textSizeToUnits(9))), 6);
     expect(title.fill).toBe(role(1));
     const sep = els.find((e) => e.kind === "path");
     expect(sep).toMatchObject({ points: [{ x: -16000, y: -9000 }, { x: 16000, y: -9000 }], stroke: role(ROLE.Lines) });
@@ -214,7 +214,7 @@ describe("title chart", () => {
     ]);
     const t = texts(buildChartScene(chart, undefined).scene.elements);
     const baseline = (name: string) => -t.find((e) => e.text === name)!.y;
-    const asc = (s: number) => DATA_TEXT_ASCENT * textSizeToUnits(s);
+    const asc = (s: number) => textAscent(textSizeToUnits(s));
     expect(baseline("Top")).toBeCloseTo(12000 - asc(12), 6);
     expect(baseline("Bottom")).toBeCloseTo(-12000 + 1200 - asc(4), 6);
     // Middle box (2800) centred between 12000 − 3700 and −12000 + 1200.
@@ -248,7 +248,7 @@ describe("bullet chart", () => {
     expect(l1!.x).toBe(l2!.x);
     expect(m1!.x).toBeLessThan(l1!.x);
     // Row 0 box top at the plot top; row 2 after a blank row.
-    expect(-l1!.y).toBeCloseTo(8800 - DATA_TEXT_ASCENT * textSizeToUnits(7), 6);
+    expect(-l1!.y).toBeCloseTo(8800 - textAscent(textSizeToUnits(7)), 6);
     expect(-l1!.y - -l2!.y).toBeCloseTo(3331, -1);
   });
 
@@ -338,7 +338,7 @@ describe("table chart", () => {
     expect(cell("8").x).toBeCloseTo(8192 - m, 6);
     // Band 1 (30 % to 40 %) centred: y from 12288 − 0.3 × 24576.
     const top = (12288 - 0.3 * 24576 + 12288 - 0.4 * 24576) / 2 + 1200 / 2;
-    expect(-cell("A").y).toBeCloseTo(top - DATA_TEXT_ASCENT * textSizeToUnits(4), 6);
+    expect(-cell("A").y).toBeCloseTo(top - textAscent(textSizeToUnits(4)), 6);
     const rects = els.filter((e) => e.kind === "rect" && e.fill !== null);
     expect(rects.map((r) => r.kind === "rect" && r.fill)).toEqual([role(33), role(36)]);
     expect(rects[0]).toMatchObject({ x: 0, width: 8192, stroke: role(ROLE.Outlines) });

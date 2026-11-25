@@ -18,11 +18,11 @@ import {
   DATA_BLANK_ROW_HEIGHT,
   DATA_FIT_MIN_SCALE,
   DATA_ROW_OVERLAP,
-  DATA_TEXT_ASCENT,
   DATA_TEXT_BOX_FACTOR,
   DATA_TEXT_BOX_STEP,
   DATA_TEXT_CHAR_EXTRA,
   DATA_TEXT_CSS_ADVANCE_EM,
+  textAscent,
   textSizeToUnits,
 } from "../../assumptions";
 import type { PageArea } from "../../chart";
@@ -30,7 +30,7 @@ import { hg3CodeOf } from "../../charset";
 import type { FontKey } from "../../fontKey";
 import { Justification } from "../../text";
 import type { ChartSceneContext } from "../context";
-import { glyphLineElement } from "../objectLayer";
+import { advanceRounder, glyphLineElement } from "../objectLayer";
 import { toScene } from "../page";
 
 /** A line to draw: text and the values it is drawn with (effectiveStyle). */
@@ -94,7 +94,7 @@ export function rowHeight(ctx: ChartSceneContext, size: number, blank: boolean):
 
 /** Baseline of a line whose box top is `top` (page y). */
 export function baselineBelow(ctx: ChartSceneContext, top: number, size: number): number {
-  return top - DATA_TEXT_ASCENT * textSizeToUnits(size, ctx.page.shortSide);
+  return top - textAscent(textSizeToUnits(size, ctx.page.shortSide));
 }
 
 /** Byte codes of a decoded string (characters outside the HG3 set become "?"). */
@@ -107,7 +107,7 @@ export function drawnAdvance(ctx: ChartSceneContext, text: string, fontKey: Font
   const em = textSizeToUnits(size, ctx.page.shortSide);
   const { glyphs } = ctx.faces.faceFor(fontKey);
   if (!glyphs) return text.length * DATA_TEXT_CSS_ADVANCE_EM * em;
-  return (layoutGlyphLine(glyphs, codesOf(text)).advance * em) / EM_UNITS;
+  return (layoutGlyphLine(glyphs, codesOf(text), advanceRounder(em, ctx.page.screenPixel)).advance * em) / EM_UNITS;
 }
 
 /**
@@ -146,7 +146,7 @@ export function textElement(
   const size = textSizeToUnits(t.size, ctx.page.shortSide);
   const p = toScene(x, baseline);
   const face = ctx.faces.faceFor(t.fontKey);
-  if (face.glyphs) return glyphLineElement(face.glyphs, t.text, codesOf(t.text), fill, anchor, p.x, p.y, size);
+  if (face.glyphs) return glyphLineElement(face.glyphs, t.text, codesOf(t.text), fill, anchor, p.x, p.y, size, ctx.page.screenPixel);
   const { font } = face;
   return {
     kind: "text",

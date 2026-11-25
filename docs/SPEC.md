@@ -484,7 +484,7 @@ The 516 extent box contains every object's bounding box but is not a tight fit. 
 | 0x1041 | Elliptical band (the side of a cylinder or a 3-D pie edge): the arc from start to end angle, extruded straight down by the depth | centre x, centre y, radius x, radius y, start angle, end angle, u16 depth | C |
 | 0x1050 | Open polyline, possibly in several parts | u16 point count n, u16 part count k, k × u16 points per part (summing to n), then n points. Most have k = 1; 160 sample polylines have k from 5 to 19 | C |
 | 0x1061, 0x1068 | Polygon (closed) | same as 0x1050 | C |
-| 0x1070 to 0x1078 | Box | u16 box style, u16 size c, i16 x1, y1, x2, y2. Styles: 1 square; 3 rounded with radius c; 5 drop shadow c to the right and down (no separate shadow shape; colour implied, likely role 19 Shadow); 6 3-D box c deep up and to the right (the 3-D bar style); 2 unknown. The bounding box includes the shadow or 3-D extent. \[C for the extents, I for the drawing\] | C for the rectangle |
+| 0x1070 to 0x1078 | Box | u16 box style, u16 size c, i16 x1, y1, x2, y2. Styles: 1 square; 3 rounded with radius c; 5 extruded 3-D box, c to the right and down, the bottom face at 25% and the right face at 50% of the fill (reference renders; an earlier draft read it as a drop shadow); 2 double outline with the inner one c inside; 6 3-D box c deep up and to the right (the 3-D bar style). The bounding box includes the shadow or 3-D extent. \[C for the extents, I for the drawing\] | C for the rectangle |
 | 0x1080 | Cubic Bézier curve: points are P0, C1, C2, P1, C1, C2, P2 … (3k + 1 points) | same as 0x1050 | C |
 | 0x1091, 0x1098 | Closed cubic Bézier curve, same point order (pie slices use circle handles of 0.552 × radius) | same as 0x1050 | C |
 | 0x10A0, 0x10A1 | Smooth curve through its points (data series lines) \[I\] | u16 point count n, n points, then 6 bytes: u16 about 500 to 630 (perhaps marker size) \[?\], u16 0 to 4 (likely the point marker shape) \[I\], u16 1 = straight segments, 0 = smooth \[I, from the reference renders\]. When it follows a 0x1050 polyline in the same object it repeats that line (the polyline is what is drawn) | I |
@@ -501,10 +501,11 @@ Angles are in tenths of a degree, measured counter-clockwise from the positive x
 | 0x1100 | 4 | Line (outline) settings: byte 0 is a colour (see below; roles seen most: 32 Outlines, 14 Frame, 26, 18 Lines, 23, 24, 15) \[I\]; byte 1 is 0, 1, 2 or 255 mostly, likely line width or style \[I\]; bytes 2 and 3 are not meaningful unless byte 0 is 0xFF |
 | 0x110B | 4 | Fill colour, byte 0 (see below) \[I\] |
 | 0x110C | 4 | Fill colour for bitmap objects (always before 0x1140; often FF 55 55 55) \[I\]; also on 3-D pie faces with byte 0 = 0 \[?\] |
-| 0x1110 | 10 | Two direct colours (FF R G B, FF R G B) and a u16 from 0 to 1800; likely a two-colour gradient with its angle in tenths of a degree \[I\] |
+| 0x1110 | 10 | Gradient fill across the shape's bounding box: colour 1, colour 2 (FF R G B each), u16 angle in tenths of a degree, counter-clockwise from up \[C, from the reference renders\] |
 | 0x1120 | 2 | u16 outline width in page units (294 draws about 6 px on a 640 × 480 screen); small values (0, 1, 25) leave the 0x1100 width \[I, from the reference renders\] |
 | 0x112A | 2 | Fill brightness in percent: 100 on flat faces, lower only on 3-D faces (bar sides, cylinder walls, pyramid faces, 3-D pie walls and edges), varying with the face's direction like a lighting model. Scale the fill towards black by it \[I\] |
-| 0x112B, 0x112D | 2 | u16 0 or 1 \[?\] |
+| 0x112B | 2 | Line style: 0 solid, 1 dotted (2 px on in a 6.5 px period at screen scale) \[C, from the reference renders\] |
+| 0x112D | 2 | u16 0 or 1 \[?\] |
 | 0x112E, 0x112F | 2 | u16 (0 or 3; 1) \[?\] |
 | 0x1140 | 8 | Bitmap fill, mostly zero; the bitmap is the 404 kind 5 reference before the 612 \[I\] |
 
@@ -534,7 +535,7 @@ Signature HGA2, version type 0x33 (.PL3) or 0x34 (.PC3), header block, palette b
 | 1551 | 2 | u16 number of colours: 64 in .PL3 files, but some have fewer (50 and 57 in the samples) | C |
 | 1553 | 18 | One per colour: u16 index (0 to 63), padded string\[16\] name | C |
 | 1552 | 6 | One per colour: u16 index, u8 role number (index + 1 in .PL3; 0xFF in every .PC3), u8 red, u8 green, u8 blue, each 0 to 255 | C |
-| 1554 | 14 | Background settings \[I\]: u16 mode (1 plain, 2 in the shaded palettes, likely a gradient), two colours each stored as 0xFF R G B, u16 (90 in almost all files, possibly an angle), u16 (12 in all files, possibly a step count). Absent in .PC3 | I |
+| 1554 | 14 | Page background \[C, from the reference renders; role 15 FrameBkg is not used for it\]: u16 mode (1 plain, 2 in the shaded palettes, likely a gradient), two colours each stored as 0xFF R G B, u16 (90 in almost all files, possibly an angle), u16 (12 in all files, possibly a step count). Absent in .PC3 | I |
 | 1555 | 64 | 16 entries of 4 bytes, each 0xFF R G B. The same 16 colours (black, white, a 12-step hue wheel, two greys) in most files, monochrome palettes included, so this is not a 16-colour display mapping; likely the colour editor's custom swatches \[I\]. Absent in .PC3 | C layout, I meaning |
 
 Custom palettes (.PC3) are plain colour lists, not role palettes: every role byte is 0xFF and the names have no "|role" part ("White", "Gray LL"). No sample chart names a .PC3. \[C\]

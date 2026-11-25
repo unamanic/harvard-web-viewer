@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NotPcxError, decodePcx, type PcxImage } from './pcx';
+import { NotPcxError, decodePcx, recolorMonochrome, type PcxImage } from './pcx';
 import { canvasAvailable, encodeBmp, encodeBmpDataUrl, pcxToDataUrl } from './toDataUrl';
 
 interface BuildOpts {
@@ -80,6 +80,7 @@ describe('decodePcx', () => {
     expect(px(img, 7, 1)).toEqual([0, 0, 0, 255]);
     expect(px(img, 8, 1)).toEqual([255, 255, 255, 255]);
     expect(px(img, 9, 1)).toEqual([255, 255, 255, 255]);
+    expect(img.monochrome).toBe(true);
   });
 
   it('decodes 1 bpp x 4 planes EGA with the header palette', () => {
@@ -184,5 +185,28 @@ describe('data URLs', () => {
   it('falls back to BMP without a DOM canvas', () => {
     if (canvasAvailable()) return;
     expect(pcxToDataUrl(img)).toBe(encodeBmpDataUrl(img));
+  });
+});
+
+describe('recolorMonochrome', () => {
+  const mono = (): PcxImage => ({
+    width: 2,
+    height: 1,
+    rgba: new Uint8ClampedArray([255, 255, 255, 255, 0, 0, 0, 255]),
+    warnings: [],
+    monochrome: true,
+  });
+
+  it('draws black pixels in the ink colour and white ones in the paper colour', () => {
+    expect([...recolorMonochrome(mono(), [0, 255, 255], [0, 0, 128]).rgba]).toEqual([0, 0, 128, 255, 0, 255, 255, 255]);
+  });
+
+  it('leaves pixels of a missing colour transparent', () => {
+    expect([...recolorMonochrome(mono(), [1, 2, 3], null).rgba]).toEqual([0, 0, 0, 0, 1, 2, 3, 255]);
+  });
+
+  it('returns other images unchanged', () => {
+    const img = { ...mono(), monochrome: undefined };
+    expect(recolorMonochrome(img, [1, 2, 3], null)).toBe(img);
   });
 });

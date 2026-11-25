@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { outlineCloneFor, outlineCloneInfo } from "../../../fonts/outline";
 import { strokeCloneFor, textToStrokePaths } from "../../../fonts/stroke";
 import type { GlyphsElement, GroupElement, ParseContext, ResolvedFile, SceneElement } from "../../types";
-import { OBJECT_TEXT_ASCENT, textSizeToUnits } from "../assumptions";
+import { textAscent, textSizeToUnits } from "../assumptions";
 import { parseChart } from "../chart";
 import { DocumentType, readContainer } from "../container";
 import { DEFAULT_PALETTE, colorForRole, rgbToCss } from "../palette";
@@ -17,7 +17,7 @@ import { type ByteSource, type RecordSpec, block, buildDocument, concat, cstr, f
 import { SPEEDO_SPACE, SPEEDO_SQUARE, SPEEDO_TRIANGLE, buildFgf, buildSpeedo } from "../testing/fonts";
 import { buildChartScene } from "./buildChartScene";
 import { createChartSceneContext } from "./context";
-import { drawObjectLayer, glyphLineElement } from "./objectLayer";
+import { advanceRounder, drawObjectLayer, glyphLineElement } from "./objectLayer";
 
 // ---------------------------------------------------------------------------
 // Builders (as in objectLayer.test.ts, with a font key per run)
@@ -101,7 +101,11 @@ const FGF = buildFgf([
   { source: 3, number: 3, style: 0x4268, name: "Swiss 721|Roman", fileName: "BX000003.SPD", map: { 0x20: 0, 0x41: 1, 0x42: 2 } },
 ]);
 const SIZE = textSizeToUnits(4);
-const BASELINE_Y = -(2000 - OBJECT_TEXT_ASCENT * SIZE);
+const BASELINE_Y = -(2000 - textAscent(SIZE));
+/** One 640 × 480 screen pixel (51.2 page units) in em units at SIZE: advances are rounded up to it (GLYPH_ADVANCE_PIXELS). */
+const PX = (51.2 / SIZE) * 1000;
+const ADV = (a: number) => Math.ceil(a / PX - 1e-6) * PX;
+const fmt1 = (n: number) => String(Math.round(n * 10) / 10);
 
 // ---------------------------------------------------------------------------
 
@@ -127,6 +131,15 @@ describe("glyphLineElement", () => {
     expect(el.transform).toEqual([2, 0, 0, 2, 100 - 1000, 0]);
   });
 
+  it("rounds each advance up to whole screen pixels when given the pixel size (GLYPH_ADVANCE_PIXELS)", () => {
+    // size 1000, pixel 300 units: advances 500 → 600, 250 → 300.
+    const el = glyphLineElement(source, "A A", [0x41, 0x20, 0x41], "#000", "start", 0, 0, 1000, 300);
+    expect(el.advance).toBeCloseTo(1500, 9);
+    expect(el.d).toBe("M10 -20l5 0zM610 -20l5 0zM910 -20l5 0z");
+    expect(advanceRounder(1000, 0)).toBeUndefined();
+    expect(advanceRounder(2000, 300)!(500)).toBeCloseTo(600, 9); // 500 em units = 1000 scene = 3.33 px → 4 px
+  });
+
   it("strokes stroke-font glyphs with the source's pen width", () => {
     const el = glyphLineElement({ ...source, paint: "stroke", strokeWidth: 40 }, "A", [0x41], "#abcdef", "start", 0, 0, 1000);
     expect(el).toMatchObject({ fill: null, stroke: "#abcdef", strokeWidth: 40 });
@@ -137,13 +150,17 @@ describe("text faces: priority", () => {
   it("draws with the original .SPD through the HG3.FGF character map", () => {
     const { elements, warnings, report } = draw("AB A", SWISS, fakeContext({ "HG3.FGF": FGF, "BX000003.SPD": SPD }), 3);
     const el = glyphs(elements[0]);
-    // A (square, 600) at 0, B (triangle, 650) at 600, space 250, A at 1500: y flipped, relative after M.
+    // A (square, 600), B (triangle, 650), space 250, A, each advance rounded up to whole pixels:
+    // y flipped, relative after M.
+    const b = ADV(600);
+    const a2 = b + ADV(650) + ADV(250);
     expect(el.d).toBe(
-      "M100 0l400 0l0 -400l-400 0z" + "M600 0l600 0c-100 -300 -500 -300 -600 0z" + "M1600 0l400 0l0 -400l-400 0z",
+      "M100 0l400 0l0 -400l-400 0z" + `M${fmt1(b)} 0l600 0c-100 -300 -500 -300 -600 0z` + `M${fmt1(a2 + 100)} 0l400 0l0 -400l-400 0z`,
     );
-    expect(el.advance).toBe(2100);
+    expect(el.advance).toBeCloseTo(a2 + ADV(600), 9);
     const s = SIZE / 1000;
-    expect(el.transform).toEqual([s, 0, 0, s, 4000 - 2100 * s, BASELINE_Y]);
+    expect(el.transform![4]).toBeCloseTo(4000 - el.advance * s, 9);
+    expect(el.transform![5]).toBeCloseTo(BASELINE_Y, 9);
     expect(el).toMatchObject({ text: "AB A", fill: role(2), stroke: null });
     expect(report).toBe("Fonts: Swiss 721 Roman — original BX000003.SPD");
     expect(warnings).toEqual([]);
@@ -171,11 +188,12 @@ describe("text faces: priority", () => {
     const el = glyphs(elements[0]);
     const font = strokeCloneFor({ source: 2, number: 16, style: 0x5848 })!;
     const ref = textToStrokePaths(font, "Hi", 1000);
+    const advance = [..."Hi"].reduce((n, ch) => n + ADV(textToStrokePaths(font, ch, 1000).advance), 0);
     expect(el.fill).toBeNull();
     expect(el.stroke).toBe(role(2));
     expect(el.strokeWidth).toBeCloseTo(ref.strokeWidth);
-    expect(el.advance).toBeCloseTo(ref.advance, 5);
-    expect(el.transform![4]).toBeCloseTo(2000 - (ref.advance / 2) * (SIZE / 1000), 5);
+    expect(el.advance).toBeCloseTo(advance, 5);
+    expect(el.transform![4]).toBeCloseTo(2000 - (advance / 2) * (SIZE / 1000), 5);
     expect(report).toBe("Fonts: HG Sans serif Light — clone HWV Stroke Sans Light");
   });
 
@@ -191,7 +209,7 @@ describe("text faces: priority", () => {
     const { elements, report } = draw("Hello", SWISS, undefined, 2);
     const el = glyphs(elements[0]);
     const info = outlineCloneInfo(key)!;
-    const advance = [..."Hello"].reduce((n, ch) => n + info.advance(ch.charCodeAt(0))!, 0);
+    const advance = [..."Hello"].reduce((n, ch) => n + ADV(info.advance(ch.charCodeAt(0))!), 0);
     expect(el.advance).toBeCloseTo(advance, 5);
     const s = SIZE / 1000;
     expect(el.transform![0]).toBeCloseTo(s);
@@ -204,7 +222,7 @@ describe("text faces: priority", () => {
 
   it("still prefers the original over a loaded clone", () => {
     const el = glyphs(draw("A", SWISS, fakeContext({ "HG3.FGF": FGF, "BX000003.SPD": SPD })).elements[0]);
-    expect(el.advance).toBe(600);
+    expect(el.advance).toBeCloseTo(ADV(600), 9);
   });
 
   it("keeps rotated text inside the object frame", () => {
@@ -213,7 +231,7 @@ describe("text faces: priority", () => {
     expect(g.kind).toBe("group");
     const el = glyphs(g.children[0]);
     const s = SIZE / 1000;
-    expect(el.transform).toEqual([s, 0, 0, s, 0, BASELINE_Y]);
+    [s, 0, 0, s, 0, BASELINE_Y].forEach((v, i) => expect(el.transform![i]).toBeCloseTo(v, 9));
   });
 
   it("adds the font report to the scene warnings", () => {

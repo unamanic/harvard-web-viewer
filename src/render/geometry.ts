@@ -7,7 +7,7 @@
  * an ellipse is (cx + rx cos t, cy - ry sin t). See src/formats/types.ts.
  */
 
-import type { Point } from "../formats/types";
+import type { Point, SceneElement } from "../formats/types";
 
 export interface EllipseGeom {
   cx: number;
@@ -173,4 +173,102 @@ export function roundedRectPath(b: Box, radius: number): string {
     ` V ${n(y + r)}` + a(x + r, y) +
     " Z"
   );
+}
+
+// ---------------------------------------------------------------------------
+// Gradients (Scene.gradients)
+// ---------------------------------------------------------------------------
+
+/**
+ * Bounding box of a shape element in its own units, or null for elements
+ * that are not filled shapes (text, glyphs, images, groups). Arcs and bands
+ * use their whole ellipse (plus the band's depth): a gradient spans the box.
+ */
+export function shapeBounds(el: SceneElement): Box | null {
+  switch (el.kind) {
+    case "path": {
+      if (el.points.length === 0) return null;
+      const xs = el.points.map((p) => p.x);
+      const ys = el.points.map((p) => p.y);
+      const x = Math.min(...xs);
+      const y = Math.min(...ys);
+      return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y };
+    }
+    case "ellipse":
+    case "arc":
+      return { x: el.cx - Math.abs(el.rx), y: el.cy - Math.abs(el.ry), width: 2 * Math.abs(el.rx), height: 2 * Math.abs(el.ry) };
+    case "band":
+      return {
+        x: el.cx - Math.abs(el.rx),
+        y: el.cy - Math.abs(el.ry),
+        width: 2 * Math.abs(el.rx),
+        height: 2 * Math.abs(el.ry) + Math.max(0, el.depth),
+      };
+    case "rect":
+      return normalizeBox(el);
+    default:
+      return null;
+  }
+}
+
+/**
+ * Where a gradient at `angle` (page-CCW degrees, types.ts FillGradient) lies
+ * over `box`: the unit direction `dir` (scene units, y down) and its normal
+ * `perp`, and the extents of the box's corners projected on both. Offset 0
+ * of the gradient is at projection `start`, offset 1 at `end`.
+ */
+export interface GradientSpan {
+  dir: Point;
+  perp: Point;
+  start: number;
+  end: number;
+  perpMin: number;
+  perpMax: number;
+}
+
+export function gradientSpan(box: Box, angle: number): GradientSpan {
+  const t = (angle * Math.PI) / 180;
+  const dir = { x: snap(Math.cos(t)), y: -snap(Math.sin(t)) };
+  const perp = { x: -dir.y, y: dir.x };
+  const b = normalizeBox(box);
+  const corners = [
+    [b.x, b.y],
+    [b.x + b.width, b.y],
+    [b.x, b.y + b.height],
+    [b.x + b.width, b.y + b.height],
+  ];
+  const along = corners.map(([x, y]) => x * dir.x + y * dir.y);
+  const across = corners.map(([x, y]) => x * perp.x + y * perp.y);
+  return {
+    dir,
+    perp,
+    start: Math.min(...along),
+    end: Math.max(...along),
+    perpMin: Math.min(...across),
+    perpMax: Math.max(...across),
+  };
+}
+
+/** The point at projection `along` (on `dir`) and `across` (on `perp`). */
+export function spanPoint(span: GradientSpan, along: number, across: number): Point {
+  return {
+    x: along * span.dir.x + across * span.perp.x,
+    y: along * span.dir.y + across * span.perp.y,
+  };
+}
+
+/**
+ * Closed polygon covering the part of the span from offset `from` to offset
+ * `to` (0 = start, 1 = end), as wide as the box.
+ */
+export function gradientStripPoints(span: GradientSpan, from: number, to: number): Point[] {
+  const len = span.end - span.start;
+  const a = span.start + from * len;
+  const b = span.start + to * len;
+  return [
+    spanPoint(span, a, span.perpMin),
+    spanPoint(span, b, span.perpMin),
+    spanPoint(span, b, span.perpMax),
+    spanPoint(span, a, span.perpMax),
+  ];
 }

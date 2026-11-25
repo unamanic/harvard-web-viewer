@@ -211,8 +211,9 @@ describe("palette option on a show", () => {
   it("uses the built-in copy for every slide when the file is absent, saying so once", () => {
     const { "MONOCHRB.PL3": _omitted, ...withoutFile } = files;
     const doc = open("MONOCHRB.PL3", withoutFile);
-    const dark = rgbToCss(colorForRole(builtInPalette("MONOCHRB.PL3")!, ROLE.FrameBkg)!);
-    expect(backgrounds(doc)).toEqual([dark, dark]);
+    // The built-in copy carries MONOCHRB's 1554: a plain black background.
+    expect(builtInPalette("MONOCHRB.PL3")!.raw1554?.[3]).toBe(0);
+    expect(backgrounds(doc)).toEqual(["#000000", "#000000"]);
     expect(doc.warnings.filter((w) => w.includes("MONOCHRB"))).toHaveLength(1);
     for (const s of doc.presentation!.slides) expect(s.warnings().filter((w) => w.includes("MONOCHRB"))).toEqual([]);
   });

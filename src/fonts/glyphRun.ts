@@ -54,15 +54,23 @@ const fmt = (n: number): string => {
   return Object.is(r, -0) ? "0" : String(r);
 };
 
-/** Lay out byte codes left to right as one path. */
-export function layoutGlyphLine(source: GlyphSource, codes: ArrayLike<number>): GlyphLine {
+/**
+ * Lay out byte codes left to right as one path. `roundAdvance`, when given,
+ * maps each glyph's advance (em units) to the advance actually used, e.g. to
+ * round it to whole device pixels.
+ */
+export function layoutGlyphLine(
+  source: GlyphSource,
+  codes: ArrayLike<number>,
+  roundAdvance?: (advance: number) => number,
+): GlyphLine {
   let pen = 0;
   let d = "";
   for (let i = 0; i < codes.length; i++) {
     const g = source.glyph(codes[i]!);
     if (!g) continue;
     for (const c of g.contours) d += `M${fmt(c.x + pen)} ${fmt(c.y)}${c.rest}`;
-    pen += g.advance;
+    pen += roundAdvance ? roundAdvance(g.advance) : g.advance;
   }
   return { d, advance: pen };
 }

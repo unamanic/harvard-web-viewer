@@ -18,14 +18,18 @@
  * (displayMode.ts) builds its tiles with `ditherRows`.
  */
 import {
+  GRADIENT_FILL_PREFIX,
   PATTERN_FILL_PREFIX,
+  type FillGradient,
   type FillPattern,
+  type GradientBand,
   type Matrix,
   type Scene,
   type SceneElement,
   type ViewBox,
 } from "../formats/types";
-import { type RGB, parseCssColor } from "./color";
+import { type RGB, formatCssColor, parseCssColor } from "./color";
+import { type Box, gradientSpan, shapeBounds } from "./geometry";
 
 /** Threshold matrix: every value 0..n−1 once (n = rows × columns), tiled from the screen's top left. */
 export type ThresholdMatrix = readonly (readonly number[])[];
@@ -37,6 +41,14 @@ export const BAYER_4X4: ThresholdMatrix = [
   [3, 11, 1, 9],
   [15, 7, 13, 5],
 ];
+
+/**
+ * The 8 × 8 Bayer matrix (64 levels): the 4 × 4 one on each of the four
+ * interleaved 2 × 2 sub-grids, sub-grid (0,0) first, then (1,1), (0,1), (1,0).
+ */
+export const BAYER_8X8: ThresholdMatrix = Array.from({ length: 8 }, (_, y) =>
+  Array.from({ length: 8 }, (_, x) => BAYER_4X4[y >> 1][x >> 1] + 16 * [[0, 2], [3, 1]][y & 1][x & 1]),
+);
 
 /** One colour of a dither: a screen colour (index into Screen.colors) on `cells` thresholds. */
 export interface DitherStop {
@@ -65,7 +77,17 @@ export interface Screen {
   matrix: ThresholdMatrix;
   /** How a stored colour is shown on shapes, lines and text. */
   dither(rgb: RGB): Dither;
-  /** Solid screen colour for the page background; when absent, the stop with the most cells. */
+  /**
+   * Gradient fills (Scene.gradients) and the page background, when the
+   * screen shows them with their own threshold matrix and colour rule (for
+   * the VGA ScreenShow driver, 64 levels on an 8 × 8 matrix); when absent,
+   * `matrix` and `dither`.
+   */
+  gradient?: { matrix: ThresholdMatrix; dither(rgb: RGB): Dither };
+  /**
+   * Solid screen colour for the page background. When absent the
+   * background is dithered like a gradient band (`gradient`, else `dither`).
+   */
   background?(rgb: RGB): number;
 }
 
@@ -198,23 +220,28 @@ export function applyScreen(scene: Scene, screen: Screen, options: ApplyScreenOp
   const geo = screenGeometry(scene.viewBox, screen);
   const patterns: Record<string, FillPattern> = {};
   const patternIds = new Map<string, string>();
-  const ditherCache = new Map<string, { solid: string } | { tileKey: string; tile: number[][] } | null>();
+  const gradients: Record<string, FillGradient> = {};
+  type Entry = { solid: string } | { tileKey: string; tile: number[][] } | null;
+  const ditherCache = new Map<string, Entry>();
+  const gradientCache = new Map<string, Entry>();
+  const fine = screen.gradient ?? { matrix: screen.matrix, dither: screen.dither };
 
-  const ditherOf = (css: string) => {
-    let entry = ditherCache.get(css);
+  const entryOf = (rgb: RGB, dither: Screen["dither"], matrix: ThresholdMatrix): Entry => {
+    const d = normalizeDither(dither(rgb));
+    if (d.length === 0) return null;
+    if (d.length === 1) return { solid: screen.colors[d[0].color] };
+    const tile = ditherTile(d, matrix);
+    return { tileKey: tile.map((r) => r.map((c) => c.toString(16)).join("")).join("/"), tile };
+  };
+
+  /** How the screen shows `css`: on shapes, lines and text, or (`gradient`) in gradients and the background. */
+  const ditherOf = (css: string, gradient = false): Entry => {
+    const cache = gradient ? gradientCache : ditherCache;
+    let entry = cache.get(css);
     if (entry !== undefined) return entry;
     const rgb = parseCssColor(css);
-    if (!rgb) entry = null;
-    else {
-      const d = normalizeDither(screen.dither(rgb));
-      if (d.length === 0) entry = null;
-      else if (d.length === 1) entry = { solid: screen.colors[d[0].color] };
-      else {
-        const tile = ditherTile(d, screen.matrix);
-        entry = { tileKey: tile.map((r) => r.map((c) => c.toString(16)).join("")).join("/"), tile };
-      }
-    }
-    ditherCache.set(css, entry);
+    entry = rgb ? (gradient ? entryOf(rgb, fine.dither, fine.matrix) : entryOf(rgb, screen.dither, screen.matrix)) : null;
+    cache.set(css, entry);
     return entry;
   };
 
@@ -222,8 +249,8 @@ export function applyScreen(scene: Scene, screen: Screen, options: ApplyScreenOp
    * Paint for `css` used in a coordinate system mapped to the scene's by
    * `toScene`: a screen colour, a "pattern:<id>", or `css` unchanged.
    */
-  const paint = (css: string, toScene: Matrix): string => {
-    const d = ditherOf(css);
+  const paint = (css: string, toScene: Matrix, gradient = false): string => {
+    const d = ditherOf(css, gradient);
     if (d === null) return css;
     if ("solid" in d) return d.solid;
     // Pattern units are scene units shifted to the screen's origin; map them
@@ -240,6 +267,37 @@ export function applyScreen(scene: Scene, screen: Screen, options: ApplyScreenOp
       patterns[id] = tilePattern(d.tile, screen.colors, geo.pixelWidth, geo.pixelHeight, transform);
     }
     return PATTERN_FILL_PREFIX + id;
+  };
+
+  /**
+   * A gradient fill as the screen shows it: sampled once per screen pixel
+   * along its direction (over the element's bounding box `box`, in units
+   * mapped to the scene's by `toScene`), each sample dithered with the
+   * gradient rule, runs of equal paint merged into bands.
+   */
+  const gradientPaint = (fill: string, box: Box | null, toScene: Matrix): string => {
+    const id = fill.slice(GRADIENT_FILL_PREFIX.length);
+    const g = scene.gradients && Object.hasOwn(scene.gradients, id) ? scene.gradients[id] : undefined;
+    if (!g) return fill;
+    const from = parseCssColor(g.from);
+    const to = parseCssColor(g.to);
+    if (!from || !to || !box) return paint(g.from, toScene, true);
+    const span = gradientSpan(box, g.angle);
+    // Screen pixels along the direction: the span mapped to the scene, over the pixel size.
+    const vx = toScene[0] * span.dir.x + toScene[2] * span.dir.y;
+    const vy = toScene[1] * span.dir.x + toScene[3] * span.dir.y;
+    const pixels = (Math.abs(span.end - span.start) * Math.hypot(vx / geo.pixelWidth, vy / geo.pixelHeight));
+    const steps = Math.max(1, Math.min(GRADIENT_MAX_STEPS, Math.round(pixels)));
+    const bands: GradientBand[] = [];
+    for (let k = 0; k < steps; k++) {
+      const t = (k + 0.5) / steps;
+      const css = formatCssColor([0, 1, 2].map((c) => from[c] + (to[c] - from[c]) * t) as unknown as RGB);
+      const p = paint(css, toScene, true);
+      if (bands.length === 0 || bands[bands.length - 1].paint !== p) bands.push({ offset: k / steps, paint: p });
+    }
+    const newId = `${prefix}-g${Object.keys(gradients).length}`;
+    gradients[newId] = { ...g, bands };
+    return GRADIENT_FILL_PREFIX + newId;
   };
 
   const mapEl = (el: SceneElement, toScene: Matrix): SceneElement => {
@@ -263,29 +321,36 @@ export function applyScreen(scene: Scene, screen: Screen, options: ApplyScreenOp
       default:
         return {
           ...el,
-          fill: el.fill === null ? null : paint(el.fill, toScene),
+          fill:
+            el.fill === null
+              ? null
+              : el.fill.startsWith(GRADIENT_FILL_PREFIX)
+                ? gradientPaint(el.fill, shapeBounds(el), toScene)
+                : paint(el.fill, toScene),
           stroke: el.stroke === null ? null : paint(el.stroke, toScene),
         };
     }
   };
 
-  const bgRgb = parseCssColor(scene.background);
+  const { minX, minY, width, height } = scene.viewBox;
   let background = scene.background;
-  if (bgRgb) {
-    let index: number;
-    if (screen.background) index = screen.background(bgRgb);
-    else {
-      const d = normalizeDither(screen.dither(bgRgb));
-      index = d.length ? d.reduce((a, b) => (b.cells > a.cells ? b : a)).color : 0;
-    }
-    background = screen.colors[index];
+  if (background.startsWith(GRADIENT_FILL_PREFIX)) {
+    background = gradientPaint(background, { x: minX, y: minY, width, height }, IDENTITY);
+  } else {
+    const bgRgb = parseCssColor(background);
+    if (bgRgb && screen.background) background = screen.colors[screen.background(bgRgb)];
+    else if (bgRgb) background = paint(background, IDENTITY, true);
   }
 
   const elements = scene.elements.map((el) => mapEl(el, IDENTITY));
   const out: Scene = { ...scene, background, elements };
   if (Object.keys(patterns).length > 0) out.patterns = { ...scene.patterns, ...patterns };
+  if (Object.keys(gradients).length > 0) out.gradients = { ...scene.gradients, ...gradients };
   return out;
 }
+
+/** Most bands a gradient is sampled into (one per screen pixel along it, up to this). */
+export const GRADIENT_MAX_STEPS = 2048;
 
 /**
  * A FillPattern for a tile of screen colour indexes: ink / paper rows for

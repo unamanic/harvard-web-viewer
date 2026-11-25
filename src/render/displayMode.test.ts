@@ -113,7 +113,7 @@ describe("applyDisplayMode", () => {
     expect(applyDisplayMode(s, "modern")).toBe(s);
   });
 
-  it("VGA dithers fills, outlines and text and clears the background solid, recursing into groups", () => {
+  it("VGA dithers fills, outlines and text, recursing into groups", () => {
     const s = scene(
       [
         rect("#808080", "#ff0000"),
@@ -131,7 +131,7 @@ describe("applyDisplayMode", () => {
           ],
         },
       ],
-      "#161616",
+      "#000000",
     );
     const out = applyDisplayMode(s, "vga");
     expect(colors(out)).toEqual(["#000000", "pattern:vga-0", "#ff0000", "#ffff00", "pattern:vga-1", "pattern:vga-0"]);
@@ -142,13 +142,40 @@ describe("applyDisplayMode", () => {
     expect(g.buttonName).toBe("b");
     expect(g.children[2]).toBe((s.elements[1] as { children: SceneElement[] }).children[2]);
     // Input is untouched.
-    expect(s.background).toBe("#161616");
+    expect(s.background).toBe("#000000");
     expect(s.elements[0]).toMatchObject({ fill: "#808080" });
   });
 
-  it("VGA uses the scene's own screen colours", () => {
+  it("VGA uses the scene's own screen colours, through the 6-bit DAC", () => {
     const out = applyDisplayMode({ ...scene([rect("#ff00ff")]), screenColors: Array(16).fill("#123456") }, "vga");
-    expect(colors(out)).toEqual(["#123456", "#123456"]);
+    expect(colors(out)).toEqual(["#103555", "#103555"]);
+  });
+
+  it("VGA dithers the background like a gradient band (64 levels, 8 x 8)", () => {
+    const out = applyDisplayMode(scene([], "#414141"), "vga");
+    expect(out.background).toBe("pattern:vga-0");
+    const p = out.patterns?.["vga-0"];
+    expect(p?.rows).toHaveLength(8);
+    // (65,65,65): 49 of 64 cells dark grey (the paper: lower thresholds), 15 black.
+    expect(p?.rows.join("").split("").filter((c) => c === "1").length).toBe(15);
+    expect(p).toMatchObject({ ink: "#000000", paper: "#555555" });
+  });
+
+  it("Modern shows a document's own screen colours in their slots (screenIntent)", () => {
+    const own = ["#000000", "#ffffff", "#ff0000", "#ff8000", "#ffff00", "#80ff00", "#00ff00", "#00ff80", "#00ffff", "#0080ff", "#0000ff", "#8000ff", "#000055", "#ff0080", "#555555", "#aaaaaa"];
+    const out = applyDisplayMode({ ...scene([rect("#ff00ff", "#ff0000")], "#ff00ff"), screenColors: own }, "modern");
+    expect(colors(out)).toEqual(["#000055", "#000055", "#ff0000"]);
+    // The standard set changes nothing.
+    const std = { ...scene([rect("#ff00ff")]), screenColors: own.map((c, i) => (i === 12 ? "#ff00ff" : c)) };
+    expect(applyDisplayMode(std, "modern")).toBe(std);
+  });
+
+  it("Modern draws gradients unchanged; mono flattens them to their middle colour", () => {
+    const s: Scene = { ...scene([rect("gradient:g")], "#000000"), gradients: { g: { from: "#000000", to: "#ffffff", angle: 90 } } };
+    expect(applyDisplayMode(s, "modern")).toBe(s);
+    const mono = applyDisplayMode(s, "mono");
+    expect(mono.gradients).toBeUndefined();
+    expect(JSON.stringify(mono.elements)).not.toContain("gradient:");
   });
 
   it("leaves colours it cannot parse unchanged", () => {

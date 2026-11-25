@@ -56,7 +56,7 @@ describe("SceneRenderer", () => {
 
   it("paints the background over the whole viewBox first", () => {
     expect(html).toMatch(
-      /^<svg[^>]*><rect x="-16384" y="-12288" width="32768" height="24576" fill="#000080"><\/rect>/,
+      /^<svg[^>]*><rect x="-16384" y="-12288" width="32768" height="24576" fill="#000080" stroke="none"><\/rect>/,
     );
   });
 
@@ -244,5 +244,34 @@ describe("SceneRenderer", () => {
     );
     // Stroke glyphs: the halo widens the stroke on both sides.
     expect(out).toContain('<path d="M0 0l10 0" fill="none" stroke="#000000" stroke-width="50"');
+  });
+});
+
+describe("SceneRenderer gradients", () => {
+  const base = (bands?: { offset: number; paint: string }[]): Scene => ({
+    viewBox: LANDSCAPE_VIEW_BOX,
+    background: "#000000",
+    elements: [{ kind: "rect", x: 0, y: 0, width: 100, height: 50, fill: "gradient:g", stroke: "#ffffff" }],
+    gradients: { g: { from: "#000000", to: "#ff0000", angle: 0, ...(bands && { bands }) } },
+  });
+
+  it("draws a smooth gradient as a linearGradient across the shape's box", () => {
+    const html = renderToStaticMarkup(<SceneRenderer scene={base()} />);
+    expect(html).toMatch(/<linearGradient id="[^"]+" gradientUnits="userSpaceOnUse" x1="0" y1="25" x2="100" y2="25">/);
+    expect(html).toContain('stop-color="#ff0000"');
+    expect(html).toMatch(/<rect x="0" y="0" width="100" height="50" fill="url\(#[^)]+\)" stroke="#ffffff"/);
+  });
+
+  it("draws a banded gradient as strips clipped to the shape, outline on top", () => {
+    const html = renderToStaticMarkup(<SceneRenderer scene={base([{ offset: 0, paint: "#000000" }, { offset: 0.5, paint: "#800000" }])} />);
+    expect(html).toContain("<clipPath");
+    expect(html).toContain('fill="#800000"');
+    expect(html).toContain('d="M 50 0 L 100 0 L 100 50 L 50 50 Z"');
+    expect(html).toMatch(/<rect x="0" y="0" width="100" height="50" fill="none" stroke="#ffffff"/);
+  });
+
+  it("paints a gradient background", () => {
+    const html = renderToStaticMarkup(<SceneRenderer scene={{ ...base(), background: "gradient:g", elements: [] }} />);
+    expect(html).toContain("<linearGradient");
   });
 });

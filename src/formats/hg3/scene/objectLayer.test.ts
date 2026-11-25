@@ -11,14 +11,24 @@ import {
 import {
   BOX_3D_SIDE_SHADE,
   BUTTON_CHART_FITS_DATA_CHART,
+  BUTTON_CHART_ON_SCREEN,
   BOX_3D_TOP_SHADE,
+  CURVE_MARKER_SHAPE_OFFSET,
+  CURVE_MARKER_SIZE_OFFSET,
+  DOUBLE_BOX_STYLE,
+  LINE_STYLE_DASHES,
   DATA_ROW_OVERLAP,
   DATA_TEXT_BOX_FACTOR,
   DATA_TEXT_BOX_STEP,
   LINE_WIDTH_SUBTAG,
   OBJECT_TEXT_ASCENT,
-  SHADOW_BOX_ROLE,
+  OBJECT_TEXT_BASELINE_AT_ASCENT,
+  BITMAP_INK_SUBTAG,
+  BITMAP_PAPER_SUBTAG,
+  BOX_SHADOW_BOTTOM_SHADE,
+  BOX_SHADOW_SIDE_SHADE,
   lineWidthFor,
+  textAscent,
   textSizeToUnits,
 } from "../assumptions";
 import { parseChart } from "../chart";
@@ -32,6 +42,7 @@ import {
   HIT_AREA_FILL,
   PIE_SLICE_STEP_DEGREES,
   composeTransforms,
+  dashedParts,
   drawObjectLayer,
   flippedMatrix,
   pieSlicePoints,
@@ -82,10 +93,22 @@ function run(text: string, color = 1, size = 4, just = 1, raw4 = 0): Uint8Array 
   return concat(s, s.length % 2 ? [0] : [], tail(text.length, color, size, just, raw4));
 }
 /** Stored layout of a line entry: box top and bottom below the extent's top, and em (all 0: none). */
-type EntryLayout = [top: number, bottom: number, em: number];
-/** 28-byte line entry: start at 4, length at 8, stored layout at 14, 18 and 26. */
-function lineEntry(start: number, length: number, [top, bottom, em]: EntryLayout = [0, 0, 0]): Uint8Array {
-  return concat([1, 0x81, 0, 0], u16(start), u16(0), [length], new Uint8Array(5), i16(top), u16(0), i16(bottom), new Uint8Array(6), u16(em));
+type EntryLayout = [top: number, bottom: number, em: number, ascent?: number];
+/** 28-byte line entry: start at 4, length at 8, stored layout at 14, 18, 20 (ascent, negated) and 26. */
+function lineEntry(start: number, length: number, [top, bottom, em, ascent = 0]: EntryLayout = [0, 0, 0]): Uint8Array {
+  return concat(
+    [1, 0x81, 0, 0],
+    u16(start),
+    u16(0),
+    [length],
+    new Uint8Array(5),
+    i16(top),
+    u16(0),
+    i16(bottom),
+    i16(-ascent),
+    new Uint8Array(4),
+    u16(em),
+  );
 }
 /** Text block with the frame at 38 and the text extent at 62. */
 function textBlock(
@@ -130,6 +153,11 @@ function chartWith(objects: RecordSpec[], type: number = DocumentType.Drawing) {
     block(504, [block(516, objects, new Uint8Array(16)), block(508, [])]),
   ]);
   return parseChart(readContainer(bytes)).chart;
+}
+
+function drawWithContext(objects: RecordSpec[]) {
+  const { context } = createChartSceneContext(chartWith(objects), undefined);
+  return { elements: drawObjectLayer(context), context };
 }
 
 function draw(objects: RecordSpec[], ctx?: ParseContext): { elements: SceneElement[]; warnings: string[] } {
@@ -211,8 +239,9 @@ describe("drawObjectLayer: shapes", () => {
 
   describe("0x10A0 data curves (CURVE_A_STRAIGHT_OFFSET, CURVE_A_AFTER_POLYLINE_DRAWN)", () => {
     const P = [0, 0, 100, 50, 200, 0, 300, 80];
-    /** 0x10A0: n, points, trailer (u16 about 600, u16 marker, u16 straight flag). */
-    const curveA = (straight: number, points = P) => sub(0x10a0, concat(u16(points.length / 2), pts(...points), u16(630), u16(1), u16(straight)));
+    /** 0x10A0: n, points, trailer (u16 marker size, u16 marker shape, u16 straight flag). */
+    const curveA = (straight: number, points = P, marker = 0, size = 630) =>
+      sub(0x10a0, concat(u16(points.length / 2), pts(...points), u16(size), u16(marker), u16(straight)));
     const path = (el: SceneElement | undefined) => {
       if (el?.kind !== "path") throw new Error(`expected a path, got ${el?.kind}`);
       return el;
@@ -233,6 +262,87 @@ describe("drawObjectLayer: shapes", () => {
       expect(path(elements[0]).points).toHaveLength(7);
       expect(path(elements[0]).smooth).toBeUndefined();
     });
+
+    it("draws point markers from the trailer: shape at 2, size at 0, scaled with the object (CURVE_MARKERS)", () => {
+      expect([CURVE_MARKER_SIZE_OFFSET, CURVE_MARKER_SHAPE_OFFSET]).toEqual([0, 2]);
+      const two = [0, 0, 1000, 0];
+      // Square (4): side = size, outlined in the line colour, filled with the fill colour.
+      const sq = draw(obj([line(24), fill(15), counted(0x1050, [two]), curveA(1, two, 4, 600)], [2, 0, 0, 2, 0, 0])).elements;
+      expect(sq).toHaveLength(3); // the polyline, then one marker per point
+      expect(path(sq[1])).toMatchObject({ closed: true, fill: role(15), stroke: role(24) });
+      expect(path(sq[1]).points).toEqual([
+        { x: -600, y: 600 },
+        { x: 600, y: 600 },
+        { x: 600, y: -600 },
+        { x: -600, y: -600 },
+      ]);
+      // Small square (1): size / 4.
+      const dot = draw(obj([line(24), curveA(1, [0, 0], 1, 600)])).elements;
+      expect(path(dot[1]).points[1]).toEqual({ x: 75, y: 75 });
+      // Cross (2): two strokes 5/6 of the size; asterisk (3): four strokes the size across.
+      const cross = draw(obj([line(24), curveA(1, [0, 0], 2, 600)])).elements;
+      expect(cross.slice(1).map((e) => path(e).points)).toEqual([
+        [{ x: -250, y: -0 }, { x: 250, y: -0 }],
+        [{ x: 0, y: 250 }, { x: 0, y: -250 }],
+      ]);
+      const star = draw(obj([line(24), curveA(1, [0, 0], 3, 600)])).elements;
+      expect(star).toHaveLength(5);
+      expect(path(star[3]).points).toEqual([{ x: -300, y: 300 }, { x: 300, y: -300 }]);
+      expect(star.slice(1).every((e) => path(e).fill === null && path(e).stroke === role(24))).toBe(true);
+      // Shape 0 (and unknown shapes): no markers.
+      expect(draw(obj([line(24), curveA(1, [0, 0], 0)])).elements).toHaveLength(1);
+      expect(draw(obj([line(24), curveA(1, [0, 0], 9)])).elements).toHaveLength(1);
+    });
+  });
+
+  describe("0x112B line style (LINE_STYLE_SUBTAG, LINE_STYLE_DASHES)", () => {
+    const style = (v: number) => sub(0x112b, u16(v));
+
+    it("cuts a dotted (1) polyline into dashes of 2 px every 6.5 px, the pattern running on across parts' corners", () => {
+      expect(LINE_STYLE_DASHES.get(1)).toEqual([2, 4.5]);
+      // Two parts on a 4:3 page: one screen pixel is 51.2 units.
+      const { elements } = draw(obj([line(14), style(1), counted(0x1050, [[0, 0, 1000, 0], [0, 100, 0, 1100]])]));
+      const on = 2 * 51.2;
+      const period = 6.5 * 51.2;
+      const first = elements.filter((e) => e.kind === "path" && e.points[0]!.y === -0);
+      expect(first.length).toBe(Math.ceil(1000 / period));
+      expect(first[0]).toMatchObject({ kind: "path", closed: false, fill: null, stroke: role(14) });
+      expect((first[0] as { points: { x: number }[] }).points.map((p) => p.x)).toEqual([0, on]);
+      expect((first[1] as { points: { x: number }[] }).points[0]!.x).toBeCloseTo(period, 9);
+      // Solid (0) or no 0x112B: one path.
+      expect(draw(obj([line(14), style(0), counted(0x1050, [[0, 0, 1000, 0]])])).elements).toHaveLength(1);
+    });
+
+    it("dashes the outline of a closed polygon and keeps its fill whole", () => {
+      const { elements } = draw(obj([line(14), fill(21), style(1), counted(0x1061, [[0, 0, 1000, 0, 1000, 1000]])]));
+      expect(elements[0]).toMatchObject({ kind: "path", closed: true, fill: role(21), stroke: null });
+      expect(elements.length).toBeGreaterThan(3);
+      expect(elements.slice(1).every((e) => e.kind === "path" && !e.closed && e.fill === null)).toBe(true);
+    });
+
+    it("splits a path into dashes across corners (dashedParts)", () => {
+      const parts = dashedParts([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }], false, 4, 2);
+      expect(parts).toEqual([
+        [{ x: 0, y: 0 }, { x: 4, y: 0 }],
+        [{ x: 6, y: 0 }, { x: 10, y: 0 }],
+        [{ x: 10, y: 2 }, { x: 10, y: 6 }],
+        [{ x: 10, y: 8 }, { x: 10, y: 10 }],
+      ]);
+      expect(dashedParts([{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 4 }, { x: 0, y: 4 }], true, 3, 1).at(-1)).toEqual([
+        { x: 0, y: 4 },
+        { x: 0, y: 1 },
+      ]);
+    });
+  });
+
+  it("draws a style 2 box as two outlines the corner size apart (DOUBLE_BOX_STYLE, FRAME2)", () => {
+    expect(DOUBLE_BOX_STYLE).toBe(2);
+    // 0x1070 (outline only), as in FRAME2.
+    const { elements } = draw(obj([line(14), sub(0x1070, concat(u16(2), u16(172), box(-1000, -800, 1000, 800)))]));
+    expect(elements).toEqual([
+      { kind: "rect", x: -1000, y: -800, width: 2000, height: 1600, fill: null, stroke: role(14), strokeWidth: lineWidthFor(1) },
+      { kind: "rect", x: -828, y: -628, width: 1656, height: 1256, fill: null, stroke: role(14), strokeWidth: lineWidthFor(1) },
+    ]);
   });
 
   it("rounds style 3 boxes, scaled with the transform", () => {
@@ -240,12 +350,21 @@ describe("drawObjectLayer: shapes", () => {
     expect(elements[0]).toMatchObject({ kind: "rect", x: 0, y: -200, width: 200, height: 200, corners: { kind: "rounded", radius: 200 } });
   });
 
-  it("draws a style 5 box square over a drop shadow of the corner size, right and down, in role Shadow", () => {
+  it("draws a style 5 box extruded right and down, with darkened bottom and right faces", () => {
     const { elements } = draw(obj([line(14), fill(21), boxShape(5, 50, 0, 0, 400, 200)], [2, 0, 0, 2, 0, 0]));
-    expect(elements).toEqual([
-      { kind: "rect", x: 100, y: -300, width: 800, height: 400, fill: role(SHADOW_BOX_ROLE), stroke: null, strokeWidth: 0 },
-      { kind: "rect", x: 0, y: -400, width: 800, height: 400, fill: role(21), stroke: role(14), strokeWidth: lineWidthFor(1) },
-    ]);
+    expect(elements).toHaveLength(3);
+    const [bottomFace, side, front] = elements;
+    expect(bottomFace).toMatchObject({
+      kind: "path",
+      closed: true,
+      points: [{ x: 0, y: -0 }, { x: 800, y: -0 }, { x: 900, y: 100 }, { x: 100, y: 100 }],
+      fill: shadeCss(role(21), BOX_SHADOW_BOTTOM_SHADE),
+    });
+    expect(side).toMatchObject({
+      points: [{ x: 800, y: -0 }, { x: 900, y: 100 }, { x: 900, y: -300 }, { x: 800, y: -400 }],
+      fill: shadeCss(role(21), BOX_SHADOW_SIDE_SHADE),
+    });
+    expect(front).toEqual({ kind: "rect", x: 0, y: -400, width: 800, height: 400, fill: role(21), stroke: role(14), strokeWidth: lineWidthFor(1) });
   });
 
   it("draws a style 6 box as a 3-D box with shaded top and right faces the corner size deep", () => {
@@ -411,10 +530,17 @@ describe("drawObjectLayer: shapes", () => {
     expect(elements[0]).toMatchObject({ fill: "#ff8000", stroke: "#010203", strokeWidth: DEFAULT_STROKE_WIDTH });
   });
 
-  it("fills with the first colour of a 0x1110 gradient", () => {
-    const { elements } = draw(obj([line(32), sub(0x1110, [0xff, 10, 20, 30, 0xff, 1, 1, 1, 0, 0]), boxShape(1, 0, 0, 0, 10, 10)]));
-    expect(elements[0]).toMatchObject({ fill: "#0a141e" });
+  it("fills with a scene gradient for 0x1110: colour 1 to colour 2, angle in tenths counter-clockwise from up", () => {
+    const { elements, context } = drawWithContext(
+      obj([line(32), sub(0x1110, [0xff, 10, 20, 30, 0xff, 1, 1, 1, 0x84, 0x03]), boxShape(1, 0, 0, 0, 10, 10)]),
+    );
+    const fill = (elements[0] as { fill: string }).fill;
+    expect(fill).toMatch(/^gradient:/);
+    // 900 (90°) from up: colour 1 on the right, colour 2 on the left (page angle 180).
+    expect(context.gradients[fill.slice("gradient:".length)]).toEqual({ from: "#0a141e", to: "#010101", angle: 180 });
   });
+
+
 
   it("draws nothing for a shape with neither line nor fill", () => {
     expect(draw(obj([boxShape(1, 0, 0, 0, 10, 10)])).elements).toEqual([]);
@@ -463,7 +589,7 @@ describe("drawObjectLayer: rotated transforms", () => {
     expect(g.transform).toEqual([0, 1, -1, 0, 100, -200]);
     const t = text(g.children[0]);
     const size = textSizeToUnits(4);
-    expect(t).toMatchObject({ x: 0, y: -(1000 - OBJECT_TEXT_ASCENT * size), size, anchor: "start" });
+    expect(t).toMatchObject({ x: 0, y: -(1000 - textAscent(size)), size, anchor: "start" });
     // det = 1, no mirroring: the child space keeps its handedness.
     const [a, b, c, d] = g.transform!;
     expect(a * d - b * c).toBe(1);
@@ -483,8 +609,10 @@ describe("drawObjectLayer: text", () => {
     // No stored layout: boxes of floor(1.285 em / 100) × 100 (1500), the second overlapping the first by 0.15 of its height.
     const h = Math.floor((DATA_TEXT_BOX_FACTOR * size) / DATA_TEXT_BOX_STEP) * DATA_TEXT_BOX_STEP;
     expect(h).toBe(1500);
-    const first = 3000 - OBJECT_TEXT_ASCENT * size;
-    const second = 3000 - (h - DATA_ROW_OVERLAP * h) - OBJECT_TEXT_ASCENT * size;
+    // Baselines one em rounded down to 100 below the box tops (textAscent: 1200 for em 1228.8).
+    expect(textAscent(size)).toBe(1200);
+    const first = 3000 - textAscent(size);
+    const second = 3000 - (h - DATA_ROW_OVERLAP * h) - textAscent(size);
     expect(elements).toHaveLength(2);
     const [a, b] = elements.map(text);
     expect(a).toMatchObject({ text: "Line one", x: 100, y: -first * 0.5, size: size * 0.5, anchor: "middle", fill: role(2), italic: false });
@@ -507,9 +635,29 @@ describe("drawObjectLayer: text", () => {
     expect(b).toMatchObject({ text: "Line two", y: -(3000 - 680 - OBJECT_TEXT_ASCENT * 675), size: 675 });
   });
 
+  it("puts the baseline at the stored ascent below the line's top (OBJECT_TEXT_BASELINE_AT_ASCENT)", () => {
+    expect(OBJECT_TEXT_BASELINE_AT_ASCENT).toBe(true);
+    // Without a stored ascent: the em rounded down to 100, as the entries store it.
+    expect([982, 860, 2211, 1228, 675].map(textAscent)).toEqual([900, 800, 2200, 1200, 600]);
+    // PIETUT's "Other / 11%": em 982, ascent 900, boxes 0..−1200 and −1020..−2220.
+    const data = textBlock(
+      [run("Other11%", 2, 4, 1)],
+      [
+        [0, 5, [0, -1200, 982, 900]],
+        [5, 3, [-1020, -2220, 982, 900]],
+      ],
+      [-5000, 4000, 5000, 0],
+      [-3000, 3000, 3000, 780],
+    );
+    const [a, b] = draw(obj([sub(0x10b0, data)])).elements.map(text);
+    expect(a).toMatchObject({ text: "Other", y: -(3000 - 900), size: 982 });
+    expect(b).toMatchObject({ text: "11%", y: -(3000 - 1020 - 900), size: 982 });
+  });
+
   it("reads a line entry's stored layout, or none when its em is 0", () => {
     const entry = (layout?: EntryLayout) => ({ raw: lineEntry(0, 1, layout) });
-    expect(storedLineLayout(entry([-1955, -4255, 1772]))).toEqual({ top: -1955, bottom: -4255, em: 1772 });
+    expect(storedLineLayout(entry([-1955, -4255, 1772]))).toEqual({ top: -1955, bottom: -4255, em: 1772, ascent: 1772 });
+    expect(storedLineLayout(entry([-1955, -4255, 1772, 1700]))).toEqual({ top: -1955, bottom: -4255, em: 1772, ascent: 1700 });
     expect(storedLineLayout(entry())).toBeNull();
     expect(storedLineLayout({ raw: new Uint8Array(20) })).toBeNull();
   });
@@ -635,6 +783,28 @@ describe("drawObjectLayer: bitmaps", () => {
     // Decoded once per name.
     expect(ctx.asked.filter((a) => a.endsWith(":bitmap"))).toHaveLength(1);
     expect(warnings).toEqual([]);
+  });
+
+  it("draws a monochrome bitmap's black pixels in the 0x110C colour over a box in the 0x110B colour", () => {
+    const ctx = fakeContext({ "LOGO.PCX": tinyPcx() });
+    const { elements } = draw(
+      [
+        transform([1, 0, 0, 1, 0, 0]),
+        leaf(404, concat(u16(5), u16(0), cstr("LOGO.PCX"))),
+        object612(
+          [sub(BITMAP_INK_SUBTAG, [0xff, 0, 0xff, 0xff]), sub(0x1140, new Uint8Array(8)), sub(BITMAP_PAPER_SUBTAG, [0xff, 0, 0, 0x80]), boxShape(1, 0, -100, -50, 100, 50)],
+          [-100, -50, 100, 50],
+        ),
+      ],
+      ctx,
+    );
+    expect(elements).toHaveLength(2);
+    expect(elements[0]).toEqual({ kind: "rect", x: -100, y: -50, width: 200, height: 100, fill: "#000080", stroke: null });
+    const img = elements[1]!;
+    if (img.kind !== "image") throw new Error("image expected");
+    // BMP fallback (no canvas in tests): 54-byte header, then BGRA pixels, bottom row first.
+    const bytes = Uint8Array.from(atob(img.href.split(",")[1]!), (c) => c.charCodeAt(0));
+    expect([...bytes.slice(54, 62)]).toEqual([0, 0, 0, 0, 0xff, 0xff, 0, 0xff]); // white: transparent; black: cyan
   });
 
   it("skips a missing bitmap with a warning", () => {
@@ -773,8 +943,11 @@ describe("buildChartScene: button chart overlay (task 20)", () => {
       ...obj([line(0xff), fill(0xff), boxShape(1, 0, -16383, 10170, 16317, 12194)], undefined, [-16383, 10170, 16317, 12194]),
       ...namedOutline("help", -16350, 11177, -9920, 12193),
     ]);
-    const s = (10170 + 12288) / 24576;
-    const fit = [s, 0, 0, s, 0, (12288 - 10170) / 2];
+    // Bar height 2118 snapped to 2048 (BUTTON_BAND_SNAP): the free part is y −12288..10240, scale 11/12;
+    // the left edge (26.67 px) floored to 26 px of 51.2 units (BUTTON_FIT_LEFT_ON_PIXEL).
+    const s = (10240 + 12288) / 24576;
+    const left = -16384 + 26 * 51.2;
+    const fit = [s, 0, 0, s, left + s * 16384, 2048 / 2];
     const slideObjects = [...obj([line(32), boxShape(1, 0, -16000, 9000, 16000, 12000)]), ...namedOutline("own", -300, -200, -100, -100)];
 
     it("shrinks the slide into the page below the bar, keeping the bar and every click area on top", () => {
@@ -788,11 +961,12 @@ describe("buildChartScene: button chart overlay (task 20)", () => {
       expect(slide.buttonName).toBeUndefined();
       slide.transform!.forEach((v, i) => expect(v).toBeCloseTo(fit[i]!, 9));
       expect(slide.children[0]).toMatchObject({ kind: "rect", x: -16000, y: -12000 });
-      // The page's top (scene y −12288) lands on the bar's bottom, its bottom stays put.
+      // The page's top (scene y −12288) lands on row 40 (y 10240), its bottom stays put, its left edge on a pixel.
       const [a, , , d, e, f] = slide.transform!;
-      expect(d * -12288 + f).toBeCloseTo(-10170, 6);
+      expect(s).toBeCloseTo(11 / 12, 12);
+      expect(d * -12288 + f).toBeCloseTo(-10240, 6);
       expect(d * 12288 + f).toBeCloseTo(12288, 6);
-      expect(a * 0 + e).toBe(0);
+      expect(a * -16384 + e).toBeCloseTo(left, 6);
       expect(scene.elements[1]).toMatchObject({ kind: "rect", y: -12194, fill: "#000000" });
       expect(group(scene.elements[2]).buttonName).toBe("help");
       expect(group(scene.elements[2]).transform).toBeUndefined();
@@ -810,6 +984,25 @@ describe("buildChartScene: button chart overlay (task 20)", () => {
       expect(scene.elements.some((e) => e.kind === "group" && e.transform !== undefined)).toBe(false);
     });
 
+    it("draws a 4:3 button chart on a Letter slide's screen, scaled by the pixel ratio (BUTTON_CHART_ON_SCREEN, GALD181)", () => {
+      expect(BUTTON_CHART_ON_SCREEN).toBe(true);
+      const letter = leaf(816, concat([1, 1], f32(11), f32(8.5)));
+      const host = chartOfBytes(chartBytes(slideObjects, "BAR.CH3", [letter], DocumentType.Bullet));
+      const { scene } = buildChartScene(host, fakeContext({ "BAR.CH3": bar }), { dataLayout: "never" });
+      const k = 25320 / 480 / 51.2; // Letter pixel (52.75) over the bar's 4:3 pixel
+      const overlay = group(scene.elements[1]);
+      overlay.transform!.forEach((v, i) => expect(v).toBeCloseTo([k, 0, 0, k, 0, 0][i]!, 9));
+      expect(overlay.children[0]).toMatchObject({ kind: "rect", y: -12194 });
+      // The bar's click areas move with it; the slide's own ones with the slide's fit.
+      const keyAreas = group(scene.elements[3]);
+      expect(keyAreas.transform).toEqual(overlay.transform);
+      expect(hitAreas(keyAreas.children).map((g) => g.buttonName)).toEqual(["help"]);
+      // The free part is measured on the screen: 40 rows of 52.75 units below the top.
+      const slide = group(scene.elements[0]);
+      const [, , , d, , f] = slide.transform!;
+      expect(d * -12660 + f).toBeCloseTo(-(12660 - 40 * 52.75), 6);
+    });
+
     it("leaves a data chart full size when the button chart is not a band (GALBUTN1's squares reach the bottom)", () => {
       const squares = chartBytes([...namedOutline("help", -16350, 11177, -9920, 12193), ...namedOutline("sq7", -16383, -12288, -5445, -4820)]);
       const host = chartOfBytes(chartBytes(slideObjects, "SQ.CH3", [], DocumentType.Bullet));
@@ -820,8 +1013,8 @@ describe("buildChartScene: button chart overlay (task 20)", () => {
     it("computes the fit for a bar along the bottom too, and none for a drawing or an empty button chart", () => {
       const vb = LANDSCAPE_VIEW_BOX;
       const bottom = buttonChartFit(DocumentType.XY, { x1: -16384, y1: -12288, x2: 16384, y2: -10000 }, vb)!;
-      const sb = (12288 + 10000) / 24576;
-      [sb, 0, 0, sb, 0, -(12288 - 10000) / 2].forEach((v, i) => expect(bottom[i]).toBeCloseTo(v, 9));
+      const sb = (12288 + 10240) / 24576; // bar height 2288 snapped to 2048
+      [sb, 0, 0, sb, -16384 + 26 * 51.2 + sb * 16384, -2048 / 2].forEach((v, i) => expect(bottom[i]).toBeCloseTo(v, 9));
       expect(buttonChartFit(DocumentType.Drawing, { x1: 0, y1: 10170, x2: 1, y2: 12194 }, vb)).toBeNull();
       expect(buttonChartFit(DocumentType.XY, null, vb)).toBeNull();
       expect(buttonChartFit(DocumentType.XY, { x1: 0, y1: -100, x2: 1, y2: 100 }, vb)).toBeNull();

@@ -29,6 +29,34 @@ export interface PcxImage {
   /** Row-major RGBA, 4 bytes per pixel, top row first. */
   rgba: Uint8ClampedArray;
   warnings: string[];
+  /**
+   * True for a monochrome image (1 bit, 1 plane): every pixel is then
+   * black (0, 0, 0) or white (255, 255, 255), see `recolorMonochrome`.
+   */
+  monochrome?: boolean;
+}
+
+/**
+ * A monochrome image with its black pixels drawn in `ink` and its white
+ * ones in `paper`; null makes those pixels transparent. Other images are
+ * returned unchanged.
+ */
+export function recolorMonochrome(
+  image: PcxImage,
+  ink: readonly [number, number, number] | null,
+  paper: readonly [number, number, number] | null,
+): PcxImage {
+  if (!image.monochrome) return image;
+  const rgba = new Uint8ClampedArray(image.rgba.length);
+  for (let o = 0; o < rgba.length; o += 4) {
+    const c = image.rgba[o] === 0 ? ink : paper;
+    if (!c) continue;
+    rgba[o] = c[0];
+    rgba[o + 1] = c[1];
+    rgba[o + 2] = c[2];
+    rgba[o + 3] = 255;
+  }
+  return { ...image, rgba };
 }
 
 export class NotPcxError extends Error {
@@ -238,5 +266,5 @@ export function decodePcx(bytes: Uint8Array): PcxImage {
       rgba[o + 3] = 255;
     }
   }
-  return { width, height, rgba, warnings };
+  return { width, height, rgba, warnings, ...(bpp === 1 && planes === 1 && { monochrome: true }) };
 }

@@ -3,6 +3,7 @@ import { LANDSCAPE_VIEW_BOX, centredViewBox, type Scene, type SceneElement } fro
 import { type RGB, luma } from "./color";
 import {
   BAYER_4X4,
+  BAYER_8X8,
   type Dither,
   type Screen,
   applyScreen,
@@ -113,7 +114,7 @@ describe("tilePattern", () => {
 
 describe("applyScreen with a 2-colour screen", () => {
   it("draws solid levels as screen colours and mixed ones as screen-aligned patterns", () => {
-    const out = applyScreen(scene([rect("#ffffff", "#000000"), rect("#808080")], "#202020"), mono);
+    const out = applyScreen(scene([rect("#ffffff", "#000000"), rect("#808080")], "#000000"), mono);
     expect(out.background).toBe("#000000");
     expect(out.elements[0]).toMatchObject({ fill: "#ffffff", stroke: "#000000" });
     expect(out.elements[1]).toMatchObject({ fill: "pattern:m-0" });
@@ -181,5 +182,44 @@ describe("applyScreen with a 2-colour screen", () => {
   it("uses Screen.background for the page when given", () => {
     const out = applyScreen(scene([], "#ffffff"), { ...mono, background: () => 0 });
     expect(out.background).toBe("#000000");
+  });
+});
+
+describe("applyScreen with gradients", () => {
+  it("samples a gradient once per screen pixel along it and merges equal paints into bands", () => {
+    // Black to white over a 640-pixel-wide rect, left to right.
+    const s: Scene = {
+      ...scene([{ kind: "rect", x: -16384, y: -12288, width: 32768, height: 24576, fill: "gradient:g", stroke: null }]),
+      gradients: { g: { from: "#000000", to: "#ffffff", angle: 0 } },
+    };
+    const out = applyScreen(s, mono);
+    const fill = (out.elements[0] as { fill: string }).fill;
+    expect(fill).toBe("gradient:m-g0");
+    const bands = out.gradients?.["m-g0"]?.bands ?? [];
+    // 9 dither levels of the test screen: black, 7 patterns, white.
+    expect(bands).toHaveLength(9);
+    expect(bands[0]).toEqual({ offset: 0, paint: "#000000" });
+    expect(bands[8]?.paint).toBe("#ffffff");
+    expect(bands.slice(1, 8).every((b) => b.paint.startsWith("pattern:"))).toBe(true);
+    expect(bands.map((b) => b.offset)).toEqual([...bands.map((b) => b.offset)].sort((a, b) => a - b));
+    // The input keeps its smooth gradient.
+    expect(s.gradients?.g.bands).toBeUndefined();
+  });
+
+  it("uses Screen.gradient (matrix and rule) for gradients and the background", () => {
+    const fine: Screen = {
+      ...mono,
+      gradient: { matrix: BAYER_8X8, dither: () => [{ color: 1, cells: 32 }, { color: 0, cells: 32 }] },
+    };
+    const out = applyScreen(scene([], "#123456"), fine);
+    expect(out.background).toBe("pattern:m-0");
+    expect(out.patterns?.["m-0"]?.rows).toHaveLength(8);
+  });
+
+  it("dithers a gradient background over the viewBox", () => {
+    const s: Scene = { ...scene([], "gradient:g"), gradients: { g: { from: "#000000", to: "#ffffff", angle: 270 } } };
+    const out = applyScreen(s, mono);
+    expect(out.background).toBe("gradient:m-g0");
+    expect(out.gradients?.["m-g0"]?.bands?.[0]?.paint).toBe("#000000");
   });
 });

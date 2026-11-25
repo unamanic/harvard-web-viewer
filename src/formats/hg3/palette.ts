@@ -178,9 +178,9 @@ export interface Palette {
    * one per index. 64 in a well-formed file; may have gaps in a damaged one.
    */
   entries: PaletteEntry[];
-  /** Data of record 1554 (14 bytes, meaning unknown), if present. */
+  /** Data of record 1554 (14 bytes: the page background, `paletteBackground`), if present. */
   raw1554?: Uint8Array;
-  /** Data of record 1555 (16 entries of 4 bytes, meaning unknown), if present. */
+  /** Data of record 1555 (16 entries of 0xFF R G B: the 16 screen colours, `paletteScreenColors`), if present. */
   raw1555?: Uint8Array;
   /** Records the parser does not interpret, kept for the hex inspector. */
   unknownRecords: LeafRecord[];
@@ -369,8 +369,71 @@ export const DEFAULT_PALETTE: Palette = {
   description: "built-in copy of HG3.PL3",
   count: DEFAULT_PALETTE_ENTRIES.length,
   entries: DEFAULT_PALETTE_ENTRIES.map((e) => makeEntry(e.index, e.role, e.name, e.rgb)),
+  // HG3.PL3's 1554 (plain black background) and 1555 (the standard 16 colours).
+  raw1554: Uint8Array.of(0x01, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x40, 0x5a, 0x00, 0x0c, 0x00),
+  raw1555: Uint8Array.from(
+    [
+      [0, 0, 0], [255, 255, 255], [255, 0, 0], [255, 128, 0], [255, 255, 0], [128, 255, 0], [0, 255, 0], [0, 255, 128],
+      [0, 255, 255], [0, 128, 255], [0, 0, 255], [128, 0, 255], [255, 0, 255], [255, 0, 128], [85, 85, 85], [170, 170, 170],
+    ].flatMap((c) => [0xff, ...c]),
+  ),
   unknownRecords: [],
 };
+
+// ---------------------------------------------------------------------------
+// Records 1554 and 1555 (reference renders; assumptions.ts)
+// ---------------------------------------------------------------------------
+
+/**
+ * The page background a palette sets (record 1554, 14 bytes; layout
+ * inferred, assumptions.ts PALETTE_BACKGROUND):
+ * u16 mode (1 plain, 2 shaded), colour 1 (0xFF R G B), colour 2 (0xFF R G
+ * B), u16 angle in degrees (90 in every sample palette but MONOCHRW's 0),
+ * u16 (12 in every sample palette, meaning unknown).
+ */
+export interface PaletteBackground {
+  /** "plain": colour 1 everywhere; "shaded": colour 1 to colour 2. */
+  mode: "plain" | "shaded";
+  /** Raw mode value (1 plain, 2 shaded; anything else is treated as plain). */
+  rawMode: number;
+  color1: RGB;
+  color2: RGB;
+  /** u16 at offset 10 (90 in the samples): the shading direction, degrees. */
+  angle: number;
+  /** u16 at offset 12 (always 12 in the samples): unknown. */
+  raw12: number;
+}
+
+/** The palette's background setting (record 1554), or null when it has none or it is malformed. */
+export function paletteBackground(palette: Palette): PaletteBackground | null {
+  const d = palette.raw1554;
+  if (!d || d.length < 14 || d[2] !== 0xff || d[6] !== 0xff) return null;
+  const rawMode = d[0]! | (d[1]! << 8);
+  return {
+    mode: rawMode === 2 ? "shaded" : "plain",
+    rawMode,
+    color1: [d[3]!, d[4]!, d[5]!],
+    color2: [d[7]!, d[8]!, d[9]!],
+    angle: d[10]! | (d[11]! << 8),
+    raw12: d[12]! | (d[13]! << 8),
+  };
+}
+
+/**
+ * The 16 screen colours a palette sets (record 1555: 16 × 0xFF R G B, as
+ * the VGA ScreenShow driver loads them into the DAC; formats.md "Verified
+ * findings"), or null when it has none or it is malformed.
+ */
+export function paletteScreenColors(palette: Palette): RGB[] | null {
+  const d = palette.raw1555;
+  if (!d || d.length < 64) return null;
+  const out: RGB[] = [];
+  for (let i = 0; i < 16; i++) {
+    if (d[i * 4] !== 0xff) return null;
+    out.push([d[i * 4 + 1]!, d[i * 4 + 2]!, d[i * 4 + 3]!]);
+  }
+  return out;
+}
 
 // ---------------------------------------------------------------------------
 // Role lookup
@@ -527,14 +590,22 @@ export function builtInPalette(name: string): Palette | null {
   const key = name.trim().toUpperCase();
   const builtIn = Object.hasOwn(GREYSCALE_PALETTES, key) ? GREYSCALE_PALETTES[key] : undefined;
   if (!builtIn || builtIn.entries.length === 0) return null;
+  const raw1554 = BUILT_IN_1554[key];
   return {
     documentType: DocumentType.Palette,
     description: builtIn.description,
     count: builtIn.entries.length,
     entries: builtIn.entries.map((e) => makeEntry(e.index, e.role, e.name, e.rgb)),
+    ...(raw1554 && { raw1554: Uint8Array.from(raw1554), raw1555: DEFAULT_PALETTE.raw1555 }),
     unknownRecords: [],
   };
 }
+
+/** Record 1554 of the built-in greyscale palettes, as in the sample files (their 1555 is the standard set). */
+const BUILT_IN_1554: Record<string, readonly number[]> = {
+  "MONOCHRB.PL3": [0x01, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x29, 0x29, 0x29, 0x5a, 0x00, 0x0c, 0x00],
+  "MONOCHRW.PL3": [0x01, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xa9, 0xa9, 0xa9, 0x00, 0x00, 0x0c, 0x00],
+};
 
 /**
  * The palette that replaces every chart's own when the viewer's palette

@@ -19,18 +19,23 @@
  */
 import type { GroupElement, Matrix, ParseContext, RectElement, Scene, SceneElement, ViewBox } from "../../types";
 import {
+  BUTTON_BAND_SNAP_ROWS,
   BUTTON_CHART_FITS_DATA_CHART,
+  BUTTON_CHART_ON_SCREEN,
+  BUTTON_FIT_LEFT_ON_PIXEL,
   BUTTON_CHART_OBJECTS_ONLY,
   DRAW_FRAME_FOR_DRAWINGS,
   DRAW_PAGE_FRAME,
-  FALLBACK_BACKGROUND,
   FRAME_STROKE_WIDTH,
+  SCREEN_HEIGHT_PX,
+  SCREEN_WIDTH_PX,
 } from "../assumptions";
 import { type Chart, type PageArea, type PageAreas } from "../chart";
 import { DocumentType } from "../container";
 import { ROLE } from "../palette";
 import { TextSlot } from "../text";
 import { type ChartSceneContext, type ChartSceneOptions, createButtonChartContext, createChartSceneContext } from "./context";
+import { chartBackground, chartSceneColors } from "./chartColors";
 import { drawOrgChart } from "./data/org";
 import { drawPieChart } from "./data/pie";
 import { drawTableChart } from "./data/table";
@@ -39,7 +44,7 @@ import { drawBulletChart, drawTitleAndFootnote, drawTitleChart } from "./data/te
 import { type DataLayoutMode, drawsFromData, drawsObjectLayer } from "./dataLayout";
 import type { Box } from "../objects";
 import { drawObjectLayer, loadReferencedChart, objectLayerPageBox } from "./objectLayer";
-import { areaToRect } from "./page";
+import { areaToRect, pageGeometry, scaleBox, screenMapping } from "./page";
 
 /**
  * Debug switches (no UI). Set `SCENE_DEBUG.showPageAreas = true` (e.g. from
@@ -170,15 +175,21 @@ export function buttonChartFit(chartType: number, buttonBox: Box | null, viewBox
   const high = Math.max(buttonBox.y1, buttonBox.y2);
   let top: number;
   let bottom: number;
-  if (low > 0) [top, bottom] = [Math.min(low, pageTop), pageBottom];
-  else if (high < 0) [top, bottom] = [pageTop, Math.max(high, pageBottom)];
+  // The bar's height snapped to BUTTON_BAND_SNAP_ROWS screen rows (assumptions.ts).
+  const pixel = Math.max(viewBox.width / SCREEN_WIDTH_PX, viewBox.height / SCREEN_HEIGHT_PX);
+  const step = BUTTON_BAND_SNAP_ROWS * pixel;
+  const snap = (h: number) => (step > 0 ? Math.round(h / step) * step : h);
+  if (low > 0) [top, bottom] = [pageTop - snap(pageTop - Math.min(low, pageTop)), pageBottom];
+  else if (high < 0) [top, bottom] = [pageTop, pageBottom + snap(Math.max(high, pageBottom) - pageBottom)];
   else return null;
   const s = (top - bottom) / viewBox.height;
   if (!(s > 0) || s >= 1) return null;
-  const centreX = viewBox.minX + viewBox.width / 2;
   const centreY = viewBox.minY + viewBox.height / 2; // scene y (down)
   const freeCentreY = -(top + bottom) / 2;
-  return [s, 0, 0, s, centreX * (1 - s), freeCentreY - s * centreY];
+  // Centred horizontally, its left edge moved left onto a whole screen pixel (BUTTON_FIT_LEFT_ON_PIXEL).
+  let left = viewBox.minX + (viewBox.width * (1 - s)) / 2;
+  if (BUTTON_FIT_LEFT_ON_PIXEL) left = viewBox.minX + Math.floor((left - viewBox.minX) / pixel + 1e-9) * pixel;
+  return [s, 0, 0, s, left - s * viewBox.minX, freeCentreY - s * centreY];
 }
 
 /** The chart-type drawing in the plot area (SPEC §5.5 step 4). */
@@ -238,25 +249,35 @@ export function buildChartScene(
   const hitAreas: GroupElement[] = [];
   context.buttonHitAreas = hitAreas;
 
-  const background = context.color(ROLE.FrameBkg) ?? FALLBACK_BACKGROUND;
-  let slide: SceneElement[] = drawChartElements(context);
+  const background = chartBackground(context);
+  const buttonChart = loadButtonChart(context);
+  // The button chart is drawn on the same screen as the slide (BUTTON_CHART_ON_SCREEN).
+  const buttonMap = buttonChart && BUTTON_CHART_ON_SCREEN ? screenMapping(pageGeometry(buttonChart.chart), context.page) : null;
+  const buttonBox = buttonChart ? objectLayerPageBox(buttonChart.chart) : null;
+  const fit = buttonChart ? buttonChartFit(chart.chartType, buttonBox && buttonMap ? scaleBox(buttonBox, buttonMap[0]) : buttonBox, context.page.viewBox) : null;
+  // A shrunk slide is drawn in its own units: one screen pixel spans more of them.
+  const slideContext = fit ? { ...context, page: { ...context.page, screenPixel: context.page.screenPixel / fit[0] } } : context;
+  let slide: SceneElement[] = drawChartElements(slideContext);
   if (SCENE_DEBUG.showPageAreas) slide.push(...drawDebugAreas(context));
   // The slide's own click areas, before the button chart adds its own.
   let slideHitAreas: SceneElement[] = hitAreas.splice(0);
-  const buttonChart = loadButtonChart(context);
   let overlay: SceneElement[] = [];
   if (buttonChart) {
-    const fit = buttonChartFit(chart.chartType, objectLayerPageBox(buttonChart.chart), context.page.viewBox);
     if (fit) {
       slide = [{ kind: "group", transform: fit, children: slide }];
       if (slideHitAreas.length > 0) slideHitAreas = [{ kind: "group", transform: fit, children: slideHitAreas }];
     }
     overlay = drawButtonChartOverlay(context, buttonChart);
+    if (buttonMap) {
+      overlay = [{ kind: "group", transform: buttonMap, children: overlay }];
+      const buttonHits = hitAreas.splice(0);
+      if (buttonHits.length > 0) hitAreas.push({ kind: "group", transform: buttonMap, children: buttonHits });
+    }
   }
   const elements: SceneElement[] = [...slide, ...overlay, ...slideHitAreas, ...hitAreas];
 
   context.fonts.warnings().forEach(context.warn);
   const fontReport = context.faces.report();
   if (fontReport) warnings.push(fontReport);
-  return { scene: { viewBox: context.page.viewBox, background, elements }, warnings };
+  return { scene: { viewBox: context.page.screenViewBox, background, elements, ...chartSceneColors(context) }, warnings };
 }

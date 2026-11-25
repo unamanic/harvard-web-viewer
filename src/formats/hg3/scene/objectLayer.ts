@@ -33,8 +33,8 @@
  *
  * Colours follow the interim rule of SPEC §5.6 (closed shapes filled with
  * the current 0x110B colour, else the 0x1100 colour; outlined with 0x1100;
- * open shapes stroke only); a 0x1110 gradient fills with its first colour,
- * and closed shapes whose sub-tag ends in 0 or 2 are outlined only
+ * open shapes stroke only); a 0x1110 gradient fills with a Scene gradient
+ * (chartColors.ts, assumptions.ts GRADIENT_SUBTAG), and closed shapes whose sub-tag ends in 0 or 2 are outlined only
  * (assumptions.ts OUTLINE_ONLY_SUBTAG_DIGITS). A 0x112A percentage darkens
  * the fill (SHADE_SUBTAG). 0x1031 arcs of style 1 are pie slices: closed
  * through the centre and filled (PIE_SLICE_ARC_STYLE).
@@ -53,7 +53,6 @@
 import type {
   GlyphsElement,
   GroupElement,
-  ImageElement,
   Matrix,
   Point,
   RectElement,
@@ -62,32 +61,46 @@ import type {
   TextElement,
 } from "../../types";
 import { EM_UNITS, type GlyphSource, layoutGlyphLine } from "../../../fonts/glyphRun";
-import { decodePcx } from "../../pcx/pcx";
+import { type PcxImage, decodePcx, recolorMonochrome } from "../../pcx/pcx";
 import { pcxToDataUrl } from "../../pcx/toDataUrl";
 import {
   BOX_3D_SIDE_SHADE,
   BOX_3D_STYLE,
+  BOX_SHADOW_BOTTOM_SHADE,
+  BOX_SHADOW_SIDE_SHADE,
   BOX_3D_TOP_SHADE,
   BOX_CORNER_RADIUS_FACTOR,
   BUTTON_HIT_AREAS,
   EMBEDDED_CHART_DRAWS_BACKGROUND,
   EMBEDDED_CHART_MAX_DEPTH,
+  GLYPH_ADVANCE_PIXELS,
+  BITMAP_INK_SUBTAG,
+  BITMAP_MONO_COLORS,
+  BITMAP_PAPER_SUBTAG,
+  DRAW_GRADIENTS,
   GRADIENT_AS_FIRST_COLOR,
   OBJECT_TEXT_ASCENT,
+  OBJECT_TEXT_BASELINE_AT_ASCENT,
   OBJECT_TEXT_USES_LINE_ENTRIES,
   OUTLINE_ONLY_SUBTAG_DIGITS,
   PIE_SLICE_ARC_STYLE,
   SHADE_FILLS_BY_PERCENT,
   CURVE_A_AFTER_POLYLINE_DRAWN,
   CURVE_A_STRAIGHT_OFFSET,
+  CURVE_MARKERS,
+  CURVE_MARKER_SHAPE_OFFSET,
+  CURVE_MARKER_SIZE_OFFSET,
+  DOUBLE_BOX_STYLE,
+  LINE_STYLE_DASHES,
+  LINE_STYLE_SUBTAG,
   LINE_WIDTH_SUBTAG,
   SHADE_SUBTAG,
-  SHADOW_BOX_ROLE,
   SHADOW_BOX_STYLE,
   SQUARE_BOX_STYLE,
   STROKE_FONT_DEFAULT_PEN_EM,
   TEXT_COLOR_ROLE_MASK,
   lineWidthFor,
+  textAscent,
   textSizeToUnits,
 } from "../assumptions";
 import { type Chart, parseChart } from "../chart";
@@ -117,6 +130,7 @@ import {
 } from "../objects";
 import { ROLE, rgbToCss } from "../palette";
 import { Justification } from "../text";
+import { gradientAttributeFill } from "./chartColors";
 import { type ChartSceneContext, createEmbeddedContext } from "./context";
 import { lineBoxHeight, stackTops } from "./data/text";
 import { areaToRect, toScene } from "./page";
@@ -243,22 +257,77 @@ function lineWidthAttr(state: readonly Attribute[]): number {
   return a && a.raw.length >= 2 ? a.raw[0]! | (a.raw[1]! << 8) : 0;
 }
 
+/**
+ * Dash and gap lengths (scene units) of the state's line style, or null for
+ * a solid line (assumptions.ts LINE_STYLE_SUBTAG, LINE_STYLE_DASHES).
+ */
+export function lineDash(ctx: ChartSceneContext, state: readonly Attribute[]): [number, number] | null {
+  const a = state.find((x) => x.subTag === LINE_STYLE_SUBTAG);
+  if (!a || a.raw.length < 2) return null;
+  const pattern = LINE_STYLE_DASHES.get(a.raw[0]! | (a.raw[1]! << 8));
+  return pattern ? [pattern[0] * ctx.page.screenPixel, pattern[1] * ctx.page.screenPixel] : null;
+}
+
+/**
+ * The dashes of a polyline (closed: back to its first point): pieces `on`
+ * long separated by gaps `off` long, the pattern running on across corners.
+ */
+export function dashedParts(points: readonly Point[], closed: boolean, on: number, off: number): Point[][] {
+  if (!(on > 0) || !(off >= 0)) return [points.slice()];
+  const path = closed && points.length > 1 ? [...points, points[0]!] : points;
+  const out: Point[][] = [];
+  let current: Point[] | null = [path[0]!];
+  let phase = 0; // distance into the current dash (current !== null) or gap
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1]!;
+    const b = path[i]!;
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    let t = 0;
+    while (t < len) {
+      const left = (current ? on : off) - phase;
+      if (t + left > len) {
+        phase += len - t;
+        t = len;
+        break;
+      }
+      t += left;
+      const p = { x: a.x + ((b.x - a.x) * t) / len, y: a.y + ((b.y - a.y) * t) / len };
+      if (current) {
+        current.push(p);
+        out.push(current);
+        current = null;
+      } else current = [p];
+      phase = 0;
+    }
+    if (current) {
+      const last = current[current.length - 1]!;
+      if (last.x !== b.x || last.y !== b.y) current.push(b);
+    }
+  }
+  if (current && current.length > 1) out.push(current);
+  return out;
+}
+
 /** The interim colour rule of SPEC §5.6 for one shape and its drawing state. */
 export function paintFor(ctx: ChartSceneContext, shape: Shape, state: readonly Attribute[]): Paint {
   let line: LineAttr | undefined;
   let fill: FillAttr | undefined;
-  let gradient: Rgb | null = null;
+  let gradient: string | null = null;
   for (const a of state) {
     if (a.kind === "line") line = a;
     else if (a.kind === "fill") fill = a;
-    else if (a.subTag === SUB_GRADIENT && GRADIENT_AS_FIRST_COLOR) gradient = directRgb(a.raw, 0);
+    else if (a.subTag === SUB_GRADIENT && DRAW_GRADIENTS) gradient = gradientAttributeFill(ctx, a.raw);
+    else if (a.subTag === SUB_GRADIENT && GRADIENT_AS_FIRST_COLOR) {
+      const first = directRgb(a.raw, 0);
+      gradient = first ? rgbToCss(first) : null;
+    }
   }
   const stroke = line ? cssOf(ctx, line.lineColor, line.rgb) : null;
   const strokeWidth = Math.max(lineWidthFor(line && !line.rgb ? line.lineStyle : undefined), lineWidthAttr(state));
   const closed = isClosedShape(shape) || isPieSlice(shape);
   if (!closed || OUTLINE_ONLY_SUBTAG_DIGITS.has(shape.subTag & 0xf)) return { fill: null, stroke, strokeWidth };
   let fillCss: string | null;
-  if (gradient) fillCss = rgbToCss(gradient);
+  if (gradient) fillCss = gradient;
   else if (fill) fillCss = cssOf(ctx, fill.fillColor, fill.rgb);
   else fillCss = stroke;
   const shade = shadeFactor(state);
@@ -282,8 +351,8 @@ export function textRunColor(ctx: ChartSceneContext, run: Pick<TextRun, "color" 
 
 interface Builder {
   ctx: ChartSceneContext;
-  /** Bitmap data URLs by upper-case file name; null when missing or unreadable. */
-  bitmaps: Map<string, string | null>;
+  /** Decoded bitmaps by upper-case file name; null when missing or unreadable. */
+  bitmaps: Map<string, PcxImage | null>;
 }
 
 function pointParts(points: readonly Point[], partCounts: readonly number[]): Point[][] {
@@ -391,21 +460,32 @@ function boxElement(m: Readonly<Transform>, x1: number, y1: number, x2: number, 
 
 /**
  * A 0x1070-family box by its style (assumptions.ts SQUARE_BOX_STYLE and
- * after): square; rounded; a square box over a drop shadow c right and c
- * down in role Shadow (style 5); or a 3-D box with a top and right face c
+ * after): square; rounded; a square box extruded c right and c down with
+ * darkened bottom and right faces (style 5); or a 3-D box with a top and right face c
  * deep (style 6), c being the corner size in object units.
  */
-function drawBox(ctx: ChartSceneContext, shape: BoxShape, m: Readonly<Transform>, paint: Paint): SceneElement[] {
+function drawBox(_ctx: ChartSceneContext, shape: BoxShape, m: Readonly<Transform>, paint: Paint): SceneElement[] {
   const c = shape.cornerSize;
   const left = Math.min(shape.x1, shape.x2);
   const right = Math.max(shape.x1, shape.x2);
   const bottom = Math.min(shape.y1, shape.y2);
   const top = Math.max(shape.y1, shape.y2);
   if (shape.style === SHADOW_BOX_STYLE && c > 0) {
-    const shadow = ctx.color(SHADOW_BOX_ROLE);
-    const box = boxElement(m, left, bottom, right, top, paint, 0);
-    if (!shadow) return [box];
-    return [boxElement(m, left + c, bottom - c, right + c, top - c, { fill: shadow, stroke: null, strokeWidth: 0 }, 0), box];
+    // Extruded c right and c down: a bottom and a right face in the fill
+    // colour, darkened (assumptions.ts SHADOW_BOX_STYLE).
+    const face = (points: [number, number][], shadeBy: number): SceneElement => ({
+      kind: "path",
+      points: points.map(([x, y]) => sceneOf(m, x, y)),
+      closed: true,
+      fill: paint.fill ? shadeCss(paint.fill, shadeBy) : null,
+      stroke: paint.stroke,
+      strokeWidth: paint.strokeWidth,
+    });
+    return [
+      face([[left, bottom], [right, bottom], [right + c, bottom - c], [left + c, bottom - c]], BOX_SHADOW_BOTTOM_SHADE),
+      face([[right, bottom], [right + c, bottom - c], [right + c, top - c], [right, top]], BOX_SHADOW_SIDE_SHADE),
+      boxElement(m, left, bottom, right, top, paint, 0),
+    ];
   }
   if (shape.style === BOX_3D_STYLE && c > 0) {
     const face = (points: [number, number][], shadeBy: number): SceneElement => ({
@@ -420,6 +500,14 @@ function drawBox(ctx: ChartSceneContext, shape: BoxShape, m: Readonly<Transform>
       face([[left, top], [right, top], [right + c, top + c], [left + c, top + c]], BOX_3D_TOP_SHADE),
       face([[right, bottom], [right + c, bottom + c], [right + c, top + c], [right, top]], BOX_3D_SIDE_SHADE),
       boxElement(m, left, bottom, right, top, paint, 0),
+    ];
+  }
+  if (shape.style === DOUBLE_BOX_STYLE && c > 0) {
+    // Two outlines c apart (the fill, if any, inside the outer one).
+    const inner = right - left > 2 * c && top - bottom > 2 * c;
+    return [
+      boxElement(m, left, bottom, right, top, paint, 0),
+      ...(inner ? [boxElement(m, left + c, bottom + c, right - c, top - c, { ...paint, fill: null }, 0)] : []),
     ];
   }
   const radius = shape.style !== SQUARE_BOX_STYLE && c > 0 ? c * BOX_CORNER_RADIUS_FACTOR : 0;
@@ -444,22 +532,35 @@ function drawShape(ctx: ChartSceneContext, entry: ShapeEntry, m: Readonly<Transf
       const closed = shape.kind === "polygon" || shape.kind === "closedCurve";
       const smooth = shape.kind === "curve" || shape.kind === "closedCurve" || (shape.kind === "curveA" && !isStraightCurveA(shape));
       const parts = shape.kind === "curveA" ? [shape.points] : pointParts(shape.points, shape.partCounts);
+      const dash = lineDash(ctx, entry.state);
       return parts
         .filter((part) => part.length > 0)
-        .map((part) => {
+        .flatMap((part): SceneElement[] => {
           // 0x1080/0x1091/0x1098 hold cubic Bézier control points (see bezierPoints);
           // 0x10A0/0x10A1 pass through their points (smoothed data lines).
           const bezier = smooth && shape.kind !== "curveA" && isBezierControlList(part);
           const points = (bezier ? bezierPoints(part) : part).map((p) => sceneOf(m, p.x, p.y));
-          return {
-            kind: "path",
-            points,
-            closed,
-            ...(smooth && !bezier ? { smooth: true } : {}),
-            fill: closed ? fill : null,
-            stroke,
-            strokeWidth,
-          };
+          const curved = smooth && !bezier;
+          if (dash && stroke && !curved) {
+            // A dashed outline: the fill on its own, then one open path per dash.
+            const out: SceneElement[] = [];
+            if (closed && fill) out.push({ kind: "path", points, closed, fill, stroke: null, strokeWidth });
+            for (const d of dashedParts(points, closed, dash[0], dash[1])) {
+              out.push({ kind: "path", points: d, closed: false, fill: null, stroke, strokeWidth });
+            }
+            return out;
+          }
+          return [
+            {
+              kind: "path",
+              points,
+              closed,
+              ...(curved ? { smooth: true } : {}),
+              fill: closed ? fill : null,
+              stroke,
+              strokeWidth,
+            },
+          ];
         });
     }
     case "box":
@@ -573,6 +674,8 @@ export interface StoredLineLayout {
   bottom: number;
   /** Glyph size, object units. */
   em: number;
+  /** Baseline below the box top, object units (the stored ascent; OBJECT_TEXT_BASELINE_AT_ASCENT). */
+  ascent: number;
 }
 
 /** The layout stored in a line entry, or null when it holds none (em 0, inverted box, short entry). */
@@ -583,7 +686,9 @@ export function storedLineLayout(line: Pick<TextLayoutLine, "raw">): StoredLineL
   const top = i16(14);
   const bottom = i16(18);
   const em = r[26]! | (r[27]! << 8);
-  return em > 0 && top <= 0 && bottom < top ? { top, bottom, em } : null;
+  const storedAscent = -i16(20);
+  const ascent = OBJECT_TEXT_BASELINE_AT_ASCENT && storedAscent > 0 && storedAscent <= top - bottom ? storedAscent : OBJECT_TEXT_ASCENT * em;
+  return em > 0 && top <= 0 && bottom < top ? { top, bottom, em, ascent } : null;
 }
 
 /**
@@ -591,13 +696,16 @@ export function storedLineLayout(line: Pick<TextLayoutLine, "raw">): StoredLineL
  * the stored line entries when every line has one, else the lines stacked
  * by the data-chart rule from their run sizes (data/text.ts stackTops).
  */
-function lineLayouts(ctx: ChartSceneContext, lines: readonly TextLinePiece[]): { top: number; size: number }[] {
+function lineLayouts(ctx: ChartSceneContext, lines: readonly TextLinePiece[]): { top: number; size: number; ascent: number }[] {
   const stored = OBJECT_TEXT_USES_LINE_ENTRIES ? lines.map((l) => (l.entry ? storedLineLayout(l.entry) : null)) : [];
   if (lines.length > 0 && stored.length === lines.length && stored.every((s) => s !== null)) {
-    return stored.map((s) => ({ top: s!.top, size: s!.em }));
+    return stored.map((s) => ({ top: s!.top, size: s!.em, ascent: s!.ascent }));
   }
   const tops = stackTops(lines.map((l) => lineBoxHeight(ctx, l.run.size)), 0);
-  return lines.map((l, i) => ({ top: tops[i]!, size: textSizeToUnits(l.run.size, ctx.page.shortSide) }));
+  return lines.map((l, i) => {
+    const size = textSizeToUnits(l.run.size, ctx.page.shortSide);
+    return { top: tops[i]!, size, ascent: textAscent(size) };
+  });
 }
 
 /** The box text is laid out in: the text extent at header offset 62, else the frame at 38 (SPEC §5.6 [I]). */
@@ -607,10 +715,23 @@ function textLayoutBox(shape: TextBlockShape): Box | null {
 }
 
 /**
+ * Each glyph advance rounded to whole screen pixels (assumptions.ts
+ * GLYPH_ADVANCE_PIXELS), for glyphs `size` units per em on a screen whose
+ * pixel is `pixel` units in the same frame; no rounding when `pixel` is 0.
+ */
+export function advanceRounder(size: number, pixel: number): ((advance: number) => number) | undefined {
+  const round = GLYPH_ADVANCE_PIXELS;
+  if (!round || !(pixel > 0) || !(size > 0)) return undefined;
+  const step = (pixel / size) * EM_UNITS; // one pixel in em units
+  return (advance) => round(advance / step) * step;
+}
+
+/**
  * A text line drawn with glyphs (task 7f): one path laid out from the byte
  * codes, its start moved left by the full or half advance for right and
  * centred lines, scaled by size / EM_UNITS. Outline fonts fill with the
- * text colour; stroke fonts stroke with it.
+ * text colour; stroke fonts stroke with it. `pixel` (same units as `size`)
+ * rounds each advance to screen pixels (advanceRounder).
  */
 export function glyphLineElement(
   glyphs: GlyphSource,
@@ -621,8 +742,9 @@ export function glyphLineElement(
   x: number,
   y: number,
   size: number,
+  pixel = 0,
 ): GlyphsElement {
-  const line = layoutGlyphLine(glyphs, codes);
+  const line = layoutGlyphLine(glyphs, codes, advanceRounder(size, pixel));
   const s = size / EM_UNITS;
   const shift = anchor === "middle" ? line.advance / 2 : anchor === "end" ? line.advance : 0;
   const paint =
@@ -655,7 +777,7 @@ function drawText(ctx: ChartSceneContext, shape: TextBlockShape, m: Readonly<Tra
   const layouts = lineLayouts(ctx, lines);
   for (const [i, { text, codes, run }] of lines.entries()) {
     const { size } = layouts[i]!;
-    const baseline = top + layouts[i]!.top - OBJECT_TEXT_ASCENT * size;
+    const baseline = top + layouts[i]!.top - layouts[i]!.ascent;
     if (!text.trim()) continue;
     const fill = textRunColor(ctx, run);
     if (!fill) continue;
@@ -666,9 +788,10 @@ function drawText(ctx: ChartSceneContext, shape: TextBlockShape, m: Readonly<Tra
     if (glyphs) {
       if (direct) {
         const p = sceneOf(m, x, baseline);
-        out.push(glyphLineElement(glyphs, text, codes, fill, anchor, p.x, p.y, size * m[0]));
+        out.push(glyphLineElement(glyphs, text, codes, fill, anchor, p.x, p.y, size * m[0], ctx.page.screenPixel));
       } else {
-        out.push(inObjectFrame(m, [glyphLineElement(glyphs, text, codes, fill, anchor, x, -baseline, size)]));
+        const pixel = ctx.page.screenPixel / linearScale(m);
+        out.push(inObjectFrame(m, [glyphLineElement(glyphs, text, codes, fill, anchor, x, -baseline, size, pixel)]));
       }
       continue;
     }
@@ -697,40 +820,63 @@ function fileRefs(records: readonly LeafRecord[], kind: number): string[] {
 }
 
 /** Data URL of a bitmap named by the chart, decoded once per scene build. */
-function bitmapUrl(b: Builder, name: string): string | null {
+function bitmapImage(b: Builder, name: string): PcxImage | null {
   // Same file whatever drive or directory the chart names (ParseContext.resolve ignores them too).
   const key = name.replace(/^.*[\\/:]/, "").toUpperCase();
   if (b.bitmaps.has(key)) return b.bitmaps.get(key) ?? null;
-  let url: string | null = null;
+  let image: PcxImage | null = null;
   const file = b.ctx.parseContext?.resolve(name, "bitmap") ?? null;
   if (!file) {
     b.ctx.warn(`bitmap ${name} not found; not drawn`);
   } else {
     try {
-      const image = decodePcx(file.bytes);
+      image = decodePcx(file.bytes);
       image.warnings.forEach((w) => b.ctx.warn(`bitmap ${file.name}: ${w}`));
-      url = pcxToDataUrl(image);
     } catch (e) {
       b.ctx.warn(`bitmap ${file.name} could not be read (${e instanceof Error ? e.message : String(e)}); not drawn`);
     }
   }
-  b.bitmaps.set(key, url);
-  return url;
+  b.bitmaps.set(key, image);
+  return image;
 }
 
-function drawBitmap(b: Builder, obj: DrawnObject, parent: Readonly<Transform>): ImageElement[] {
+/** RGB of a 4-byte colour attribute: 0xFF R G B, else a colour role (role 0: none). */
+function attributeRgb(ctx: ChartSceneContext, raw: Uint8Array | undefined): Rgb | null {
+  if (!raw || raw.length < 4) return null;
+  const direct = directRgb(raw, 0);
+  if (direct) return direct;
+  const css = ctx.color(raw[0]!);
+  return css ? [parseInt(css.slice(1, 3), 16), parseInt(css.slice(3, 5), 16), parseInt(css.slice(5, 7), 16)] : null;
+}
+
+/**
+ * A bitmap object: its 404 kind 5 bitmap stretched to the 612 bounding box.
+ * A monochrome bitmap is drawn in the object's colours
+ * (assumptions.ts BITMAP_MONO_COLORS): its white pixels as a box in the
+ * 0x110B colour (a scene colour, so display modes treat it like any fill),
+ * its black pixels in the 0x110C colour over it; a colour that is "none"
+ * leaves those pixels transparent.
+ */
+function drawBitmap(b: Builder, obj: DrawnObject, parent: Readonly<Transform>): SceneElement[] {
   const [name] = fileRefs(obj.extraRecords, REF_KIND_BITMAP);
   if (name === undefined) {
     b.ctx.warn(`bitmap object at offset ${obj.offset} names no bitmap (404 kind 5); not drawn`);
     return [];
   }
-  const href = bitmapUrl(b, name);
-  if (!href) return [];
+  const image = bitmapImage(b, name);
+  if (!image) return [];
   // The 612 bounding box is already on the page; only a group transform applies on top.
   const { x1, y1, x2, y2 } = obj.bbox;
   const corners = [applyTransform(parent, { x: x1, y: y1 }), applyTransform(parent, { x: x2, y: y2 })];
   const rect = areaToRect({ x1: corners[0]!.x, y1: corners[0]!.y, x2: corners[1]!.x, y2: corners[1]!.y });
-  return [{ kind: "image", href, ...rect }];
+  if (!image.monochrome || !BITMAP_MONO_COLORS) return [{ kind: "image", href: pcxToDataUrl(image), ...rect }];
+  const last = (subTag: number) => obj.attributes.filter((a) => a.subTag === subTag).pop()?.raw;
+  const ink = attributeRgb(b.ctx, last(BITMAP_INK_SUBTAG));
+  const paper = attributeRgb(b.ctx, last(BITMAP_PAPER_SUBTAG));
+  const out: SceneElement[] = [];
+  if (paper) out.push({ kind: "rect", ...rect, fill: rgbToCss(paper), stroke: null });
+  if (ink) out.push({ kind: "image", href: pcxToDataUrl(recolorMonochrome(image, ink, null)), ...rect });
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -741,6 +887,57 @@ function drawBitmap(b: Builder, obj: DrawnObject, parent: Readonly<Transform>): 
 export function isStraightCurveA(shape: CurveAShape): boolean {
   const t = shape.trailer;
   return t.length >= CURVE_A_STRAIGHT_OFFSET + 2 && (t[CURVE_A_STRAIGHT_OFFSET]! | (t[CURVE_A_STRAIGHT_OFFSET + 1]! << 8)) === 1;
+}
+
+/** Marker shape and size (object units) of a 0x10A0/0x10A1 curve (assumptions.ts CURVE_MARKER_SHAPE_OFFSET), or null for none. */
+export function curveMarker(shape: CurveAShape): { shape: number; size: number } | null {
+  const t = shape.trailer;
+  const u16 = (o: number) => (t.length >= o + 2 ? t[o]! | (t[o + 1]! << 8) : 0);
+  const marker = u16(CURVE_MARKER_SHAPE_OFFSET);
+  const size = u16(CURVE_MARKER_SIZE_OFFSET);
+  return CURVE_MARKERS.has(marker) && size > 0 ? { shape: marker, size } : null;
+}
+
+/**
+ * The point markers of a 0x10A0/0x10A1 curve, one per point, in object
+ * units mapped by `m` (they scale with the object): squares outlined in the
+ * line colour and filled with the fill colour, crosses stroked
+ * (assumptions.ts CURVE_MARKERS).
+ */
+export function drawCurveMarkers(ctx: ChartSceneContext, shape: CurveAShape, state: readonly Attribute[], m: Readonly<Transform>): SceneElement[] {
+  const marker = curveMarker(shape);
+  if (!marker) return [];
+  const kind = CURVE_MARKERS.get(marker.shape)!;
+  let line: LineAttr | undefined;
+  let fillAttr: FillAttr | undefined;
+  for (const a of state) {
+    if (a.kind === "line") line = a;
+    else if (a.kind === "fill") fillAttr = a;
+  }
+  const stroke = line ? cssOf(ctx, line.lineColor, line.rgb) : null;
+  if (!stroke) return [];
+  const fill = fillAttr ? cssOf(ctx, fillAttr.fillColor, fillAttr.rgb) : null;
+  const strokeWidth = lineWidthFor(undefined);
+  const h = (marker.size * kind.size) / 2;
+  const out: SceneElement[] = [];
+  const seg = (x1: number, y1: number, x2: number, y2: number): SceneElement => ({
+    kind: "path",
+    points: [sceneOf(m, x1, y1), sceneOf(m, x2, y2)],
+    closed: false,
+    fill: null,
+    stroke,
+    strokeWidth,
+  });
+  for (const p of shape.points) {
+    if (kind.form === "square") {
+      const points = [sceneOf(m, p.x - h, p.y - h), sceneOf(m, p.x + h, p.y - h), sceneOf(m, p.x + h, p.y + h), sceneOf(m, p.x - h, p.y + h)];
+      out.push({ kind: "path", points, closed: true, fill, stroke, strokeWidth });
+    } else {
+      out.push(seg(p.x - h, p.y, p.x + h, p.y), seg(p.x, p.y - h, p.x, p.y + h));
+      if (kind.form === "asterisk") out.push(seg(p.x - h, p.y - h, p.x + h, p.y + h), seg(p.x - h, p.y + h, p.x + h, p.y - h));
+    }
+  }
+  return out;
 }
 
 /** Whether shape `i` is a 0x10A0/0x10A1 curve right after a polyline, which draws it (CURVE_A_AFTER_POLYLINE_DRAWN). */
@@ -754,7 +951,10 @@ function drawObject(b: Builder, obj: DrawnObject, parent: Readonly<Transform>): 
     children = drawBitmap(b, obj, parent);
   } else {
     const m = composeTransforms(parent, obj.transform);
-    children = obj.shapes.filter((_, i) => !duplicatesPolyline(obj.shapes, i)).flatMap((entry) => drawShape(b.ctx, entry, m));
+    children = obj.shapes.flatMap((entry, i) => [
+      ...(duplicatesPolyline(obj.shapes, i) ? [] : drawShape(b.ctx, entry, m)),
+      ...(entry.shape.kind === "curveA" ? drawCurveMarkers(b.ctx, entry.shape, entry.state, m) : []),
+    ]);
   }
   if (obj.buttonName === undefined) return children;
   addHitArea(b.ctx, obj, parent);
@@ -813,6 +1013,8 @@ function drawEmbeddedChart(ctx: ChartSceneContext, name: string, m: Readonly<Tra
   }
   const loaded = loadReferencedChart(ctx, name, "embedded chart", label);
   if (!loaded) return [];
+  // Glyph advances are rounded to the embedded page's own screen pixels, not the host's
+  // (GLYPH_ADVANCE_PIXELS: closer on all four embedding samples).
   const child = createEmbeddedContext(ctx, loaded.chart, loaded.key);
   const children: SceneElement[] = [];
   if (EMBEDDED_CHART_DRAWS_BACKGROUND) {

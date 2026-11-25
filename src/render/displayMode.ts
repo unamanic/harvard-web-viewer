@@ -36,21 +36,27 @@
  *   visible. Text gets a halo in the background colour so it stays readable
  *   over dithered fills. (Drawing with the program's own greyscale palettes,
  *   MONOCHRB / MONOCHRW, is a separate option in the format layer.)
- * - Modern: stored RGB unchanged.
+ * - Modern: stored RGB unchanged, except that a document with its own 16
+ *   screen colours (Scene.screenColors, e.g. HG3's 1HDW palettes) shows
+ *   each colour with its slots replaced (`applyScreenIntent`); EGA and mono
+ *   start from those colours too. Gradients stay smooth in Modern and EGA
+ *   (EGA maps their two colours); mono draws them as their middle colour.
  *
  * Only colours in the forms #rgb, #rrggbb and rgb(r, g, b) are transformed;
  * any other CSS colour string (named colours, hsl(), ...) is left unchanged.
  * Bitmaps (image elements) are not recoloured.
  */
 import {
+  GRADIENT_FILL_PREFIX,
   PATTERN_FILL_PREFIX,
+  type FillGradient,
   type FillPattern,
   type Scene,
   type SceneElement,
 } from "../formats/types";
 import { type RGB, colorDistance, formatCssColor, luma, nearestColor, parseCssColor } from "./color";
 import { BAYER_4X4, applyScreen, ditherAverage, ditherRows, normalizeDither } from "./dither";
-import { SCREENSHOW_DAC, screenShowDither, vgaScreenShow } from "./vgaScreenShow";
+import { SCREENSHOW_DAC, changedScreenColors, screenIntent, screenShowDither, vgaScreenShow } from "./vgaScreenShow";
 
 export { type RGB, colorDistance, formatCssColor, luma, nearestColor, parseCssColor, vgaChannel } from "./color";
 
@@ -108,9 +114,13 @@ export function toScreenColor(rgb: RGB, mode: DisplayMode): RGB {
 // Whole scene
 // ---------------------------------------------------------------------------
 
-/** Calls `visit` on every colour string in the scene, background first. */
+/** Calls `visit` on every colour string in the scene, background first (gradients' colours after it). */
 function forEachColor(scene: Scene, visit: (css: string) => void): void {
   visit(scene.background);
+  for (const g of Object.values(scene.gradients ?? {})) {
+    visit(g.from);
+    visit(g.to);
+  }
   const walk = (els: SceneElement[]) => {
     for (const el of els) {
       switch (el.kind) {
@@ -149,7 +159,63 @@ function mapColors(scene: Scene, map: (css: string) => string): Scene {
         };
     }
   };
-  return { ...scene, background: map(scene.background), elements: scene.elements.map(mapEl) };
+  const out: Scene = { ...scene, background: map(scene.background), elements: scene.elements.map(mapEl) };
+  if (scene.gradients) {
+    out.gradients = Object.fromEntries(
+      Object.entries(scene.gradients).map(([id, g]) => [id, { ...g, from: map(g.from), to: map(g.to) }]),
+    );
+  }
+  return out;
+}
+
+/** `css` through `f` when it is an #rgb/#rrggbb/rgb() colour, else unchanged; cached per call site. */
+function rgbMapper(f: (rgb: RGB) => RGB): (css: string) => string {
+  const cache = new Map<string, string>();
+  return (css) => {
+    let out = cache.get(css);
+    if (out === undefined) {
+      const rgb = parseCssColor(css);
+      out = rgb ? formatCssColor(f(rgb)) : css;
+      cache.set(css, out);
+    }
+    return out;
+  };
+}
+
+/**
+ * The scene's colours as its own screen colours show them
+ * (Scene.screenColors, vgaScreenShow.ts `screenIntent`): unchanged unless
+ * the document changes some of the 16 screen colours. The VGA mode does not
+ * use this: it draws the stored colours with the document's DAC.
+ */
+export function applyScreenIntent(scene: Scene): Scene {
+  const own = changedScreenColors(scene.screenColors);
+  if (!own) return scene;
+  return mapColors(scene, rgbMapper((rgb) => screenIntent(rgb, own)));
+}
+
+/**
+ * Gradient fills (and a gradient background) replaced by the colour half
+ * way between their two colours, for display modes that do not draw
+ * gradients.
+ */
+function flattenGradients(scene: Scene): Scene {
+  const gradients = scene.gradients;
+  if (!gradients) return scene;
+  const mid = (fill: string): string => {
+    if (!fill.startsWith(GRADIENT_FILL_PREFIX)) return fill;
+    const g: FillGradient | undefined = gradients[fill.slice(GRADIENT_FILL_PREFIX.length)];
+    const a = g && parseCssColor(g.from);
+    const b = g && parseCssColor(g.to);
+    return a && b ? formatCssColor([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2]) : (g?.from ?? fill);
+  };
+  const mapEl = (el: SceneElement): SceneElement => {
+    if (el.kind === "group") return { ...el, children: el.children.map(mapEl) };
+    if (el.kind === "image" || el.kind === "text" || el.fill === null) return el;
+    return { ...el, fill: mid(el.fill) };
+  };
+  const { gradients: _drawn, ...rest } = scene;
+  return { ...rest, background: mid(scene.background), elements: scene.elements.map(mapEl) };
 }
 
 /** Most EGA colours shown at once. */
@@ -431,20 +497,11 @@ export function applyMono(scene: Scene): Scene {
  * "modern" returns the scene itself.
  */
 export function applyDisplayMode(scene: Scene, mode: DisplayMode): Scene {
-  if (mode === "modern") return scene;
-  if (mode === "mono") return applyMono(scene);
   if (mode === "vga") return applyScreen(scene, vgaScreenShow(scene.screenColors));
-  const toScreen = egaMapper(scene);
-  const cache = new Map<string, string>();
-  return mapColors(scene, (css) => {
-    let out = cache.get(css);
-    if (out === undefined) {
-      const rgb = parseCssColor(css);
-      out = rgb ? formatCssColor(toScreen(rgb)) : css;
-      cache.set(css, out);
-    }
-    return out;
-  });
+  const shown = applyScreenIntent(scene);
+  if (mode === "modern") return shown;
+  if (mode === "mono") return applyMono(flattenGradients(shown));
+  return mapColors(shown, rgbMapper(egaMapper(shown)));
 }
 
 // ---------------------------------------------------------------------------

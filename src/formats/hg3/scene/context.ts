@@ -3,7 +3,7 @@
  * palette, a colour helper, the font resolver, a warning sink and the page
  * geometry.
  */
-import type { GroupElement, ParseContext, SceneElement } from "../../types";
+import { type FillGradient, GRADIENT_FILL_PREFIX, type GroupElement, type ParseContext, type SceneElement } from "../../types";
 import type { Chart } from "../chart";
 import { type FontResolver, createFontResolver } from "../fonts";
 import {
@@ -31,6 +31,13 @@ export interface ChartSceneContext {
    * (deduplicated) warning.
    */
   color(role: number): string | null;
+  /**
+   * The scene's gradients (Scene.gradients), shared by the chart, its
+   * embedded charts and its button chart; add one with `gradient`.
+   */
+  gradients: Record<string, FillGradient>;
+  /** A "gradient:<id>" fill for this gradient (the same id for the same gradient). */
+  gradient(from: string, to: string, angle: number): string;
   fonts: FontResolver;
   /** Glyphs per font key: original font, clone or CSS look-alike (task 7f). */
   faces: TextFaces;
@@ -119,6 +126,8 @@ export function createChartSceneContext(
   const warn = uniqueWarningSink(warnings);
   const palette = chartPalette(chart, parseContext, options, warn);
   const fonts = createFontResolver(parseContext);
+  const gradients: Record<string, FillGradient> = {};
+  const gradientIds = new Map<string, string>();
   const context: ChartSceneContext = {
     chart,
     parseContext,
@@ -126,6 +135,17 @@ export function createChartSceneContext(
     color(role) {
       const rgb = colorForRole(palette.palette, role, warn);
       return rgb ? rgbToCss(rgb) : null;
+    },
+    gradients,
+    gradient(from, to, angle) {
+      const key = `${from} ${to} ${angle}`;
+      let id = gradientIds.get(key);
+      if (id === undefined) {
+        id = `g${gradientIds.size}`;
+        gradientIds.set(key, id);
+        gradients[id] = { from, to, angle };
+      }
+      return GRADIENT_FILL_PREFIX + id;
     },
     fonts,
     faces: createTextFaces(fonts, warn),

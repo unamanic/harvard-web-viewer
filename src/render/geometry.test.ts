@@ -5,7 +5,10 @@ import {
   arcSweep,
   bandPath,
   clampCornerRadius,
+  gradientSpan,
+  gradientStripPoints,
   normalizeBox,
+  shapeBounds,
   polylinePath,
   roundedRectPath,
   smoothPath,
@@ -133,5 +136,35 @@ describe("rect helpers", () => {
   });
   it("square corners when radius is zero", () => {
     expect(roundedRectPath({ x: 0, y: 0, width: 5, height: 5 }, 0)).toBe("M 0 0 H 5 V 5 H 0 Z");
+  });
+});
+
+describe("gradient geometry", () => {
+  it("bounds shape elements in their own units", () => {
+    expect(shapeBounds({ kind: "rect", x: 10, y: 20, width: -4, height: 5, fill: null, stroke: null })).toEqual({ x: 6, y: 20, width: 4, height: 5 });
+    expect(shapeBounds({ kind: "ellipse", cx: 0, cy: 0, rx: 3, ry: 2, fill: null, stroke: null })).toEqual({ x: -3, y: -2, width: 6, height: 4 });
+    expect(shapeBounds({ kind: "path", points: [{ x: 1, y: 5 }, { x: 4, y: -1 }], closed: true, fill: null, stroke: null })).toEqual({ x: 1, y: -1, width: 3, height: 6 });
+    expect(shapeBounds({ kind: "image", href: "", x: 0, y: 0, width: 1, height: 1 })).toBeNull();
+  });
+
+  it("spans a box along the page angle (90 = up, i.e. scene −y)", () => {
+    const up = gradientSpan({ x: 0, y: 0, width: 10, height: 20 }, 90);
+    expect(up.dir).toEqual({ x: 0, y: -1 });
+    expect([up.start, up.end]).toEqual([-20, 0]);
+    const right = gradientSpan({ x: 0, y: 0, width: 10, height: 20 }, 0);
+    expect([right.start, right.end, right.perpMin, right.perpMax]).toEqual([0, 10, 0, 20]);
+    // A diagonal spans the box corner to corner.
+    const diag = gradientSpan({ x: 0, y: 0, width: 10, height: 10 }, 45);
+    expect(diag.end - diag.start).toBeCloseTo(10 * Math.SQRT2);
+  });
+
+  it("gives strips of the span as 4-point polygons", () => {
+    const span = gradientSpan({ x: 0, y: 0, width: 10, height: 20 }, 0);
+    expect(gradientStripPoints(span, 0.5, 1)).toEqual([
+      { x: 5, y: 0 },
+      { x: 10, y: 0 },
+      { x: 10, y: 20 },
+      { x: 5, y: 20 },
+    ]);
   });
 });
