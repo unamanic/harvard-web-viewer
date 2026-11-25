@@ -6,6 +6,35 @@ been **verified against real sample files**, and cite the file you checked.
 Keep this file in sync with the code: any change that confirms, corrects or
 adds to what we know about a format updates this file in the same commit.
 
+## Harvard Graphics 1.0 and 2.x (DOS)
+
+The clean-room specification is [SPEC-HG1-HG2.md](SPEC-HG1-HG2.md); the
+reader and layout code is `src/formats/hg2/`, and the test charts are
+`samples/hg1-hg2/` (checked by `src/formats/hg2/hg2.samples.test.tsx`).
+
+### Status
+
+| Area | Spec section | Implemented | Verified against samples |
+| --- | --- | --- | --- |
+| 1.0 charts (`PCOK`, fixed 4716 bytes) | §2 | Read and laid out from data: text, bar/line, pie, org | All 50 1.0 test charts read and draw with no unexpected warnings |
+| 2.x charts (`Falc` records) | §3, §4 | Read and laid out from data: title, list, bullet, column, free form, bar/line, area, high/low/close, pie, org, multiple | All 201 2.x test charts read and draw; 2.10 and 2.12 resaves read the same as their 2.30 originals |
+| Annotations (1.0 trailer, 2.x tag 300) | §2.6, §3.1 | Not decoded; a warning says so | No test chart has any |
+| 2.x slide shows (`.SHW`), `HG.DIR` | §5 | No | No |
+
+### Verified findings
+
+- 2.x tag 121 holds the axis minimums at 4/8/12 (X/Y1/Y2), maximums at 16/20 and increments at 28/32 for X/Y1, one field later than the first version of the spec said (BXMIN, BXMAX, BXINC, BY1MIN, BY1MAX, BY1INC, BY2MIN).
+- 2.x tag 120 byte 45 is the data table (1 normal, 2 framed, 3 none) and byte 14 the plot background colour; both are drawn (BDT1, BDT2, BFRB).
+- The org chart options tail bytes +22/+23 limit the text lines in each box (OB2); +4 is the number of levels shown (1.0 O1).
+
+### Assumptions [I]
+
+Listed in `src/formats/hg2/assumptions.ts`: the colour set (no file stores
+colours), text size as percent of page height, the black screen, the
+average character width used for layout, the pie direction
+(counter-clockwise from the start angle), column-chart cells read row by
+row, and multiple-chart slot boxes as (x, width, y, height) with y up.
+
 ## Harvard Graphics 3 (DOS)
 
 The full clean-room specification is [SPEC.md](SPEC.md); the implementation

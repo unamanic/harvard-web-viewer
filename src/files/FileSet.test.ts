@@ -102,6 +102,8 @@ describe("choosePrimary", () => {
   it("picks the first show, then the first chart", () => {
     expect(choosePrimary(e("A.CH3", "HG3.PL3", "x.sh3", "Y.SH3"), none)?.name).toBe("x.sh3");
     expect(choosePrimary(e("HG3.PL3", "b.ch3", "C.CH3"), none)?.name).toBe("b.ch3");
+    expect(choosePrimary(e("HG.DIR", "OLD.CHT", "b.ch3"), none)?.name).toBe("b.ch3");
+    expect(choosePrimary(e("HG.DIR", "OLD.CHT"), none)?.name).toBe("OLD.CHT");
   });
 
   it("falls back to a recognised file, then the first file", () => {

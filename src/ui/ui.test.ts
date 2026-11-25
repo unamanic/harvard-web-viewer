@@ -34,6 +34,12 @@ describe("groupFiles", () => {
     expect(groupFiles([{ name: "X.PL3" }]).map((g) => g.kind)).toEqual(["other"]);
     expect(fileGroupKind("noext")).toBe("other");
   });
+
+  it("counts Harvard Graphics 1.x/2.x charts as charts", () => {
+    expect(fileGroupKind("OLD.CHT")).toBe("chart");
+    expect(fileGroupKind("ODD.BIN", ascii("PCOK...."))).toBe("chart");
+    expect(fileGroupKind("ODD.BIN", ascii("Falc...."))).toBe("chart");
+  });
 });
 
 describe("recordTreeOf", () => {
