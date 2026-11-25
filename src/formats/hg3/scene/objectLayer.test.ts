@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_STROKE_WIDTH,
   type GroupElement,
+  LANDSCAPE_VIEW_BOX,
   type ParseContext,
   type ResolvedFile,
   type SceneElement,
@@ -9,10 +10,12 @@ import {
 } from "../../types";
 import {
   BOX_3D_SIDE_SHADE,
+  BUTTON_CHART_FITS_DATA_CHART,
   BOX_3D_TOP_SHADE,
   DATA_ROW_OVERLAP,
   DATA_TEXT_BOX_FACTOR,
   DATA_TEXT_BOX_STEP,
+  LINE_WIDTH_SUBTAG,
   OBJECT_TEXT_ASCENT,
   SHADOW_BOX_ROLE,
   lineWidthFor,
@@ -22,7 +25,7 @@ import { parseChart } from "../chart";
 import { DocumentType, readContainer } from "../container";
 import { DEFAULT_PALETTE, colorForRole, rgbToCss } from "../palette";
 import { type ByteSource, type RecordSpec, block, buildDocument, concat, cstr, f32, i16, leaf, u16 } from "../testing/bytes";
-import { buildChartScene } from "./buildChartScene";
+import { buildChartScene, buttonChartFit } from "./buildChartScene";
 import { createChartSceneContext } from "./context";
 import {
   BEZIER_SEGMENTS,
@@ -194,6 +197,42 @@ describe("drawObjectLayer: shapes", () => {
       { kind: "rect", x: -100, y: -250, width: 400, height: 200, fill: role(21), stroke: role(32), strokeWidth: lineWidthFor(2) },
     ]);
     expect(lineWidthFor(2)).toBe(2 * DEFAULT_STROKE_WIDTH);
+  });
+
+  it("draws outlines at the 0x1120 width (page units) when it is wider than the 0x1100 one", () => {
+    const width = (w: number) => sub(LINE_WIDTH_SUBTAG, u16(w));
+    const { elements } = draw([
+      ...obj([line(24, 0), width(369), counted(0x1050, [[0, 0, 100, 50, 200, 0]])]),
+      ...obj([line(32, 1), width(25), boxShape(1, 0, 0, 0, 10, 10)]),
+      ...obj([line(32, 2), width(1), boxShape(1, 0, 0, 0, 10, 10)]),
+    ]);
+    expect(elements.map((e) => "strokeWidth" in e && e.strokeWidth)).toEqual([369, DEFAULT_STROKE_WIDTH, lineWidthFor(2)]);
+  });
+
+  describe("0x10A0 data curves (CURVE_A_STRAIGHT_OFFSET, CURVE_A_AFTER_POLYLINE_DRAWN)", () => {
+    const P = [0, 0, 100, 50, 200, 0, 300, 80];
+    /** 0x10A0: n, points, trailer (u16 about 600, u16 marker, u16 straight flag). */
+    const curveA = (straight: number, points = P) => sub(0x10a0, concat(u16(points.length / 2), pts(...points), u16(630), u16(1), u16(straight)));
+    const path = (el: SceneElement | undefined) => {
+      if (el?.kind !== "path") throw new Error(`expected a path, got ${el?.kind}`);
+      return el;
+    };
+
+    it("draws a curve with straight flag 1 as straight segments and 0 as a smooth curve", () => {
+      const { elements } = draw([...obj([line(1), curveA(1)]), ...obj([line(1), curveA(0)])]);
+      expect(elements).toHaveLength(2);
+      expect(path(elements[0]).smooth).toBeUndefined();
+      expect(path(elements[0]).points).toEqual([{ x: 0, y: -0 }, { x: 100, y: -50 }, { x: 200, y: -0 }, { x: 300, y: -80 }]);
+      expect(path(elements[1]).smooth).toBe(true);
+    });
+
+    it("does not draw a curve right after a polyline (the polyline is the drawn line)", () => {
+      const flattened = [0, 0, 50, 40, 100, 50, 150, 30, 200, 0, 250, 40, 300, 80];
+      const { elements } = draw(obj([line(1), counted(0x1050, [flattened]), curveA(0)]));
+      expect(elements).toHaveLength(1);
+      expect(path(elements[0]).points).toHaveLength(7);
+      expect(path(elements[0]).smooth).toBeUndefined();
+    });
   });
 
   it("rounds style 3 boxes, scaled with the transform", () => {
@@ -539,7 +578,7 @@ describe("drawObjectLayer: embedded charts", () => {
     expect([a * 0 + c * -1000 + e, b * 0 + d * -1000 + f]).toEqual([100, -700]);
   });
 
-  it("draws an embedded chart's frame but not its background through buildChartScene", () => {
+  it("draws neither an embedded chart's frame (DRAW_PAGE_FRAME) nor its background through buildChartScene", () => {
     const frameChart = buildDocument("HGB3", DocumentType.Title, [
       block(500, [leaf(400, cstr("demo"))]),
       block(504, [leaf(802, concat(box(-1000, -1000, 1000, 1000), u16(0))), block(516, [], new Uint8Array(16)), block(508, [])]),
@@ -547,8 +586,7 @@ describe("drawObjectLayer: embedded charts", () => {
     const ctx = fakeContext({ "FRAME.CH3": frameChart });
     const { scene } = buildChartScene(chartWith(embed("FRAME.CH3")), ctx);
     const inner = group(group(scene.elements[0]).children[0]);
-    expect(inner.children.map((e) => e.kind)).toEqual(["rect"]);
-    expect(inner.children[0]).toMatchObject({ fill: null, stroke: role(14) });
+    expect(inner.children).toEqual([]);
   });
 
   it("warns about a missing embedded chart", () => {
@@ -619,9 +657,9 @@ describe("buildChartScene with an object layer", () => {
 
 describe("buildChartScene: button chart overlay (task 20)", () => {
   const buttonRef = (name: string): RecordSpec => leaf(404, concat(u16(1), u16(0), cstr(name)));
-  /** A drawing whose 508 names `buttonChart` (404 kind 1), plus `inner508`. */
-  const chartBytes = (objects: RecordSpec[], buttonChart?: string, inner508: RecordSpec[] = []) =>
-    buildDocument("HGB3", DocumentType.Drawing, [
+  /** A drawing (or `type`) whose 508 names `buttonChart` (404 kind 1), plus `inner508`. */
+  const chartBytes = (objects: RecordSpec[], buttonChart?: string, inner508: RecordSpec[] = [], type: number = DocumentType.Drawing) =>
+    buildDocument("HGB3", type, [
       block(500, [leaf(400, cstr("demo"))]),
       block(504, [block(516, objects, new Uint8Array(16)), block(508, [...(buttonChart ? [buttonRef(buttonChart)] : []), ...inner508])]),
     ]);
@@ -727,6 +765,67 @@ describe("buildChartScene: button chart overlay (task 20)", () => {
     // Members' union (0,0)-(20,20) scaled by 2 and moved by 10: (10,0)-(50,40).
     expect(areas[0]!.children[0]).toMatchObject({ x: 10, y: -40, width: 40, height: 40 });
     expect(areas[1]!.children[0]).toMatchObject({ x: 30, y: -40, width: 20, height: 20 });
+  });
+
+  describe("a data chart under a button bar (BUTTON_CHART_FITS_DATA_CHART)", () => {
+    /** GALBUTN2's layout: a filled bar y 10170..12194 across the page, one named key in it. */
+    const bar = chartBytes([
+      ...obj([line(0xff), fill(0xff), boxShape(1, 0, -16383, 10170, 16317, 12194)], undefined, [-16383, 10170, 16317, 12194]),
+      ...namedOutline("help", -16350, 11177, -9920, 12193),
+    ]);
+    const s = (10170 + 12288) / 24576;
+    const fit = [s, 0, 0, s, 0, (12288 - 10170) / 2];
+    const slideObjects = [...obj([line(32), boxShape(1, 0, -16000, 9000, 16000, 12000)]), ...namedOutline("own", -300, -200, -100, -100)];
+
+    it("shrinks the slide into the page below the bar, keeping the bar and every click area on top", () => {
+      expect(BUTTON_CHART_FITS_DATA_CHART).toBe(true);
+      const host = chartOfBytes(chartBytes(slideObjects, "BAR.CH3", [], DocumentType.Bullet));
+      const { scene, warnings } = buildChartScene(host, fakeContext({ "BAR.CH3": bar }), { dataLayout: "never" });
+      expect(warnings).toEqual([]);
+      // Slide (one transformed group), bar box, named key, slide click areas (transformed), key click area.
+      expect(scene.elements).toHaveLength(5);
+      const slide = group(scene.elements[0]);
+      expect(slide.buttonName).toBeUndefined();
+      slide.transform!.forEach((v, i) => expect(v).toBeCloseTo(fit[i]!, 9));
+      expect(slide.children[0]).toMatchObject({ kind: "rect", x: -16000, y: -12000 });
+      // The page's top (scene y −12288) lands on the bar's bottom, its bottom stays put.
+      const [a, , , d, e, f] = slide.transform!;
+      expect(d * -12288 + f).toBeCloseTo(-10170, 6);
+      expect(d * 12288 + f).toBeCloseTo(12288, 6);
+      expect(a * 0 + e).toBe(0);
+      expect(scene.elements[1]).toMatchObject({ kind: "rect", y: -12194, fill: "#000000" });
+      expect(group(scene.elements[2]).buttonName).toBe("help");
+      expect(group(scene.elements[2]).transform).toBeUndefined();
+      const own = group(scene.elements[3]);
+      expect(own.transform).toEqual(slide.transform);
+      expect(hitAreas(own.children).map((g) => g.buttonName)).toEqual(["own"]);
+      expect(hitAreas(scene.elements.slice(4)).map((g) => g.buttonName)).toEqual(["help"]);
+      expect(group(scene.elements[4]).children[0]).toMatchObject({ x: -16350, y: -12193 });
+    });
+
+    it("leaves a drawing full size under the same bar (GALBUTN1 hosts)", () => {
+      const host = chartOfBytes(chartBytes(slideObjects, "BAR.CH3"));
+      const { scene } = buildChartScene(host, fakeContext({ "BAR.CH3": bar }));
+      expect(scene.elements[0]).toMatchObject({ kind: "rect", x: -16000, y: -12000 });
+      expect(scene.elements.some((e) => e.kind === "group" && e.transform !== undefined)).toBe(false);
+    });
+
+    it("leaves a data chart full size when the button chart is not a band (GALBUTN1's squares reach the bottom)", () => {
+      const squares = chartBytes([...namedOutline("help", -16350, 11177, -9920, 12193), ...namedOutline("sq7", -16383, -12288, -5445, -4820)]);
+      const host = chartOfBytes(chartBytes(slideObjects, "SQ.CH3", [], DocumentType.Bullet));
+      const { scene } = buildChartScene(host, fakeContext({ "SQ.CH3": squares }), { dataLayout: "never" });
+      expect(scene.elements[0]).toMatchObject({ kind: "rect", x: -16000 });
+    });
+
+    it("computes the fit for a bar along the bottom too, and none for a drawing or an empty button chart", () => {
+      const vb = LANDSCAPE_VIEW_BOX;
+      const bottom = buttonChartFit(DocumentType.XY, { x1: -16384, y1: -12288, x2: 16384, y2: -10000 }, vb)!;
+      const sb = (12288 + 10000) / 24576;
+      [sb, 0, 0, sb, 0, -(12288 - 10000) / 2].forEach((v, i) => expect(bottom[i]).toBeCloseTo(v, 9));
+      expect(buttonChartFit(DocumentType.Drawing, { x1: 0, y1: 10170, x2: 1, y2: 12194 }, vb)).toBeNull();
+      expect(buttonChartFit(DocumentType.XY, null, vb)).toBeNull();
+      expect(buttonChartFit(DocumentType.XY, { x1: 0, y1: -100, x2: 1, y2: 100 }, vb)).toBeNull();
+    });
   });
 
   it("adds no click areas for buttons inside embedded charts", () => {

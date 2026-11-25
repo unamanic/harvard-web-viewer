@@ -53,7 +53,21 @@ export function textSizeToUnits(size: number, pageShortSide: number = PAGE_SHORT
 export const FRAME_STROKE_WIDTH = DEFAULT_STROKE_WIDTH;
 
 /**
- * Whether drawings (type 0x29) get a page frame. SPEC §5.5 [I] describes the
+ * Whether the 802 page frame is drawn at all (role 14 outline, SPEC §5.5
+ * step 1). Not drawn [I, from evidence, not decoded]: the reference renders from HG 3.05
+ * (samples-private/renders, VGA ScreenShow) show no frame on any of the 166
+ * sample data charts that store an 802 area (XYTUT, PIETUT, ORGTUT, every
+ * GALD*): the strips where its sides would be (x 5 and 635 of 640, or x 30
+ * and 607 on the shrunk GALBUTN2 slides) hold no grey (role 14 is the DAC's
+ * own grey 85 there, so a drawn frame would be solid grey). Either the frame
+ * style is stored somewhere undecoded and every sample has "none", or HG
+ * never outlines the 802 area on screen; either way the samples draw none.
+ * Set to true to see the 802 area outlined in role 14 again.
+ */
+export const DRAW_PAGE_FRAME = false;
+
+/**
+ * Whether drawings (type 0x29) get a page frame (only when DRAW_PAGE_FRAME). SPEC §5.5 [I] describes the
  * frame for data charts only, and drawings have no 802 frame area (§5.2 [C]),
  * so a drawing shows just the background and its objects.
  */
@@ -82,6 +96,43 @@ export const LINE_WIDTH_FACTORS: ReadonlyMap<number, number> = new Map([
   [2, 2],
   [3, 3],
 ]);
+
+/**
+ * 0x1120 attribute: u16 line width in page units [I, from the HG 3.05
+ * reference renders]. Values in the samples: 0 and 1 (most shapes), 25
+ * (table cell boxes), and 74 to 369 on data lines (polylines, 0x10A0
+ * curves): 294 on GALA1's line chart picture, 369 on every GALD36x/41x
+ * line series, 344 on GALA1/GALB* gallery pictures. The references draw
+ * those lines about 6 px (294: 5.7 px at 51.2 units per pixel; measured 6
+ * px on GALA1) and 7 to 8 px (369, GALD411) thick, where our 30-unit
+ * default gave 1 px. An outline is drawn at the larger of this width and
+ * the 0x1100 byte 1 width (so 0, 1 and 25 change nothing).
+ */
+export const LINE_WIDTH_SUBTAG = 0x1120;
+
+/**
+ * 0x10A0/0x10A1 data line curves (SPEC §5.6: u16 n, n points, 6 bytes)
+ * [I, from the HG 3.05 reference renders]:
+ *
+ * - The u16 at trailer offset 4 is 1 for a straight line through the points
+ *   and 0 for a smooth curve. 118 of the 137 sample curves are 1; the
+ *   references draw them with straight segments (GALD411 and GALD413
+ *   "Single Line", GALC41's pictures 3 and 6), and the 0 ones smooth
+ *   (GALD421 and GALD423 "Curve", GALC42's pictures 3 and 6).
+ * - A curve right after a 0x1050 polyline in the same object is not drawn:
+ *   the polyline is the line HG draws. When straight it holds the same
+ *   points (100 samples); when smooth it holds HG's own flattened curve
+ *   (13 samples, e.g. GALD421's 59-point polyline for 8 data points), which
+ *   the references match and our spline through the points does not
+ *   exactly (two lines showed). Only the 25 curves with no polyline before
+ *   them (GALB4, GALC41, GALC42, GALC44, GALC49 pictures) are drawn.
+ * - Not decoded: trailer u16 at 2 (0 to 4) looks like the point marker
+ *   (the references show markers on GALD413, GALD423 and GALC44 picture 3:
+ *   squares, crosses), u16 at 0 (500 to 630) perhaps its size. Markers are
+ *   not drawn.
+ */
+export const CURVE_A_STRAIGHT_OFFSET = 4;
+export const CURVE_A_AFTER_POLYLINE_DRAWN = false;
 
 /** Outline width in scene units for 0x1100 byte 1 (see LINE_WIDTH_FACTORS). */
 export function lineWidthFor(lineStyle: number | undefined): number {
@@ -248,7 +299,9 @@ export const STROKE_FONT_DEFAULT_PEN_EM = 0.05;
 
 /**
  * The chart named by a 404 kind 1 reference (the "button chart", SPEC §4.4,
- * §6.5) is drawn on top of the slide, after the slide's object layer [I]:
+ * §6.5) is drawn on top of the slide, after the slide's object layer [I]
+ * (the slide is shrunk under it first when it is a data chart: see
+ * BUTTON_CHART_FITS_DATA_CHART):
  *
  * - Objects only: its frame, background, title/footnote text and data chart
  *   are not drawn (SPEC §4.4: "draw that chart's objects"). The two sample
@@ -268,6 +321,44 @@ export const STROKE_FONT_DEFAULT_PEN_EM = 0.05;
  *   (or a chart already being drawn) is not drawn, with a warning.
  */
 export const BUTTON_CHART_OBJECTS_ONLY = true;
+
+/**
+ * A data chart (any type but a drawing) with a button chart is drawn shrunk
+ * into the part of the page the button chart leaves free, the button chart
+ * itself unscaled on top [I, from the HG 3.05 reference renders]:
+ *
+ * - Free part: the button chart's objects (their union box, as for click
+ *   areas) form a band across the top (box entirely above the page centre)
+ *   or the bottom (entirely below it); the free part is the rest of the
+ *   page's height. GALBUTN2's objects span y 10170 to 12194, so its slides
+ *   get y −12288 to 10170. A box crossing the centre (GALBUTN1's nine
+ *   squares reach the bottom) leaves no band and nothing is shrunk.
+ * - Fit: one uniform scale s = free height / page height (0.9138 for
+ *   GALBUTN2) about the page centre, then moved so the page's centre lands
+ *   on the free part's centre: x stays centred, the whole slide (title,
+ *   chart, background objects) fits below the bar.
+ * - Evidence: all 164 GALBUTN2 slides (every data chart naming a button
+ *   chart) in samples-private/renders. Comparing each against our render of
+ *   the same slide without the button chart, the bounding box of the drawn
+ *   content maps by x' = 0.916 x + 25.4, y' = 0.912 y + 40.3 (pixels,
+ *   least squares over 656 box edges). Drawn with this rule, 652 of the
+ *   656 edges land within 3 px of the reference's (median 1 px, worst 7). GALD111's title, hidden under the
+ *   bar when the slide was drawn full size, sits fully below it, as in the
+ *   reference. The 35 drawings using GALBUTN1 are drawn at full size there
+ *   (GALA1's pictures sit exactly in GALBUTN1's squares).
+ * - Not separable from the samples: GALBUTN1 serves only drawings and
+ *   GALBUTN2 only data charts, so "data charts only" and "only when the
+ *   button chart is a band" both explain every reference. Both conditions
+ *   are required here. Drawings are authored around their button chart;
+ *   data charts are laid out on the whole page and could not be.
+ * - Drawing order: with the slide out of the way it does not matter. Its
+ *   bar box (0x1071 with 0x110B fill FF 00 00 00, direct black) is filled,
+ *   so drawing it under the slide or outline-only would not have shown
+ *   GALD111's title either; the button chart stays on top, and the click
+ *   areas (BUTTON_HIT_AREAS) above everything, the slide's own ones mapped
+ *   by the same fit.
+ */
+export const BUTTON_CHART_FITS_DATA_CHART = true;
 
 /**
  * Click area of a show button (an object or group with a 618 name) [I]:

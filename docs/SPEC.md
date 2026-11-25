@@ -433,7 +433,7 @@ The tree is given by the stored links in each 914 record. (An earlier reading, "
 
 The original lays out data charts itself; the stored areas (5.2) tell a viewer where each part goes. Until reference renders are compared, use this method: \[I for everything in 5.5\]
 
-1. Fill the page with the background colour (palette role FrameBkg) and draw the page frame (role Frame) using the frame style.
+1. Fill the page with the background colour (palette role FrameBkg). The page frame area (802) is not drawn as a line in any reference render. If the chart has a button chart forming a band at the top or bottom, the chart is shrunk uniformly into the rest of the page and centred horizontally; the button chart is drawn unscaled on top. \[C, from the reference renders\]
 2. Draw slot 1 text in the title area, centred lines from the top, each line's height taken from its text size.
 3. Draw slot 2 text (footnote) in the footnote area.
 4. Draw the chart in the plot area:
@@ -487,7 +487,7 @@ The 516 extent box contains every object's bounding box but is not a tight fit. 
 | 0x1070 to 0x1078 | Box | u16 box style, u16 size c, i16 x1, y1, x2, y2. Styles: 1 square; 3 rounded with radius c; 5 drop shadow c to the right and down (no separate shadow shape; colour implied, likely role 19 Shadow); 6 3-D box c deep up and to the right (the 3-D bar style); 2 unknown. The bounding box includes the shadow or 3-D extent. \[C for the extents, I for the drawing\] | C for the rectangle |
 | 0x1080 | Cubic Bézier curve: points are P0, C1, C2, P1, C1, C2, P2 … (3k + 1 points) | same as 0x1050 | C |
 | 0x1091, 0x1098 | Closed cubic Bézier curve, same point order (pie slices use circle handles of 0.552 × radius) | same as 0x1050 | C |
-| 0x10A0, 0x10A1 | Smooth curve through its points (data series lines) \[I\] | u16 point count n, n points, then 6 bytes: u16 about 500 to 630, u16 0 to 4, u16 0 or 1 \[?\] | I |
+| 0x10A0, 0x10A1 | Smooth curve through its points (data series lines) \[I\] | u16 point count n, n points, then 6 bytes: u16 about 500 to 630 (perhaps marker size) \[?\], u16 0 to 4 (likely the point marker shape) \[I\], u16 1 = straight segments, 0 = smooth \[I, from the reference renders\]. When it follows a 0x1050 polyline in the same object it repeats that line (the polyline is what is drawn) | I |
 | 0x10B0 | Text block | see below | I |
 
 Angles are in tenths of a degree, measured counter-clockwise from the positive x axis (0 = 3 o'clock, 900 = 12 o'clock). \[C\]
@@ -502,7 +502,7 @@ Angles are in tenths of a degree, measured counter-clockwise from the positive x
 | 0x110B | 4 | Fill colour, byte 0 (see below) \[I\] |
 | 0x110C | 4 | Fill colour for bitmap objects (always before 0x1140; often FF 55 55 55) \[I\]; also on 3-D pie faces with byte 0 = 0 \[?\] |
 | 0x1110 | 10 | Two direct colours (FF R G B, FF R G B) and a u16 from 0 to 1800; likely a two-colour gradient with its angle in tenths of a degree \[I\] |
-| 0x1120 | 2 | u16: 0, 1, 25, 147 and others \[?\] |
+| 0x1120 | 2 | u16 outline width in page units (294 draws about 6 px on a 640 × 480 screen); small values (0, 1, 25) leave the 0x1100 width \[I, from the reference renders\] |
 | 0x112A | 2 | Fill brightness in percent: 100 on flat faces, lower only on 3-D faces (bar sides, cylinder walls, pyramid faces, 3-D pie walls and edges), varying with the face's direction like a lighting model. Scale the fill towards black by it \[I\] |
 | 0x112B, 0x112D | 2 | u16 0 or 1 \[?\] |
 | 0x112E, 0x112F | 2 | u16 (0 or 3; 1) \[?\] |

@@ -78,6 +78,9 @@ import {
   OUTLINE_ONLY_SUBTAG_DIGITS,
   PIE_SLICE_ARC_STYLE,
   SHADE_FILLS_BY_PERCENT,
+  CURVE_A_AFTER_POLYLINE_DRAWN,
+  CURVE_A_STRAIGHT_OFFSET,
+  LINE_WIDTH_SUBTAG,
   SHADE_SUBTAG,
   SHADOW_BOX_ROLE,
   SHADOW_BOX_STYLE,
@@ -94,6 +97,7 @@ import {
   type Attribute,
   type Box,
   type BoxShape,
+  type CurveAShape,
   DIRECT_COLOR,
   type DrawnObject,
   IDENTITY_TRANSFORM,
@@ -233,6 +237,12 @@ function shadeFactor(state: readonly Attribute[]): number | null {
   return percent < 100 ? percent / 100 : null;
 }
 
+/** The 0x1120 line width in page units, or 0 when the state has none (assumptions.ts LINE_WIDTH_SUBTAG). */
+function lineWidthAttr(state: readonly Attribute[]): number {
+  const a = state.find((x) => x.subTag === LINE_WIDTH_SUBTAG);
+  return a && a.raw.length >= 2 ? a.raw[0]! | (a.raw[1]! << 8) : 0;
+}
+
 /** The interim colour rule of SPEC §5.6 for one shape and its drawing state. */
 export function paintFor(ctx: ChartSceneContext, shape: Shape, state: readonly Attribute[]): Paint {
   let line: LineAttr | undefined;
@@ -244,7 +254,7 @@ export function paintFor(ctx: ChartSceneContext, shape: Shape, state: readonly A
     else if (a.subTag === SUB_GRADIENT && GRADIENT_AS_FIRST_COLOR) gradient = directRgb(a.raw, 0);
   }
   const stroke = line ? cssOf(ctx, line.lineColor, line.rgb) : null;
-  const strokeWidth = lineWidthFor(line && !line.rgb ? line.lineStyle : undefined);
+  const strokeWidth = Math.max(lineWidthFor(line && !line.rgb ? line.lineStyle : undefined), lineWidthAttr(state));
   const closed = isClosedShape(shape) || isPieSlice(shape);
   if (!closed || OUTLINE_ONLY_SUBTAG_DIGITS.has(shape.subTag & 0xf)) return { fill: null, stroke, strokeWidth };
   let fillCss: string | null;
@@ -432,7 +442,7 @@ function drawShape(ctx: ChartSceneContext, entry: ShapeEntry, m: Readonly<Transf
     case "closedCurve":
     case "curveA": {
       const closed = shape.kind === "polygon" || shape.kind === "closedCurve";
-      const smooth = shape.kind === "curve" || shape.kind === "closedCurve" || shape.kind === "curveA";
+      const smooth = shape.kind === "curve" || shape.kind === "closedCurve" || (shape.kind === "curveA" && !isStraightCurveA(shape));
       const parts = shape.kind === "curveA" ? [shape.points] : pointParts(shape.points, shape.partCounts);
       return parts
         .filter((part) => part.length > 0)
@@ -727,13 +737,24 @@ function drawBitmap(b: Builder, obj: DrawnObject, parent: Readonly<Transform>): 
 // Objects and groups
 // ---------------------------------------------------------------------------
 
+/** A 0x10A0/0x10A1 curve whose trailer marks it straight (assumptions.ts CURVE_A_STRAIGHT_OFFSET). */
+export function isStraightCurveA(shape: CurveAShape): boolean {
+  const t = shape.trailer;
+  return t.length >= CURVE_A_STRAIGHT_OFFSET + 2 && (t[CURVE_A_STRAIGHT_OFFSET]! | (t[CURVE_A_STRAIGHT_OFFSET + 1]! << 8)) === 1;
+}
+
+/** Whether shape `i` is a 0x10A0/0x10A1 curve right after a polyline, which draws it (CURVE_A_AFTER_POLYLINE_DRAWN). */
+function duplicatesPolyline(shapes: readonly ShapeEntry[], i: number): boolean {
+  return !CURVE_A_AFTER_POLYLINE_DRAWN && shapes[i]!.shape.kind === "curveA" && shapes[i - 1]?.shape.kind === "polyline";
+}
+
 function drawObject(b: Builder, obj: DrawnObject, parent: Readonly<Transform>): SceneElement[] {
   let children: SceneElement[];
   if (obj.attributes.some((a) => a.kind === "bitmap")) {
     children = drawBitmap(b, obj, parent);
   } else {
     const m = composeTransforms(parent, obj.transform);
-    children = obj.shapes.flatMap((entry) => drawShape(b.ctx, entry, m));
+    children = obj.shapes.filter((_, i) => !duplicatesPolyline(obj.shapes, i)).flatMap((entry) => drawShape(b.ctx, entry, m));
   }
   if (obj.buttonName === undefined) return children;
   addHitArea(b.ctx, obj, parent);
@@ -844,6 +865,18 @@ function itemPageBox(item: LayerItem, parent: Readonly<Transform>): Box | null {
   const t = item.transform ? composeTransforms(parent, item.transform) : parent;
   const members = unionBox(item.items.map((i) => itemPageBox(i, t)).filter((b): b is Box => b !== null));
   return members ?? (item.box ? mappedBox(t, item.box) : null);
+}
+
+/**
+ * Page box around everything a chart's object layer draws (each top-level
+ * item's box as for click areas), or null when it has no objects. Used to
+ * find the part of the page a button chart leaves free (task 20,
+ * assumptions.ts BUTTON_CHART_FITS_DATA_CHART).
+ */
+export function objectLayerPageBox(chart: Pick<Chart, "objectLayer">): Box | null {
+  if (!chart.objectLayer) return null;
+  const { layer } = parseObjectLayer(chart.objectLayer);
+  return unionBox(layer.items.map((i) => itemPageBox(i, IDENTITY_TRANSFORM)).filter((b): b is Box => b !== null));
 }
 
 function addHitArea(ctx: ChartSceneContext, item: LayerItem, parent: Readonly<Transform>): void {

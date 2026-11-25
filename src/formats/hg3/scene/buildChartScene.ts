@@ -5,6 +5,8 @@
  * footnote text, then the chart-type drawing in the plot area), then the
  * object layer, then the button chart's objects (task 20), then one
  * transparent click area per button (assumptions.ts BUTTON_HIT_AREAS).
+ * A data chart with a button chart is shrunk into the part of the page the
+ * button chart leaves free (assumptions.ts BUTTON_CHART_FITS_DATA_CHART).
  * The data chart is drawn only when the chart is laid out from its data
  * (dataLayout.ts: by default only when its object layer holds no drawn
  * copy of it, which every sample chart has).
@@ -15,10 +17,12 @@
  * each takes the shared ChartSceneContext. When a task lands, it replaces its
  * stub and removes its part from NOT_YET_DRAWN.
  */
-import type { GroupElement, ParseContext, RectElement, Scene, SceneElement } from "../../types";
+import type { GroupElement, Matrix, ParseContext, RectElement, Scene, SceneElement, ViewBox } from "../../types";
 import {
+  BUTTON_CHART_FITS_DATA_CHART,
   BUTTON_CHART_OBJECTS_ONLY,
   DRAW_FRAME_FOR_DRAWINGS,
+  DRAW_PAGE_FRAME,
   FALLBACK_BACKGROUND,
   FRAME_STROKE_WIDTH,
 } from "../assumptions";
@@ -33,7 +37,8 @@ import { drawTableChart } from "./data/table";
 import { drawXYChart } from "./data/xy";
 import { drawBulletChart, drawTitleAndFootnote, drawTitleChart } from "./data/textCharts";
 import { type DataLayoutMode, drawsFromData, drawsObjectLayer } from "./dataLayout";
-import { drawObjectLayer, loadReferencedChart } from "./objectLayer";
+import type { Box } from "../objects";
+import { drawObjectLayer, loadReferencedChart, objectLayerPageBox } from "./objectLayer";
 import { areaToRect } from "./page";
 
 /**
@@ -113,7 +118,7 @@ export function notYetDrawn(chart: Chart, mode: DataLayoutMode = "auto"): ChartP
 function drawFrame(ctx: ChartSceneContext): SceneElement[] {
   const { chart } = ctx;
   const area = chart.areas.frame;
-  if (!area) return [];
+  if (!area || !DRAW_PAGE_FRAME) return [];
   if (chart.chartType === DocumentType.Drawing && !DRAW_FRAME_FOR_DRAWINGS) return [];
   const stroke = ctx.color(ROLE.Frame);
   if (!stroke) return [];
@@ -133,18 +138,47 @@ function drawDebugAreas(ctx: ChartSceneContext): RectElement[] {
 // Button chart overlay (task 20, SPEC §4.4, §6.5)
 // ---------------------------------------------------------------------------
 
+/** The chart a 404 kind 1 reference names, loaded (with a warning when it cannot be). */
+function loadButtonChart(ctx: ChartSceneContext): { chart: Chart; key: string } | null {
+  const name = ctx.chart.fileRefs.buttonChartName;
+  if (name === null) return null;
+  return loadReferencedChart(ctx, name, "button chart", `button chart ${name}`);
+}
+
 /**
  * The object layer of the 404 kind 1 chart, on top of the slide, in the
  * host's coordinates and palette (assumptions.ts BUTTON_CHART_OBJECTS_ONLY).
  * Its 618 names stay on their groups, so clicks reach the show player.
  */
-function drawButtonChartOverlay(ctx: ChartSceneContext): SceneElement[] {
-  const name = ctx.chart.fileRefs.buttonChartName;
-  if (name === null) return [];
-  const loaded = loadReferencedChart(ctx, name, "button chart", `button chart ${name}`);
-  if (!loaded) return [];
+function drawButtonChartOverlay(ctx: ChartSceneContext, loaded: { chart: Chart; key: string }): SceneElement[] {
   const child = createButtonChartContext(ctx, loaded.chart, loaded.key);
   return BUTTON_CHART_OBJECTS_ONLY ? drawObjectLayer(child) : drawChartElements(child);
+}
+
+/**
+ * Scene matrix that shrinks a data chart into the part of the page its
+ * button chart leaves free (assumptions.ts BUTTON_CHART_FITS_DATA_CHART), or
+ * null when it is drawn full size: a drawing, a button chart with no
+ * objects, or one whose objects (page box `buttonBox`) do not form a band
+ * entirely above or below the page centre.
+ */
+export function buttonChartFit(chartType: number, buttonBox: Box | null, viewBox: ViewBox): Matrix | null {
+  if (!BUTTON_CHART_FITS_DATA_CHART || chartType === DocumentType.Drawing || !buttonBox) return null;
+  const pageTop = -viewBox.minY; // page y is up; the viewBox is centred on (0, 0)
+  const pageBottom = -(viewBox.minY + viewBox.height);
+  const low = Math.min(buttonBox.y1, buttonBox.y2);
+  const high = Math.max(buttonBox.y1, buttonBox.y2);
+  let top: number;
+  let bottom: number;
+  if (low > 0) [top, bottom] = [Math.min(low, pageTop), pageBottom];
+  else if (high < 0) [top, bottom] = [pageTop, Math.max(high, pageBottom)];
+  else return null;
+  const s = (top - bottom) / viewBox.height;
+  if (!(s > 0) || s >= 1) return null;
+  const centreX = viewBox.minX + viewBox.width / 2;
+  const centreY = viewBox.minY + viewBox.height / 2; // scene y (down)
+  const freeCentreY = -(top + bottom) / 2;
+  return [s, 0, 0, s, centreX * (1 - s), freeCentreY - s * centreY];
 }
 
 /** The chart-type drawing in the plot area (SPEC §5.5 step 4). */
@@ -205,8 +239,21 @@ export function buildChartScene(
   context.buttonHitAreas = hitAreas;
 
   const background = context.color(ROLE.FrameBkg) ?? FALLBACK_BACKGROUND;
-  const elements: SceneElement[] = [...drawChartElements(context), ...drawButtonChartOverlay(context), ...hitAreas];
-  if (SCENE_DEBUG.showPageAreas) elements.push(...drawDebugAreas(context));
+  let slide: SceneElement[] = drawChartElements(context);
+  if (SCENE_DEBUG.showPageAreas) slide.push(...drawDebugAreas(context));
+  // The slide's own click areas, before the button chart adds its own.
+  let slideHitAreas: SceneElement[] = hitAreas.splice(0);
+  const buttonChart = loadButtonChart(context);
+  let overlay: SceneElement[] = [];
+  if (buttonChart) {
+    const fit = buttonChartFit(chart.chartType, objectLayerPageBox(buttonChart.chart), context.page.viewBox);
+    if (fit) {
+      slide = [{ kind: "group", transform: fit, children: slide }];
+      if (slideHitAreas.length > 0) slideHitAreas = [{ kind: "group", transform: fit, children: slideHitAreas }];
+    }
+    overlay = drawButtonChartOverlay(context, buttonChart);
+  }
+  const elements: SceneElement[] = [...slide, ...overlay, ...slideHitAreas, ...hitAreas];
 
   context.fonts.warnings().forEach(context.warn);
   const fontReport = context.faces.report();

@@ -173,11 +173,23 @@ Add entries as `- finding (sample file checked, task number)`.
   and its nested shows, 1,913 of 2,159 button-table entries now have a
   clickable object; the rest are 214 empty names and 32 "edit"/"editcler".
   (all charts and shows, task 20)
-- Open question: on the 163 data charts using GALBUTN2, its black bar
-  (page y 10170 to 12194) covers most of the title, whose area 804 runs
-  8995 to 12041. Either the original draws the bar under the chart, or
-  shows these charts smaller below it. Needs a screenshot of GALD111 from
-  the original program (SPEC §7.3). (task 20)
+- Resolved from the reference renders: a data chart with a button chart
+  is shrunk uniformly to fit the page below the button bar (scale
+  22458 / 24576 = 0.914 for GALBUTN2's bar bottom at y 10170), centred
+  horizontally, and the button chart is drawn unscaled on top. Drawings
+  (all 35 GALBUTN1 hosts) are not shrunk. 652 of 656 measured box edges
+  land within 3 px of the reference. The page frame (802, role 14) is not
+  drawn in any reference. (all button-chart samples, task 20 follow-up)
+- 0x1120 is an outline width in page units (294 → about 6 px). 0x10A0/
+  0x10A1 trailer u16 at offset 4: 1 straight, 0 smooth; a curve right
+  after a 0x1050 polyline in the same object duplicates it (the polyline
+  is the drawn line). The trailer u16 at 2 (0–4) is likely a point marker
+  shape (markers are not drawn yet). (reference renders, task 20 follow-up)
+- Sound is a 3.05 feature: the 3.0 installer has no sound drivers; the 3.05
+  installer offers SoundBlaster and "all sound drivers" and installs
+  RIMSHOT.WAV; its READ.ME adds Pro AudioSpectrum drivers. Previewing a
+  sound slide without a driver shows "The sound driver has not been
+  loaded." (installer scripts, READ.ME, reference renders)
 - Chart data (all 171 data charts, task 11; SPEC.md §5.3–5.4 updated):
   parsed with no warnings and checked against the drawn copies. Pie
   slices sweep exactly value / total × 360° (76 of 76) and the explode code
@@ -254,6 +266,24 @@ Add entries as `- finding (sample file checked, task number)`.
   bounding boxes looked "off" are that extent. PLAY_ALL stores taller line
   boxes than the stacking rule gives. Open: GALC37's 3-D bars are deeper
   than wide (c = 1797); unconfirmed without a reference render. (task 13d)
+- Reference renders from the real program (samples-private/renders/,
+  private; HG 3.05 in DOSBox-X, VGA ScreenShow driver, 640×480; every
+  chart and every show row; see its NOTES.md):
+  - The VGA ScreenShow driver uses one fixed 16-colour DAC for every
+    chart (black, white, red, orange, yellow, yellow-green, green,
+    spring green, cyan, azure, blue, violet, magenta, rose, grey 85,
+    grey 170). Every other palette colour is drawn as a 1-pixel
+    checkerboard of two DAC colours (the "D"/"L" swatches).
+  - GALD111: the gallery key bar does not cover the chart title (the
+    button chart's box is not drawn over the slide).
+  - GALC37: the deep 3-D bars (c = 1797) are correct.
+  - Transitions: the sample shows use only Draw = Replace and Overlay;
+    direction, speed and erase are blank everywhere; Time only on
+    PLAY_ALL's sound rows (0:00). Decoding other values needs files made
+    with one setting changed at a time.
+  - Show context does not change drawing (221 of 240 slides
+    pixel-identical to the standalone chart; the rest differ only on
+    glyph edges).
 
 ### Samples
 
