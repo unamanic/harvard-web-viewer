@@ -51,9 +51,16 @@ export const PORTRAIT_VIEW_BOX: ViewBox = {
 /** Stroke width used when a shape gives none: ~1px on a 1000px-wide page. */
 export const DEFAULT_STROKE_WIDTH = 30;
 
+/** Prefix of a `ShapeStyle.fill` that names an entry of `Scene.patterns`. */
+export const PATTERN_FILL_PREFIX = "pattern:";
+
 /** Fill and outline of a shape. `null` means "do not paint". */
 export interface ShapeStyle {
-  /** CSS colour, or null for no fill. */
+  /**
+   * CSS colour, or null for no fill. May instead be "pattern:<id>" naming an
+   * entry of `Scene.patterns` (PATTERN_FILL_PREFIX); parsers do not use
+   * this, render-side transforms (e.g. the mono display mode) do.
+   */
   fill: string | null;
   /** CSS colour, or null for no outline. */
   stroke: string | null;
@@ -133,6 +140,18 @@ export interface RectElement extends ShapeStyle {
 
 export type TextAnchor = "start" | "middle" | "end";
 
+/**
+ * An outline painted under text (beneath the glyphs, so they are not
+ * narrowed), to keep it readable over busy fills. Parsers do not use it;
+ * render-side transforms (e.g. the mono display mode) do.
+ */
+export interface TextHalo {
+  /** CSS colour. */
+  color: string;
+  /** Width beyond the glyph edge, in the element's own (local) units. */
+  width: number;
+}
+
 export interface TextElement {
   kind: "text";
   /** Anchor point; `y` is the baseline. */
@@ -149,6 +168,7 @@ export interface TextElement {
   fontWeight: number;
   italic: boolean;
   anchor: TextAnchor;
+  halo?: TextHalo;
 }
 
 /**
@@ -174,6 +194,7 @@ export interface GlyphsElement extends ShapeStyle {
   advance: number;
   /** Em size, local units (font size of the invisible text). */
   em: number;
+  halo?: TextHalo;
 }
 
 /** Bitmap stretched to its box (no aspect-ratio preservation). */
@@ -219,6 +240,24 @@ export interface Scene {
   background: string;
   /** Drawn in order: later elements on top. */
   elements: SceneElement[];
+  /** Fill patterns referenced by "pattern:<id>" fills, keyed by id. Usually absent. */
+  patterns?: Record<string, FillPattern>;
+}
+
+/**
+ * A repeating two-colour bitmap tile (e.g. a 1-bit dither), tiled from the
+ * origin of the coordinate system of the element that uses it.
+ */
+export interface FillPattern {
+  /** Tile rows, top first, all the same length: "1" = ink pixel, anything else = paper. */
+  rows: string[];
+  /** CSS colour of ink pixels. */
+  ink: string;
+  /** CSS colour of paper pixels. */
+  paper: string;
+  /** Size of one tile pixel, in the units of the element that uses the pattern. */
+  pixelWidth: number;
+  pixelHeight: number;
 }
 
 /** A parsed file: one or more scenes (slides) plus informational metadata. */

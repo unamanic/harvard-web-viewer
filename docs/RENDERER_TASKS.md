@@ -162,26 +162,32 @@ The current `Scene` has only text, rect and line. Extend
   file set, else the built-in copy; an empty or missing palette also falls
   back to the built-in copy.
 
-### 6b. Display modes (CGA, EGA, VGA)
+### 6b. Display modes (EGA, VGA, monochrome)
 
-Harvard Graphics 3 ran on CGA, EGA and VGA screens, and its palettes were
-made for them (16COLOR, 8COLOR and MONOCHR among the samples). The viewer
-lets the user pick the display it imitates; the choice only changes how
-palette RGB values become screen colours, applied after task 6.
+Harvard Graphics 3 supported EGA (640 × 350, 16 of 64 colours), EGA
+Monochrome (640 × 350), VGA (640 × 480, 16 colours) and, from 3.05,
+Hercules (720 × 348). It never supported CGA; a 256-colour VGA driver was
+planned but not shipped. (Research from the 3.0 and 3.05 installer scripts
+and SPC's hardware requirements; see formats.md.) The viewer lets the user
+pick the display it imitates; the choice only changes how palette RGB values
+become screen colours, applied after task 6.
 
 | Mode | Colours | Rule |
 | --- | --- | --- |
-| VGA (default) | 262,144 | Stored RGB, rounded to the VGA DAC's 6 bits per channel |
-| EGA | 16 at once, chosen from 64 | Each role maps to the nearest of the 64 EGA colours (2 bits per channel); if a palette uses more than 16 distinct colours, keep the 16 most used. (Record 1555 was checked and is not a display mapping; see formats.md.) |
-| CGA | 2 (640 × 200 mono) | Each role becomes black or white by brightness, matching the MONOCHRB/MONOCHRW palettes |
+| VGA (default) | 16 at once | Stored RGB, rounded to the VGA DAC's 6 bits per channel |
+| EGA | 16 at once, chosen from 64 | Each role maps to the nearest of the 64 EGA colours (2 bits per channel); if a scene uses more than 16, keep the 16 most used |
+| Monochrome screen (EGA Mono / Hercules), imitation | 2 | Text and lines always in the foreground colour; fills as ordered-dither patterns by brightness. How the program itself drew colour charts on these displays is unknown \[I\] |
 | Modern | Full 24-bit | Stored RGB unchanged |
 
-- **Build:** `DisplayMode` type, a `toScreenColor(rgb, mode)` function and a
-  selector in the viewer. The mode is remembered per browser.
-- **Later, optional:** also imitate the mode's resolution (render to a
-  640 × 350 or 640 × 200 canvas and scale up with square pixels turned off).
-- **Done when:** switching modes recolours the open chart without
-  re-parsing.
+The MONOCHRB and MONOCHRW palettes are greyscale palettes a chart author
+picks (black or white background), not a screen mapping. Task 6c adds them
+as an option.
+
+### 6c. Greyscale palette option
+
+Draw a chart with the program's own MONOCHRW.PL3 or MONOCHRB.PL3 in place of
+its palette (role for role), as a 1991 user would by changing palettes. Falls
+back to the current palette when the files are missing.
 
 ### 7. Font resolution and look-alikes
 

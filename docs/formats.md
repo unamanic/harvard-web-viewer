@@ -186,6 +186,14 @@ Add entries as `- finding (sample file checked, task number)`.
   Corrections: pie titles are keyed by column; 914 has stored tree links
   and the order rule was wrong; 1108 is one entry per row; 1208/1214 are
   page-percentage columns and row bands; 1212 is a value-range colour table.
+- Displays (research from the 3.0 and 3.05 installer scripts and SPC's
+  1991 hardware requirements; no driver code examined): EGA, EGA
+  Monochrome and VGA in 3.0; Hercules added by 3.05; no CGA, MCGA, 8514/A
+  or SVGA; a 256-colour VGA driver was planned but not shipped. The
+  Projector supports the same displays. How colour charts were drawn on
+  the monochrome drivers is undocumented. MONOCHRB/MONOCHRW are greyscale
+  palettes (13 and 16 greys) for authors to pick, not a screen mapping.
+  The sample set has no .SC3/.CLR/.B&W files. (CGA research)
 
 ### Samples
 

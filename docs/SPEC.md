@@ -55,7 +55,7 @@ The Projector (HG3SHOW) plays a screen show: it opens a show file, then displays
 | \*.PCX, \*.PCC | ZSoft PCX bitmaps used as backgrounds, patterns and logos | Yes, if referenced |
 | \*.WAV, \*.MID | Sounds a show can play | Optional |
 | \*.SY3 | Symbol libraries for the editor | Not needed for playback (symbols are copied into charts) \[I\] |
-| \*.SC3, \*.CLR, \*.B&W, \*.IN3 | Screen drivers, screen colour setups, input-device drivers for DOS | No |
+| \*.SC3, \*.CLR, \*.B&W, \*.IN3 | Screen drivers (EGA, EGA Monochrome, VGA, VGA ScreenShow, and Hercules from 3.05; no CGA), per-resolution screen colour setups for the program's interface (640X350.CLR, 640X350.B&W, 640X480.CLR, 720X348.B&W; likely icon artwork), input-device drivers for DOS | No |
 | HG3SHOW.CF3 | Plain-text settings (work, font and data directories, memory use) | No; a viewer can take paths from its own settings |
 | HG3.ERR | Message text for errors | No; see section 7 for the error cases |
 

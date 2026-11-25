@@ -133,4 +133,77 @@ describe("SceneRenderer", () => {
     );
     expect(clickable).toContain('data-button="Next" style="cursor:pointer"');
   });
+
+  it("emits no <defs> when the scene has no patterns", () => {
+    expect(html).not.toContain("<defs>");
+    expect(html).not.toContain("<pattern");
+  });
+
+  it("emits pattern defs and resolves pattern fills to them", () => {
+    const patterned: Scene = {
+      viewBox: LANDSCAPE_VIEW_BOX,
+      background: "#000000",
+      patterns: {
+        "mono-4": { rows: ["10", "01"], ink: "#ffffff", paper: "#000000", pixelWidth: 5, pixelHeight: 10 },
+      },
+      elements: [
+        { kind: "rect", x: 0, y: 0, width: 100, height: 100, fill: "pattern:mono-4", stroke: "#ffffff" },
+        { kind: "rect", x: 0, y: 0, width: 100, height: 100, fill: "pattern:missing", stroke: null },
+      ],
+    };
+    const out = renderToStaticMarkup(<SceneRenderer scene={patterned} />);
+    const id = /<pattern id="([^"]+)"/.exec(out)?.[1];
+    expect(id).toMatch(/^p[A-Za-z0-9_-]*-mono-4$/);
+    expect(out).toContain(
+      `<pattern id="${id}" patternUnits="userSpaceOnUse" width="10" height="20" shape-rendering="crispEdges">` +
+        '<rect width="10" height="20" fill="#000000"></rect>' +
+        '<rect x="0" y="0" width="5" height="10" fill="#ffffff"></rect>' +
+        '<rect x="5" y="10" width="5" height="10" fill="#ffffff"></rect></pattern>',
+    );
+    expect(out).toContain(`fill="url(#${id})" stroke="#ffffff"`);
+    // An unknown pattern paints nothing rather than an invalid reference.
+    expect(out).toContain('<rect x="0" y="0" width="100" height="100" fill="none" stroke="none">');
+  });
+
+  it("gives each rendered scene its own pattern ids", () => {
+    const patterned: Scene = {
+      viewBox: LANDSCAPE_VIEW_BOX,
+      background: "#000000",
+      patterns: { a: { rows: ["1"], ink: "#fff", paper: "#000", pixelWidth: 1, pixelHeight: 1 } },
+      elements: [{ kind: "rect", x: 0, y: 0, width: 1, height: 1, fill: "pattern:a", stroke: null }],
+    };
+    const out = renderToStaticMarkup(
+      <>
+        <SceneRenderer scene={patterned} />
+        <SceneRenderer scene={patterned} />
+      </>,
+    );
+    const ids = [...out.matchAll(/<pattern id="([^"]+)"/g)].map((m) => m[1]);
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).not.toBe(ids[1]);
+  });
+
+  it("paints text halos under the glyphs", () => {
+    const haloScene: Scene = {
+      viewBox: LANDSCAPE_VIEW_BOX,
+      background: "#000000",
+      elements: [
+        {
+          kind: "text", x: 0, y: 0, text: "Hi", size: 100, fill: "#ffffff", fontFamily: "sans-serif",
+          fontWeight: 400, italic: false, anchor: "start", halo: { color: "#000000", width: 7 },
+        },
+        { kind: "glyphs", d: "M0 0l10 0z", text: "A", advance: 1, em: 1000, fill: "#ffffff", stroke: null, halo: { color: "#000000", width: 5 } },
+        { kind: "glyphs", d: "M0 0l10 0", text: "s", advance: 1, em: 1000, fill: null, stroke: "#ffffff", strokeWidth: 40, halo: { color: "#000000", width: 5 } },
+      ],
+    };
+    const out = renderToStaticMarkup(<SceneRenderer scene={haloScene} />);
+    expect(out).toContain('stroke="#000000" stroke-width="14" stroke-linejoin="round" paint-order="stroke"');
+    // Outline glyphs: halo path (filled and stroked) before the glyph path.
+    expect(out).toContain(
+      '<g><path d="M0 0l10 0z" fill="#000000" stroke="#000000" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"></path>' +
+        '<path d="M0 0l10 0z" aria-hidden="true" fill="#ffffff" stroke="none"></path>',
+    );
+    // Stroke glyphs: the halo widens the stroke on both sides.
+    expect(out).toContain('<path d="M0 0l10 0" fill="none" stroke="#000000" stroke-width="50"');
+  });
 });

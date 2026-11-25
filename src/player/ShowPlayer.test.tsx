@@ -38,7 +38,7 @@ describe("ShowPlayer", () => {
   });
 
   it("applies the display mode and draws the first slide alone in a transition stage", () => {
-    const html = renderToStaticMarkup(<ShowPlayer presentation={presentation} displayMode="cga" transitionMode="demo" />);
+    const html = renderToStaticMarkup(<ShowPlayer presentation={presentation} displayMode="mono" transitionMode="demo" />);
     expect(html).toContain('class="transition-stage"');
     expect(html.match(/class="transition-layer/g)).toHaveLength(1);
     expect(html).toContain("transition-current");
