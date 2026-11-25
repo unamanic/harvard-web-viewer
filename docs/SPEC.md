@@ -333,7 +333,7 @@ Charts of type XY, pie, organization, title, bullet and table store their **data
 | 804 | 10 | Title area, same layout | I |
 | 806 | 10 | Chart (plot) area, same layout | I |
 | 808 | 10 | Footnote area, same layout | I |
-| 810 | 10 | Legend area, same layout | I |
+| 810 | 10 | Legend area, same layout; all zero when the legend is off (C by test pair, see 5.4) | I |
 | 816 | 10 | u8 orientation (1 landscape, 2 portrait), u8 paper size (index into the paper size list, 1 = Letter 8.5 × 11 in, 14 = screen 10 × 7.5 in), f32 page width in inches, f32 page height in inches | C |
 | 820 | 12 | 12 colour role numbers for chart parts, e.g. 02 02 02 12 01 01 12 12 12 0F 0F 0F \[?\] | ? |
 | 822 | 19 | Chart options \[?\] | ? |
@@ -395,28 +395,182 @@ A viewer should draw each 800 line with the colour, size, justification and font
 
 ### 5.4 Data records by chart type
 
-**Pie (type 0x15).** Up to 6 pies. \[C for the layout of 1316, I otherwise\] In every sample the drawn copy's slice angles are exactly value / total × 360°, starting at 0° counter-clockwise. \[C\]
+**Pie (type 0x15).** Up to 6 pies; records 1310 to 1314 are always stored for all six. Every C below is confirmed by a test pair made in Harvard Graphics 3.05: a base pie (PBASE.CH3: title Test, slices Alpha 40, Beta 30, Gamma 20, Delta 10) and a copy with one setting changed (file names in brackets, see 7.3). Yes/No bytes are 1 = Yes, 2 = No throughout. Strings are NUL-terminated; bytes after the NUL can hold leftovers of older text and must be ignored. \[C\] In every sample the drawn copy's slice angles are exactly value / total × 360°, from the starting angle counter-clockwise. \[C\]
 
 | Tag | Size | Meaning |
 | --- | --- | --- |
-| 1304 | 7 | Pie chart options: byte 1 is 1 for 3-D pies, 2 for flat; byte 3 is 1 for proportional pies (radius scaled by √total) \[I\]; the rest \[?\] |
-| 1306 | 6 | Colour roles for chart parts, e.g. 02 02 0C 02 0E 14 \[?\] |
-| 1310 | 18 | One per pie: u8 pie number, then options; byte 2 is 2 for a pie drawn as a stacked column \[I\]; f32 30.0 at offset 5 and f32 100.0 at offset 13 in every sample \[?\] |
-| 1312 | 31 | One per pie: u8 pie number, then options \[?\] |
-| 1314 | 43 | One per pie: u8 pie number, then options; contains f64 1.0 \[?\] |
-| 1316 | 32 | One per slice: u8 pie number, u8 slice number, u8 explode code (1 = exploded slice, 2 = not; matches the drawn offset in every sample) \[C\], u8 colour role (21 = Series1 for the first slice, then 22 and so on), u8 \[?\], f32 value, padded string\[23\] slice label |
+| 1304 | 7 | Pie style (Options > Style), one per chart; bytes below \[C\] |
+| 1306 | 6 | Legend options (Options > Legend), one per chart; bytes below \[C for bytes 0 and 2\] |
+| 1308 | 320 | Text style table (5.3) |
+| 1310 | 18 | One per pie (pie 0 to 5): pie options (Options > Pie options); bytes below \[C\] |
+| 1312 | 31 | One per pie: slice percent options (Options > Slice percents); bytes below \[C\] |
+| 1314 | 43 | One per pie: slice value options (Options > Slice values); bytes below \[C\] |
+| 1316 | 32 | One per slice, in data order: u8 pie number, u8 slice number, u8 cut out 1/2 (PCUT2), u8 colour role (21 = Series1 for the first slice, then 22 and so on), u8 pattern number (the Pattern column, 0 to 11 by default), f32 value, padded string\[23\] label \[C\]. Sorting never reorders these records. \[C\] |
 
-**XY (type 0x01).** Up to 16 series; rows are the X categories. \[C for 1422 and 1424, I otherwise\]
+1304, pie style:
+
+| Offset | Meaning | Values |
+| --- | --- | --- |
+| 0 | Share Pie 1 labels | 1/2, default 2 (PSHARE) \[C\] |
+| 1 | 3D effect | 1/2, default 2 (P3DSE2) \[C\] |
+| 2 | Link pies 1 and 2 | 1/2, default 2 (PLINK) \[C\] |
+| 3 | Proportional pies | 1/2, default 2 (PPROP) \[C\] |
+| 4 | Slice fill style | 1 Color (default), 2 Pattern, 3 Both (PFILLP, PFILLB) \[C\] |
+| 5 | Slice outline colour role | default 32 = Outlines (POUTL) \[C\] |
+| 6 | Link line colour role | default 18 = Lines (PLINKC) \[C\] |
+
+1306, legend:
+
+| Offset | Meaning | Values |
+| --- | --- | --- |
+| 0 | Show legend | 1/2, default 2 (PLEG) \[C\] |
+| 1 | Placement | 1 = Inside, 2 = Outside (the default) \[C in the XY copy 1418 (XLEGPL), I for pies\] |
+| 2 | Location: one of 12 places around the plot area, counted clockwise | 5 = right side, middle (default); 6 = right side, bottom; 7 = bottom, right; 8 = bottom, middle (PLEGL1 to PLEGL3) \[C for 5 to 8, I for the rest\] |
+| 3 | Frame style | 2 = Plain (default) \[I\] |
+| 4 | Frame outline colour role | default 14 = Frame \[I\] |
+| 5 | Frame fill colour role | default 20 = Legend \[I\] |
+
+1310, pie options:
+
+| Offset | Type | Meaning | Values |
+| --- | --- | --- | --- |
+| 0 | u8 | Pie number | 0 to 5 |
+| 1 | u8 | Show pie | 1/2 (PNOPIE) \[C\] |
+| 2 | u8 | Show as | 1 Pie, 2 Column (PCOLUMN) \[C\] |
+| 3 | u8 | Sort slices | 1/2, default 2 (PUNSSRT) \[C\] |
+| 4 | u8 | Slice pointer | 1 None, 2 Short (default), 3 Medium, 4 Long (PPTRN, PPTRL) \[C, 3 by order\] |
+| 5 | f32 | 3D slice depth | default 30 (PDEPTH6) \[C\] |
+| 9 | f32 | Starting angle in degrees | default 0 (PANG45) \[C\] |
+| 13 | f32 | Pie size in percent | default 100 (PSIZE50) \[C\] |
+| 17 | u8 | Show slice labels | 1/2, default 1 (PNOLAB) \[C\] |
+
+1312, slice percents:
+
+| Offset | Type | Meaning | Values |
+| --- | --- | --- | --- |
+| 0 | u8 | Pie number | 0 to 5 |
+| 1 | u8 | Show percents | 1/2, default 2 (PPCT) \[C\] |
+| 2 | u8 | Place percents | 1 Below (default), 2 Adjacent, 3 Inside (PPCTPI) \[C, 2 by analogy with 1314\] |
+| 3 | u16 | Decimal places | default 0 (PPCTD1) \[C\] |
+| 5 | string\[13\] | Leading text | (PPCTL) \[C\] |
+| 18 | string\[13\] | Trailing text | (PPCTT) \[C\] |
+
+1314, slice values:
+
+| Offset | Type | Meaning | Values |
+| --- | --- | --- | --- |
+| 0 | u8 | Pie number | 0 to 5 |
+| 1 | u8 | Show values | 1/2, default 1 (PVALNO) \[C\] |
+| 2 | u8 | Place values | 1 Below (default), 2 Adjacent, 3 Inside (PVALADJ, PVALIN) \[C\] |
+| 3 | u8 | Currency | 1/2, default 2 (PVCURR) \[C\] |
+| 4 | f32 | Decimal places; NaN (bytes 00 00 F0 FF) = blank, which means automatic | (PVDEC2) \[C\] |
+| 8 | u8 | Thousands separator | 1/2, default 2 (PVTHOU) \[C\] |
+| 9 | f64 | Scale factor | default 1 (PVSCALE) \[C\] |
+| 17 | string\[13\] | Leading text | (PVLEAD) \[C\] |
+| 30 | string\[13\] | Trailing text | (PVTRAIL) \[C\] |
+
+**XY (type 0x01).** Up to 16 series; rows are the X categories. Every C below is confirmed by a test pair made in Harvard Graphics 3.05: a base bar chart (XBASE.CH3: title Test, X labels Jan, Feb, Mar, Series 1 = 10, 20, 30 and Series 2 = 5, 15, 25) and a copy with one setting changed (file names in brackets, see 7.3). Yes/No bytes are 1 = Yes, 2 = No, as for pies. An f64 of 00 00 00 00 00 00 F0 FF (NaN) means blank, so Harvard Graphics picks the value itself. Strings are NUL-terminated, and bytes after the NUL can hold leftovers of older text and must be ignored. \[C\]
 
 | Tag | Size | Meaning |
 | --- | --- | --- |
-| 1402 | 102 | One per axis (0 = X, 1 = Y1, 2 = Y2): u8 number, then f64 fields at offsets 2, 10, 18, 29, 37, 45, 53 and 66, almost all "not set". Offset 10 on Y1 is the axis minimum and offset 29 on X the label step (every nth row), both confirmed by the drawn copies; offset 18 is likely the maximum \[I\]. Byte 1 is the scale: 1 linear, 2 logarithmic (GALD481's Y1, drawn over whole decades) \[I\] |
-| 1404, 1410, 1414, 1418 | 3 to 6 | Chart-wide options. 1410 byte 0 = 2: a data table under the chart (series names and values in a grid); byte 2 = 1: values printed at the bar ends. 1414 byte 0 = 13: a numeric X axis (rows placed by the value of their X label). 1418 byte 1 = 2: the legend and data table list layered series (stacked bars, areas) bottom-up. All matched against the drawn copies \[I\]; 1404 and the other bytes \[?\] |
+| 1402 | 102 | Axis options and label format, three records: axis 0 = X, 1 = Y1, 2 = Y2; bytes below \[C\] |
+| 1404 | 3 | Axis frame (Options > Axis frame): u8 frame style (1 = Full, the default; 2 = the next choice) (XFRST), u8 outline colour role (14 = Frame) (XFROC), u8 fill colour role (15 = FrameBkg) (XFRFC) \[C\] |
+| 1405 | 1 | Show frame fill colour, Yes/No (XFRSHF) \[C\] |
+| 1406 | 15 | One per series (0 to 15): series options; bytes below \[C\] |
+| 1408 | 25 | Chart style (Options > Style); bytes below \[C\] |
+| 1410 | 3 | Data table and data labels; bytes below \[C\] |
+| 1412 | 256 | Text style table (5.3) |
+| 1414 | 4 | Byte 0 = 13: a numeric X axis, rows placed by the value of their X label \[I, matched against the samples' drawn copies\]. 01 82 00 00 in every test chart, and no option tried changed it \[?\] |
+| 1418 | 6 | Legend options, same layout as pie 1306; bytes below \[C\] |
 | 1420 | var | Calculated series: u8, then a string formula such as "@n(#3,5,5)" \[I\]; 2 sample charts |
-| 1406 | 15 | One per series: u8 series number, then style bytes; byte 2 is the series type (1 bar, 2 line, 3 area, confirmed by the drawn shapes; 4, 5, 6 on high, low and close series) \[C for 1 to 3\], byte 3 the Y axis (2 = right-hand axis) \[I\], byte 9 the series colour role (21 to 26, repeating every 6 series) \[C\], byte 10 the line style (1 straight, 2 drawn as a least-squares trend line, 3 a smoothed curve) \[I\], byte 13 the colour lines and points are drawn in (usually the same as byte 9; GALD411 draws its line in byte 13) \[I\], byte 14 a marker or pattern number \[I\]; type 8 is drawn as a curve through the points \[I\]. Bar heights in the drawn copies are proportional to the values (or to row shares for 100% stacked bars) \[C\]. A 1424 value may hold the "not set" f64, meaning a blank cell |
-| 1408 | 25 | Chart style \[I, every field checked against the drawn copies\]: byte 0 bar style (1 cluster, 2 overlap, 3 stacked, 4 100 %, 5 step, 6 paired); byte 1 bar shape (1 bar, 2 pyramid, 3 octagon, 4 cylinder); f32 at 2 bar width (% of the category slot); f32 at 6 overlap (%); byte 10 area style (1 overlap, 2 stacked, 3 100 %); byte 11 high/low style (1 box, 2 band, 3 I bar); byte 12 = 2 3-D; byte 13 = 4 horizontal; f32 at 15 3-D bar depth (% of its depth lane); f32 at 19 3-D depth (% of the frame height); bytes 23, 24 (0x12, 0x20) \[?\] |
-| 1422 | 25 | One per row: u16 row number, padded string\[23\] X label |
-| 1424 | 11 | One per data value: u8 series number, u16 row number, f64 value. A missing record means no value at that point. |
+| 1426 | 33 | One per row in charts saved by 3.05: u16 row number, string\[31\] X label \[C\]. Older sample files store the same thing as 1422, 25 bytes: u16 row number, padded string\[23\] \[C\] |
+| 1424 | 11 | One per data value: u8 series number, u16 row number, f64 value. A missing record means no value at that point, and a value holding the NaN f64 is a blank cell \[C\] |
+
+1402, axis options (Options > Axis options) and label format (Options > Format), per axis:
+
+| Offset | Meaning | Values |
+| --- | --- | --- |
+| 0 | Axis | 0 = X, 1 = Y1, 2 = Y2 (XXMAX9, XY2MAX) \[C\] |
+| 1 | Scale type | 1 = Linear, 2 = Log (XLOG) \[C\]; GALD481's log Y1 is drawn over whole decades \[I\] |
+| 2 | f64 scale factor | NaN = blank (XSCALE) \[C\] |
+| 10 | f64 minimum axis value | NaN = automatic (XMIN5) \[C\] |
+| 18 | f64 maximum axis value | NaN = automatic (XMAX50, XXMAX9, XY2MAX) \[C\] |
+| 26 | Grid line style | 1 = Dotted, 2 = Solid (XGRIDS), 3 = None (XGRIDN); default X = 3, Y1 and Y2 = 1 \[C\] |
+| 27 | Major tick mark style | 1 = In (XMAJIN), 2 = Out (XMAJOUT), 3 = Both (XMAJBOT), 4 = None (the default) \[C\] |
+| 28 | Minor tick mark style | Same values (XMINBOT) \[C\] |
+| 29 | f64 major tick increment | NaN = automatic (XMAJI10) \[C\]; on the X axis the samples' drawn copies use it as the label step, every nth row \[I\] |
+| 37 | f64 minor tick increment | NaN = automatic (XMINI2) \[C\] |
+| 45 | f64 goal range minimum | NaN = none (XGOALMN); Y axes only, the X column shows a dash \[C\] |
+| 53 | f64 goal range maximum | NaN = none (XGOALMX) \[C\] |
+| 61 | Goal range colour role | 27 = GoalY1, 28 = GoalY2, 29 = Draw1 and so on (XGOALC); the X record holds 28 but has no goal range \[C\] |
+| 62 | Show axis labels | Yes/No (XLBLNO) \[C\] |
+| 63 | Percent | Yes/No (XPCT) \[C\] |
+| 64 | Currency | Yes/No (XCUR) \[C\] |
+| 65 | Scientific notation | Yes/No (XSCI) \[C\] |
+| 66 | f64 decimal places | NaN = automatic (XDEC2) \[C\] |
+| 74 | Thousands separator | Yes/No, default Yes (XTHOUN) \[C\] |
+| 75 | string\[13\] leading text | (XLEAD) \[C\] |
+| 88 | string\[13\] trailing text | (XTRAIL) \[C\] |
+| 101 | Unused | 0 \[?\] |
+
+1406, series options (Options > Series), one per series:
+
+| Offset | Meaning | Values |
+| --- | --- | --- |
+| 0 | Series | 0 to 15 \[C\] |
+| 1 | Show series | Yes/No (XS6SH) \[C\] |
+| 2 | Show as | 1 = Bar, 2 = Line (XS6AS) \[C\]; 3 = Area \[C, from the samples' drawn shapes\]; 4 = High, 5 = Low, 6 = Close, 7 = Open, 8 = Point in the order the menu lists them \[I\]. The samples draw type 8 as a curve through the points \[I\] |
+| 3 | Y axis | 1 = Y1, 2 = Y2 (XS6Y2) \[C\] |
+| 4 | Cumulative | Yes/No, default No (XS6CU) \[C\] |
+| 5 | Data labels | Yes/No, default Yes; shown only when 1410 byte 2 is Yes \[C for the byte (XS6DL), I for the rule\] |
+| 6 | Data table | Yes/No, default Yes (XS6DT) \[C\] |
+| 7 | Fill style | 1 = Color, 2 = the next choice (XS6FS) \[C\] |
+| 8 | Fill pattern | The number the menu shows minus 1, so 0 to 11 for series 1 to 12 (XS6FP) \[C\] |
+| 9 | Fill colour role | 21 = Series1 for series 0, then 22 and so on, repeating every 6 series (XS6FC) \[C\] |
+| 10 | Line fit | 1 = Normal, 2 = the next choice (XS6LF) \[C\]; the samples draw 2 as a least-squares trend line and 3 as a smoothed curve \[I\] |
+| 11 | Line style | 1 = solid, 2 = the next style (XS6LS) \[C\] |
+| 12 | Line width | As shown, default 0 (XS6LW) \[C\] |
+| 13 | Line colour role | Same roles as the fill colour (XS6LC) \[C\]; lines and points are drawn in this colour, which is usually the same as byte 9 (GALD411 differs) \[I\] |
+| 14 | Marker style | As shown: 1 to 13, then repeating from 1 (XS6MK) \[C\] |
+
+Bar heights in the samples' drawn copies are proportional to the values, or to row shares for 100 % stacked bars. \[C\]
+
+1408, chart style (Options > Style):
+
+| Offset | Meaning | Values |
+| --- | --- | --- |
+| 0 | Bar style | 1 = Cluster (the default), 2 = Overlap (XSBSTY) \[C\]; 3 = Stacked, 4 = 100 %, 5 = Step, 6 = Paired \[I, from the samples' drawn copies\] |
+| 1 | Bar shape | 1 = Rectangle (the default), 2 = Pyramid (XSBSHP) \[C\]; 3 = Octagon, 4 = Cylinder \[I, from the samples\] |
+| 2 | f32 bar width | Percent of the category slot, 85 by default (XSBW60) \[C\] |
+| 6 | f32 bar overlap | Percent, 50 by default (XSBO30) \[C\] |
+| 10 | Area style | 2 = Stack (the default), 3 = 100 % (XSAREA) \[C\]; 1 = Overlap \[I, from the samples\] |
+| 11 | High/Low style | 1 = Bar (the default), 2 = the next choice (XSHILO) \[C\]; the samples draw 1 as a box, 2 as a band and 3 as an I bar \[I\] |
+| 12 | Chart style | 1 = 2D, 2 = 3D (XS3D) \[C\] |
+| 13 | 2D style | 1 = Normal, 2 = the next choice (XS2DST) \[C\]; 4 = horizontal bars \[I, from the samples\] |
+| 14 | 3D style | 1 = Normal, 2 = the next choice (XS3DST) \[C\] |
+| 15 | f32 3D object depth | 40 by default (XSOD60) \[C\]; percent of the bar's depth lane \[I\] |
+| 19 | f32 3D floor depth | 20 by default (XSFD30) \[C\]; percent of the frame height \[I\] |
+| 23 | Link line colour role | 18 = Lines (XSLINK) \[C\] |
+| 24 | Outline colour role | 32 = Outlines (XSOUT) \[C\] |
+
+1410, data table and data labels (Options > Data table/labels):
+
+| Offset | Meaning | Values |
+| --- | --- | --- |
+| 0 | Show data table | 1 = No, 2 = With chart, 3 = Table only (XDTAB, XDTONLY); Table only empties the legend area 810 \[C\]. With 2 the samples draw series names and values in a grid under the chart \[I\] |
+| 1 | Table grid lines | 1 = Vertical, 2 = Horizontal (XDTGRID) \[C\]; 3 = Both, 4 = None in menu order \[I\] |
+| 2 | Show data labels | Yes/No, default No (XDLBL) \[C\]; the samples print values at the bar ends \[I\] |
+
+1418, legend options (Options > Legend), the same bytes as pie 1306:
+
+| Offset | Meaning | Values |
+| --- | --- | --- |
+| 0 | Show legend | Yes/No, default Yes; No zeroes area 810 and widens the plot area 806 (XLEGNO) \[C\] |
+| 1 | Placement | 1 = Inside, 2 = Outside (the default) (XLEGPL) \[C\]. An earlier reading of the samples tied 2 to legends that list layered series bottom-up; since 2 is the default, that order must come from elsewhere \[?\] |
+| 2 | Location | 1 to 12 clockwise, 5 = right middle (the default), 6 = right bottom (XLEGFR) \[C\] |
+| 3 | Legend frame style | 2 = Plain (the default), 1 = the choice before it (XLEGOC) \[C\] |
+| 4 | Frame outline colour role | 14 = Frame (XLEGOC) \[C\] |
+| 5 | Frame fill colour role | 20 = Legend (XLEGFC) \[C\] |
 
 **Organization (type 0x1A).** \[I\]
 
@@ -437,14 +591,30 @@ The tree is given by the stored links in each 914 record. (An earlier reading, "
 
 ### 5.5 Drawing a data chart
 
-The original lays out data charts itself; the stored areas (5.2) tell a viewer where each part goes. Until reference renders are compared, use this method: \[I for everything in 5.5\]
+**Parts of the drawn copy.** The drawn copy (5.1) is one 608 group in the object layer. The first flag byte of each object in it names the chart part: 2 = titles, 3 = plot, 4 = footnote, 5 = legend; their bounding boxes match the areas 804 to 810. Objects the user drew themselves have first flag byte 0, and text charts use flag bytes 1 to 4 for their own parts \[I\]. Every option change tried in 5.4 changed the drawn copy the way the chart looks on screen. \[C, by test pair\]
+
+How the stored pie is built, for checking a viewer's own drawing against the original \[C, by the test pair named\]:
+
+- One 0x1031 arc per slice, all with the same centre and radius. The first slice starts at the starting angle (1310) and the slices go counter-clockwise; each sweep is the slice's share of 3600 tenths of a degree. Angles are not wrapped: with a 45° start the last slice ends at 4050 (PANG45).
+- Unsorted pies draw slices in data order. Sorted pies draw the largest first; each slice keeps its own colour (PUNSSRT).
+- Pie size is a percentage of area, not radius: at 50 the radius is the full radius × √0.5 (PSIZE50).
+- A cut slice is moved out along its middle angle by half the radius, and the whole pie shrinks to 70% of its radius to make room (PCUT2, one test).
+- 3D: the pie becomes an ellipse with height 0.6 × width, the edge is 0.15 × the width radius deep at depth 30, and the sides (0x1061 polygons and 0x1041 bands) are drawn back to front before the top arcs (P3DSE2, one test).
+- Each slice label is one text block holding the label, a line feed and the value, with an 0x1050 leader line from the rim; slice pointer Long adds a horizontal second segment, None removes the line. With slice labels off, only the value remains (PPTRL, PPTRN, PNOLAB).
+- Show as Column draws the slices as stacked 0x1071 boxes, bottom to top in data order, each as tall as its share (PCOLUMN).
+- Fill style Pattern or Both turns the arcs into 0x1032 with a 0x112E attribute holding the pattern number and a 0x110C attribute holding a pattern colour (PFILLP, PFILLB) \[C for what changes, I for the attribute meanings\].
+- With the legend on, the plot area (806) shrinks to make room and the legend area (810) holds the legend box; with it off, 810 is all zero (PLEG, PLEGL1 to PLEGL3).
+
+How the stored XY chart is built \[C, by the test pairs named in 5.4\]: the plot object (flag byte 3) holds one 0x1071 box per bar, 0x1050 polylines for the axes, grid lines and tick marks, and 0x10B0 text blocks for the tick labels and X names. Every XY option tried changed this geometry as on screen: no grid lines (XGRIDN) and no axis labels (XLBLNO) shrink it, a log scale (XLOG) redraws the ticks, 3D (XS3D) adds 0x1061 polygons for the bar sides and the floor, and a series shown as a line (XS6AS) replaces its three boxes with one polyline plus a 0x10A1 record, likely its markers \[I\], and changes its legend key.
+
+The original lays out data charts itself; the stored areas (5.2) tell a viewer where each part goes. For a data chart without a drawn copy, use this method: \[I unless marked\]
 
 1. Fill the page with the background colour (palette role FrameBkg). The page frame area (802) is not drawn as a line in any reference render. If the chart has a button chart forming a band at the top or bottom, the chart is shrunk uniformly into the rest of the page and centred horizontally; the button chart is drawn unscaled on top. \[C, from the reference renders\]
 2. Draw slot 1 text in the title area, centred lines from the top, each line's height taken from its text size.
 3. Draw slot 2 text (footnote) in the footnote area.
 4. Draw the chart in the plot area:
-   - **Pie:** add up the slice values of each pie; each slice's angle is its share of 360°. Start at 0° (3 o'clock) and go counter-clockwise, which matches the angle convention of drawn arcs (5.6). Fill each slice with its colour role, outline it with role Outlines, and place the label outside the slice on the line from the centre through the middle of the slice, with the value or percentage if the options ask for it. Several pies are spaced evenly across the plot area, each titled with its slot 5 text.
-   - **XY:** work out each axis range from the data where 1402 says "not set", choosing round tick intervals. Draw the frame, grid and tick labels (X labels from 1422, Y labels from the range). Draw each series by its type: bars side by side in each category (Cluster), stacked, or overlapping; lines through the points; areas filled down to the axis; points as markers. Use the series colour roles from 1406 and the series names (slot 4) in the legend area.
+   - **Pie:** add up the slice values of each pie; each slice's angle is its share of 360°. Start at the pie's starting angle (1310, default 0° = 3 o'clock) and go counter-clockwise \[C\], which matches the angle convention of drawn arcs (5.6). Fill each slice with its colour role, outline it with role Outlines, and place the label outside the slice on the line from the centre through the middle of the slice, with the value or percentage if the options ask for it. Several pies are spaced evenly across the plot area, each titled with its slot 5 text.
+   - **XY:** work out each axis range from the data where 1402 says "not set", choosing round tick intervals. Draw the frame, grid and tick labels (X labels from 1426 or 1422, Y labels from the range). Draw each series by its type: bars side by side in each category (Cluster), stacked, or overlapping; lines through the points; areas filled down to the axis; points as markers. Use the series colour roles from 1406 and the series names (slot 4) in the legend area.
    - **Organization:** draw one box per 914 record, top level at the top, children spread evenly below their parent, connected by lines (role Lines); write name, title and comment in the box.
    - **Title, bullet:** stack the lines vertically in the plot area with their own sizes and justification; bullets get a marker (role Bullet) before each line.
    - **Table:** draw a grid in the plot area with columns and rows as stored, and write each cell's text.
@@ -474,7 +644,7 @@ This was checked by recomputing the stored bounding box of many objects from the
 | Offset | Type | Meaning |
 | --- | --- | --- |
 | 0 | 4 × i16 | Bounding box on the page after the transform: x1, y1, x2, y2 |
-| 8 | 8 bytes | Object flags; usually zero, first byte sometimes 1 to 5 \[?\] |
+| 8 | 8 bytes | Object flags; usually zero. In a data chart's drawn copy the first byte names the chart part (5.5) \[C\]; the rest \[?\] |
 | 16 | sub-records | Each: u16 sub-tag, u16 length, data. The list ends with sub-tag 0x1FFF. |
 
 The sub-records are a **display list**, not one shape: attribute sub-records set the current drawing state, and each shape sub-record is drawn with the state at that point. For example 0x112D, 0x1100, 0x110B, 0x1071, 0x110B, 0x1071, 0x10B0 draws two boxes with different fills and then a text block. 427 of the 3,712 sample objects have two or more shapes, 217 have ten or more. \[C\]
@@ -614,8 +784,8 @@ The original program's limits seen in its messages: at most 10 changes of text a
 In rough order of how much they matter to a viewer:
 
 1. **Remaining slide-entry bytes:** 702 offsets 3, 4, 13, 16 and 17 (3 and 4 look like sound options) and 708 bytes 0 and 1. The transition and timing bytes are decoded (4.2, 4.5).
-2. **Data chart layout.** How the original places axes, tick marks, labels, legends, pie slices (start angle, direction, 3-D depth, exploded slices) and organization boxes. Section 5.5 gives a method, not the original's.
-3. **Series types and chart styles** in 1402, 1406, 1408 and the pie option records 1304 to 1314 (bar, line, area, stacked, 3-D, proportional pies and so on).
+2. **Data chart layout.** How the original places axes, tick marks, labels, legends, pie slices (start angle, direction, 3-D depth, exploded slices) and organization boxes. Largely answered for pie and XY charts: the drawn copy holds the original's own layout (5.1, 5.5), and the pie and XY option records are decoded (5.4). Still open: the original's layout for a chart without a drawn copy, and organization charts.
+3. **Series types and chart styles:** decoded by test pairs for pie (1304 to 1316) and XY (1402 to 1418) in 5.4. Still open: XY 1414, and some menu values past the first two choices that are known only from the samples.
 4. **Object attributes** 0x1100 to 0x1140: line width and style, fill kinds, gradients, shadows, patterns.
 5. **Text block** 0x10B0 header fields and text record 800 offsets 6 and 7.
 6. **Text size unit** (6.4).
@@ -627,7 +797,7 @@ In rough order of how much they matter to a viewer:
 
 - **Reference pictures from the original program** for a handful of the sample files (GALD111 in particular, to see where GALBUTN2's button bar sits relative to the chart title): the tutorial charts (PIETUT, XYTUT, ORGTUT, DRAWTUT), a few gallery charts of each type, and GALLERY.SH3 played through. Screenshots taken in DOSBox at 640 × 480 are enough. These would settle chart layout, text size, line widths and fills.
 - **The show editor's slide list for GALB1.SH3 and PLAY\_ALL.SH3**, showing each slide's transition, direction, speed and time. That pins down the 702 fields.
-- **Pairs of files that differ in one setting**, made in Harvard Graphics 3 (for example the same pie with the start angle changed, or the same slide with only the transition changed). These are the fastest way to decode the remaining option bytes.
+- **Pairs of files that differ in one setting**, made in Harvard Graphics 3 (for example the same pie with the start angle changed, or the same slide with only the transition changed). These are the fastest way to decode the remaining option bytes. Done for transitions, timing, pie and XY options: the test files are in samples/option-tests. Still needed for organization charts.
 - The Harvard Graphics 3 user manual, if available, for the meaning of options and limits.
 
 All of this can be gathered by running the original program in an emulator; nothing more is needed from its code.
