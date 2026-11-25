@@ -178,6 +178,14 @@ Add entries as `- finding (sample file checked, task number)`.
   8995 to 12041. Either the original draws the bar under the chart, or
   shows these charts smaller below it. Needs a screenshot of GALD111 from
   the original program (SPEC §7.3). (task 20)
+- Chart data (all 171 data charts, task 11; SPEC.md §5.3–5.4 updated):
+  parsed with no warnings and checked against the drawn copies. Pie
+  slices sweep exactly value / total × 360° (76 of 76) and the explode code
+  matches; bar heights are proportional to values (122 series; 94 more as
+  100% stacked bars); org names, table cells and bullet markers all match.
+  Corrections: pie titles are keyed by column; 914 has stored tree links
+  and the order rule was wrong; 1108 is one entry per row; 1208/1214 are
+  page-percentage columns and row bands; 1212 is a value-range colour table.
 
 ### Samples
 

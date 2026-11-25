@@ -367,7 +367,7 @@ Text slots: \[C for which chart types use them, I for the names\]
 | 2 | Pie, organization | Footnote |
 | 3 | XY | Axis titles |
 | 4 | XY | Series names, one line per series (the row number is the series number); used in the legend |
-| 5 | Pie | Title of each pie (row = pie number) |
+| 5 | Pie | Title of each pie (the column is the pie number; the row is 0) \[C, GALD291\] |
 | 6 | Table | Cell text (row, column) |
 | 7 | Title chart | The title chart's lines, top to bottom |
 | 8 | Bullet | The bullet list's lines, in order |
@@ -389,25 +389,25 @@ A viewer should draw each 800 line with the colour, size, justification and font
 
 ### 5.4 Data records by chart type
 
-**Pie (type 0x15).** Up to 6 pies. \[C for the layout of 1316, I otherwise\]
+**Pie (type 0x15).** Up to 6 pies. \[C for the layout of 1316, I otherwise\] In every sample the drawn copy's slice angles are exactly value / total × 360°, starting at 0° counter-clockwise. \[C\]
 
 | Tag | Size | Meaning |
 | --- | --- | --- |
-| 1304 | 7 | Pie chart options \[?\] |
+| 1304 | 7 | Pie chart options: byte 1 is 1 for 3-D pies, 2 for flat; byte 3 is 1 for proportional pies (radius scaled by √total) \[I\]; the rest \[?\] |
 | 1306 | 6 | Colour roles for chart parts, e.g. 02 02 0C 02 0E 14 \[?\] |
-| 1310 | 18 | One per pie: u8 pie number, then options; contains f32 30.0 and f32 100.0 (likely size and a percentage) \[?\] |
+| 1310 | 18 | One per pie: u8 pie number, then options; byte 2 is 2 for a pie drawn as a stacked column \[I\]; f32 30.0 at offset 5 and f32 100.0 at offset 13 in every sample \[?\] |
 | 1312 | 31 | One per pie: u8 pie number, then options \[?\] |
 | 1314 | 43 | One per pie: u8 pie number, then options; contains f64 1.0 \[?\] |
-| 1316 | 32 | One per slice: u8 pie number, u8 slice number, u8 \[?\], u8 colour role (21 = Series1 for the first slice, then 22 and so on), u8 \[?\], f32 value, padded string\[23\] slice label |
+| 1316 | 32 | One per slice: u8 pie number, u8 slice number, u8 explode code (1 = exploded slice, 2 = not; matches the drawn offset in every sample) \[C\], u8 colour role (21 = Series1 for the first slice, then 22 and so on), u8 \[?\], f32 value, padded string\[23\] slice label |
 
 **XY (type 0x01).** Up to 16 series; rows are the X categories. \[C for 1422 and 1424, I otherwise\]
 
 | Tag | Size | Meaning |
 | --- | --- | --- |
-| 1402 | 102 | One per series or axis: u8 number, then axis settings; holds several f64 "not set" values (axis minimum, maximum, increment chosen automatically) \[I\] |
+| 1402 | 102 | One per axis (0 = X, 1 = Y1, 2 = Y2): u8 number, then f64 fields at offsets 2, 10, 18, 29, 37, 45, 53 and 66, almost all "not set". Offset 10 on Y1 is the axis minimum and offset 29 on X the label step (every nth row), both confirmed by the drawn copies; offset 18 is likely the maximum \[I\] |
 | 1404, 1410, 1414, 1418 | 3 to 6 | Chart-wide options \[?\] |
-| 1420 | ? | Present in 2 sample XY charts only \[?\] |
-| 1406 | 15 | One per series: u8 series number, then style bytes; byte 9 and byte 13 are the series colour role (21 to 26, repeating every 6 series) \[C\], byte 14 a marker or pattern number \[I\]. The series type (bar, line, area, point) is among bytes 1 to 7 \[?\] |
+| 1420 | var | Calculated series: u8, then a string formula such as "@n(#3,5,5)" \[I\]; 2 sample charts |
+| 1406 | 15 | One per series: u8 series number, then style bytes; byte 2 is the series type (1 bar, 2 line, 3 area, confirmed by the drawn shapes; 4, 5, 6 on high, low and close series) \[C for 1 to 3\], byte 3 the Y axis (2 = right-hand axis) \[I\], byte 9 the series colour role (21 to 26, repeating every 6 series) \[C\], byte 13 usually the same colour (it differs on high/low series, where byte 9 is the drawn one), byte 14 a marker or pattern number \[I\]. Bar heights in the drawn copies are proportional to the values (or to row shares for 100% stacked bars) \[C\]. A 1424 value may hold the "not set" f64, meaning a blank cell |
 | 1408 | 25 | Frame and axis placement, including f32 85.0, 50.0, 40.0, 15.0 \[?\] |
 | 1422 | 25 | One per row: u16 row number, padded string\[23\] X label |
 | 1424 | 11 | One per data value: u8 series number, u16 row number, f64 value. A missing record means no value at that point. |
@@ -418,16 +418,16 @@ A viewer should draw each 800 line with the colour, size, justification and font
 | --- | --- | --- |
 | 900, 902, 904, 910, 912 | 8 to 17 | Chart options: box style, colours, levels to show |
 | 906 | 144 | Text style table |
-| 914 | 190 | One per box (person), in tree order. Starts with a u8 level or relation byte, then several text fields, each a u8 field width (18), padded string\[22\] and the 22-byte text tail of 5.3 (length, colours, size, justification, font key). Fields are name, title and comments. |
+| 914 | 190 | One per box (person), not necessarily in tree order. Byte 0 is always 3. Then three 47-byte fields (name, title, comment), each a u8 field width (18), padded string\[23\], the 22-byte text tail of 5.3 and a u8 0, ending at offset 142. At 142: i16 box centre x, y; subtree x extent; 4 u16 \[?\]; u16 level at 158; u16 number of subordinates at 160; own index at 168; flag + index pairs for parent (170), first child (174), next sibling (178) and previous sibling (182) \[C for the links, which match the drawn copies; I for the rest\] |
 
-The tree is given by the order of 914 records and the level byte: each box is a subordinate of the nearest earlier box one level higher. \[I\]
+The tree is given by the stored links in each 914 record. (An earlier reading, "each box is a subordinate of the nearest earlier box one level higher", disagrees with the links for 30 of 58 sample boxes; records can be in reverse order.) Box centres match the drawn boxes, except that in some charts every box is shifted by one constant, likely a shadow style. \[C\]
 
 **Title (type 0x1F) and bullet (type 0x20).**
 
 - Title charts use only text slot 7 and the style table 1002. \[C\] Their lines fall in three sections starting at rows 0, 4 and 12 (top, middle, bottom), matching the three 1002 entries. \[I\]
-- Bullet charts use slot 8 for lines, 1102 for styles, 1106 (22 bytes, options) and 1108 (8 bytes per line: bullet shape \[I\], colour role 16 = Bullet \[C\], line number \[C\], indent level \[I\]). \[I unless marked\]
+- Bullet charts use slot 8 for lines, 1102 for styles, 1106 (22 bytes: a default 1108 entry in bytes 0 to 3, then options) and 1108: one 192-byte record of 48 four-byte entries, one per row: bullet shape (1 •, 4 ►, 7 "1.", 8 "I.", 9 none; 0 on continuation rows, 100 unused), a byte \[?\] (2), colour role 16 = Bullet, paragraph number counting from 1. \[C for the layout and shapes, from the drawn markers\] No indent level was found.
 
-**Table (type 0x21).** Slot 6 holds the cell text by row and column. 1202 is the style table; 1206, 1210 and 1212 are options; 1208 and 1214 hold f64 values that are likely column widths and row positions \[?\].
+**Table (type 0x21).** Slot 6 holds the cell text by row and column. 1202 is the style table; 1206 and 1210 are options \[?\]. 1208 is 24 column entries of 39 bytes (f64 left, f64 right — not set when unused — u8 justification, u8 \[?\], filler); 1214 is 24 row bands (f64 top, f64 bottom). Both are percentages of the page: x = p/100 × 32768 − 16384, y = H/2 − p/100 × H with H = 32768 × height / width from 816. Drawn cell texts sit in these columns and bands. \[C\] 1212 is a value-range colour table: a 3-byte head (byte 0 = 1 when on), then 10 entries of 40 bytes with f64 low, f64 high and a colour role (33 to 42, Range1 to Range10); each numeric cell's background is the colour of the range holding its value. \[C, GALD181\]
 
 ### 5.5 Drawing a data chart
 
