@@ -89,14 +89,32 @@ export function lineWidthFor(lineStyle: number | undefined): number {
 }
 
 /**
- * Corner radius of a box (0x1070 to 0x1078) whose style is not 1: the
- * stored corner size, in object units (SPEC §5.6 [I]). Style 1 is square
- * even when a corner size is stored (it often is). Styles 5 and 6 "extend
- * beyond the rectangle" and may be shadowed rather than rounded [?]; they
- * are drawn rounded too.
+ * Box styles (0x1070 to 0x1078 u16 style, u16 corner size c; SPEC §5.6),
+ * read from the stored copies' 612 bounding boxes against the rectangle
+ * (task 13d):
+ * - 1 square, even when a corner size is stored (it often is);
+ * - 3 rounded corners of radius c × BOX_CORNER_RADIUS_FACTOR (bbox = rect;
+ *   910 org style 4 is drawn as 0x1070 style 3);
+ * - 5 drop shadow: the bbox reaches c further right and c further down
+ *   (30 single-shape objects, object units through the 616), and 910 org
+ *   style 6 is drawn as style 5 with the shadow outside the box. The copy
+ *   has no separate shadow shape, so its colour is implied: role Shadow
+ *   (19), as for org charts from data; square box and shadow [I];
+ * - 6 3-D box: the bbox reaches c further right and c further UP (39
+ *   single-shape objects); used for the bars of 3-D bar charts (GALD312 to
+ *   374, GALC35, GALC37, GALA1) whose floor and back wall are offset up and
+ *   right the same way. Drawn as the front rectangle with a top and a right
+ *   face c deep, shaded by BOX_3D_TOP_SHADE and BOX_3D_SIDE_SHADE [I];
+ * - 2 (two page frames, bbox = rect): unknown, drawn rounded like 3 [?].
  */
 export const SQUARE_BOX_STYLE = 1;
 export const BOX_CORNER_RADIUS_FACTOR = 1;
+export const SHADOW_BOX_STYLE = 5;
+export const SHADOW_BOX_ROLE = 19;
+export const BOX_3D_STYLE = 6;
+/** Face brightness of a 3-D box, as the 3-D stacked column (PIE_COLUMN_3D_SHADES: front 1, top 0.75, right 0.5) [I]. */
+export const BOX_3D_TOP_SHADE = 0.75;
+export const BOX_3D_SIDE_SHADE = 0.5;
 
 /**
  * Gradient fill 0x1110 (two direct colours and an angle; SPEC §5.6 [I]).
@@ -107,16 +125,26 @@ export const BOX_CORNER_RADIUS_FACTOR = 1;
 export const GRADIENT_AS_FIRST_COLOR = true;
 
 /**
- * Text blocks (0x10B0, SPEC §5.6 [I]): line pitch as a multiple of the text
- * size. The box at header offset 62 is the laid-out text extent; for
- * one-line blocks its height is 1.27 to 1.32 times textSizeToUnits(size)
- * in the samples (e.g. 2,800 units for size 9, 2,200 for size 7).
+ * Text block lines (0x10B0, SPEC §5.6, task 13d). Each 28-byte line entry
+ * of the header stores the copy's layout of that line, relative to the top
+ * of the text extent (box at 62), in object units [I]:
+ *   i16 at 14: top of the line's box (0 for the first line),
+ *   i16 at 18: bottom of the line's box,
+ *   i16 at 20 / u16 at 22: ascent (negated) / descent, multiples of 50,
+ *   u16 at 26: em, the glyph size (= textSizeToUnits(size) within 1 unit for
+ *   3,542 of 3,814 sample lines; HELP1's 27 lines store 8/9 of it, which
+ *   is why its blocks, 680 apart, overlap when drawn at the run's size).
+ * The boxes follow the stacking rule of data charts (DATA_TEXT_BOX_FACTOR,
+ * DATA_ROW_OVERLAP: 74 of 80 second-and-later lines), and their extent is
+ * the box at 62 for 3,730 lines. OBJECT_TEXT_USES_LINE_ENTRIES: draw at the
+ * stored tops and em; lines without a usable entry (em 0, or no entries)
+ * are stacked by the rule from their run sizes.
  */
-export const OBJECT_TEXT_LINE_SPACING = 1.28;
+export const OBJECT_TEXT_USES_LINE_ENTRIES = true;
 
 /**
- * Text blocks: baseline of the first line below the top of the text extent,
- * as a multiple of the size (the rest of the 1.28 pitch is the descent) [I].
+ * Text blocks: baseline of a line below the top of its box, as a multiple
+ * of the em (the stored ascents are 0.9 to 1.0 em) [I].
  */
 export const OBJECT_TEXT_ASCENT = 1.0;
 

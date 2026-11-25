@@ -65,17 +65,22 @@ import { EM_UNITS, type GlyphSource, layoutGlyphLine } from "../../../fonts/glyp
 import { decodePcx } from "../../pcx/pcx";
 import { pcxToDataUrl } from "../../pcx/toDataUrl";
 import {
+  BOX_3D_SIDE_SHADE,
+  BOX_3D_STYLE,
+  BOX_3D_TOP_SHADE,
   BOX_CORNER_RADIUS_FACTOR,
   BUTTON_HIT_AREAS,
   EMBEDDED_CHART_DRAWS_BACKGROUND,
   EMBEDDED_CHART_MAX_DEPTH,
   GRADIENT_AS_FIRST_COLOR,
   OBJECT_TEXT_ASCENT,
-  OBJECT_TEXT_LINE_SPACING,
+  OBJECT_TEXT_USES_LINE_ENTRIES,
   OUTLINE_ONLY_SUBTAG_DIGITS,
   PIE_SLICE_ARC_STYLE,
   SHADE_FILLS_BY_PERCENT,
   SHADE_SUBTAG,
+  SHADOW_BOX_ROLE,
+  SHADOW_BOX_STYLE,
   SQUARE_BOX_STYLE,
   STROKE_FONT_DEFAULT_PEN_EM,
   TEXT_COLOR_ROLE_MASK,
@@ -88,6 +93,7 @@ import {
   type ArcShape,
   type Attribute,
   type Box,
+  type BoxShape,
   DIRECT_COLOR,
   type DrawnObject,
   IDENTITY_TRANSFORM,
@@ -97,6 +103,7 @@ import {
   type Shape,
   type ShapeEntry,
   type TextBlockShape,
+  type TextLayoutLine,
   type TextRun,
   type Transform,
   applyTransform,
@@ -107,6 +114,7 @@ import {
 import { ROLE, rgbToCss } from "../palette";
 import { Justification } from "../text";
 import { type ChartSceneContext, createEmbeddedContext } from "./context";
+import { lineBoxHeight, stackTops } from "./data/text";
 import { areaToRect, toScene } from "./page";
 
 /** 404 kind of a bitmap reference (SPEC §5.6) and of an embedded chart. */
@@ -337,6 +345,77 @@ export function pieSlicePoints(shape: Pick<ArcShape, "cx" | "cy" | "rx" | "ry" |
   return points;
 }
 
+/** A rectangle given by object-space corners, plain or with rounded corners of `radius` (object units). */
+function boxElement(m: Readonly<Transform>, x1: number, y1: number, x2: number, y2: number, paint: Paint, radius: number): SceneElement {
+  const { fill, stroke, strokeWidth } = paint;
+  const rounded = radius > 0;
+  if (keepsAxes(m) || swapsAxes(m)) {
+    const rect = sceneRectOf(m, x1, y1, x2, y2);
+    return {
+      kind: "rect",
+      ...rect,
+      ...(rounded ? { corners: { kind: "rounded" as const, radius: radius * linearScale(m) } } : {}),
+      fill,
+      stroke,
+      strokeWidth,
+    };
+  }
+  if (!rounded) {
+    const points = [sceneOf(m, x1, y1), sceneOf(m, x2, y1), sceneOf(m, x2, y2), sceneOf(m, x1, y2)];
+    return { kind: "path", points, closed: true, fill, stroke, strokeWidth };
+  }
+  return inObjectFrame(m, [
+    {
+      kind: "rect",
+      x: Math.min(x1, x2),
+      y: -Math.max(y1, y2),
+      width: Math.abs(x2 - x1),
+      height: Math.abs(y2 - y1),
+      corners: { kind: "rounded", radius },
+      fill,
+      stroke,
+      strokeWidth: strokeWidth / linearScale(m),
+    },
+  ]);
+}
+
+/**
+ * A 0x1070-family box by its style (assumptions.ts SQUARE_BOX_STYLE and
+ * after): square; rounded; a square box over a drop shadow c right and c
+ * down in role Shadow (style 5); or a 3-D box with a top and right face c
+ * deep (style 6), c being the corner size in object units.
+ */
+function drawBox(ctx: ChartSceneContext, shape: BoxShape, m: Readonly<Transform>, paint: Paint): SceneElement[] {
+  const c = shape.cornerSize;
+  const left = Math.min(shape.x1, shape.x2);
+  const right = Math.max(shape.x1, shape.x2);
+  const bottom = Math.min(shape.y1, shape.y2);
+  const top = Math.max(shape.y1, shape.y2);
+  if (shape.style === SHADOW_BOX_STYLE && c > 0) {
+    const shadow = ctx.color(SHADOW_BOX_ROLE);
+    const box = boxElement(m, left, bottom, right, top, paint, 0);
+    if (!shadow) return [box];
+    return [boxElement(m, left + c, bottom - c, right + c, top - c, { fill: shadow, stroke: null, strokeWidth: 0 }, 0), box];
+  }
+  if (shape.style === BOX_3D_STYLE && c > 0) {
+    const face = (points: [number, number][], shadeBy: number): SceneElement => ({
+      kind: "path",
+      points: points.map(([x, y]) => sceneOf(m, x, y)),
+      closed: true,
+      fill: paint.fill ? shadeCss(paint.fill, shadeBy) : null,
+      stroke: paint.stroke,
+      strokeWidth: paint.strokeWidth,
+    });
+    return [
+      face([[left, top], [right, top], [right + c, top + c], [left + c, top + c]], BOX_3D_TOP_SHADE),
+      face([[right, bottom], [right + c, bottom + c], [right + c, top + c], [right, top]], BOX_3D_SIDE_SHADE),
+      boxElement(m, left, bottom, right, top, paint, 0),
+    ];
+  }
+  const radius = shape.style !== SQUARE_BOX_STYLE && c > 0 ? c * BOX_CORNER_RADIUS_FACTOR : 0;
+  return [boxElement(m, shape.x1, shape.y1, shape.x2, shape.y2, paint, radius)];
+}
+
 function drawShape(ctx: ChartSceneContext, entry: ShapeEntry, m: Readonly<Transform>): SceneElement[] {
   const { shape } = entry;
   if (shape.kind === "text") return drawText(ctx, shape, m);
@@ -373,40 +452,8 @@ function drawShape(ctx: ChartSceneContext, entry: ShapeEntry, m: Readonly<Transf
           };
         });
     }
-    case "box": {
-      const rounded = shape.style !== SQUARE_BOX_STYLE && shape.cornerSize > 0;
-      const radius = shape.cornerSize * BOX_CORNER_RADIUS_FACTOR;
-      if (keepsAxes(m) || swapsAxes(m)) {
-        const rect = sceneRectOf(m, shape.x1, shape.y1, shape.x2, shape.y2);
-        return [
-          {
-            kind: "rect",
-            ...rect,
-            ...(rounded ? { corners: { kind: "rounded" as const, radius: radius * linearScale(m) } } : {}),
-            fill,
-            stroke,
-            strokeWidth,
-          },
-        ];
-      }
-      if (!rounded) {
-        const { x1, y1, x2, y2 } = shape;
-        const points = [sceneOf(m, x1, y1), sceneOf(m, x2, y1), sceneOf(m, x2, y2), sceneOf(m, x1, y2)];
-        return [{ kind: "path", points, closed: true, fill, stroke, strokeWidth }];
-      }
-      const x = Math.min(shape.x1, shape.x2);
-      const top = Math.max(shape.y1, shape.y2);
-      const rect: SceneElement = {
-        kind: "rect",
-        x,
-        y: -top,
-        width: Math.abs(shape.x2 - shape.x1),
-        height: Math.abs(shape.y2 - shape.y1),
-        corners: { kind: "rounded", radius },
-        ...framed,
-      };
-      return [inObjectFrame(m, [rect])];
-    }
+    case "box":
+      return drawBox(ctx, shape, m, paint);
     case "ellipse": {
       if (keepsAxes(m) || swapsAxes(m)) {
         const c = sceneOf(m, shape.cx, shape.cy);
@@ -447,6 +494,8 @@ export interface TextLinePiece {
   /** Byte codes of `text`, one per character (TextRun.codes). */
   codes: Uint8Array;
   run: TextRun;
+  /** The header's line entry for this line, when the block has them. */
+  entry?: TextLayoutLine;
 }
 
 /** Index after the last character that is not a line end (0x0A "\n" or 0x0D "\r"). */
@@ -477,7 +526,7 @@ export function textBlockLines(shape: TextBlockShape): TextLinePiece[] {
       const from = Math.min(line.start, all.length);
       const to = endWithoutLineBreaks(all, Math.min(line.start + line.length, all.length));
       const end = Math.max(from, to);
-      out.push({ text: all.slice(from, end), codes: allCodes.subarray(from, end), run: shape.runs[i]! });
+      out.push({ text: all.slice(from, end), codes: allCodes.subarray(from, end), run: shape.runs[i]!, entry: line });
     }
     return out;
   }
@@ -505,6 +554,40 @@ function anchorFor(justification: number): TextAnchor {
     default:
       return "start";
   }
+}
+
+/** Layout a line entry stores, relative to the top of the text extent (assumptions.ts OBJECT_TEXT_USES_LINE_ENTRIES). */
+export interface StoredLineLayout {
+  /** Top and bottom of the line's box (object y, up; top 0 for the first line). */
+  top: number;
+  bottom: number;
+  /** Glyph size, object units. */
+  em: number;
+}
+
+/** The layout stored in a line entry, or null when it holds none (em 0, inverted box, short entry). */
+export function storedLineLayout(line: Pick<TextLayoutLine, "raw">): StoredLineLayout | null {
+  const r = line.raw;
+  if (r.length < 28) return null;
+  const i16 = (o: number) => ((r[o]! | (r[o + 1]! << 8)) << 16) >> 16;
+  const top = i16(14);
+  const bottom = i16(18);
+  const em = r[26]! | (r[27]! << 8);
+  return em > 0 && top <= 0 && bottom < top ? { top, bottom, em } : null;
+}
+
+/**
+ * Box top (relative to the text extent's top) and glyph size of each line:
+ * the stored line entries when every line has one, else the lines stacked
+ * by the data-chart rule from their run sizes (data/text.ts stackTops).
+ */
+function lineLayouts(ctx: ChartSceneContext, lines: readonly TextLinePiece[]): { top: number; size: number }[] {
+  const stored = OBJECT_TEXT_USES_LINE_ENTRIES ? lines.map((l) => (l.entry ? storedLineLayout(l.entry) : null)) : [];
+  if (lines.length > 0 && stored.length === lines.length && stored.every((s) => s !== null)) {
+    return stored.map((s) => ({ top: s!.top, size: s!.em }));
+  }
+  const tops = stackTops(lines.map((l) => lineBoxHeight(ctx, l.run.size)), 0);
+  return lines.map((l, i) => ({ top: tops[i]!, size: textSizeToUnits(l.run.size, ctx.page.shortSide) }));
 }
 
 /** The box text is laid out in: the text extent at header offset 62, else the frame at 38 (SPEC §5.6 [I]). */
@@ -557,11 +640,12 @@ function drawText(ctx: ChartSceneContext, shape: TextBlockShape, m: Readonly<Tra
   const right = Math.max(box.x1, box.x2);
   const direct = isUniformPositiveScale(m);
   const out: SceneElement[] = [];
-  let top = Math.max(box.y1, box.y2);
-  for (const { text, codes, run } of textBlockLines(shape)) {
-    const size = textSizeToUnits(run.size, ctx.page.shortSide);
-    const baseline = top - OBJECT_TEXT_ASCENT * size;
-    top -= OBJECT_TEXT_LINE_SPACING * size;
+  const top = Math.max(box.y1, box.y2);
+  const lines = textBlockLines(shape);
+  const layouts = lineLayouts(ctx, lines);
+  for (const [i, { text, codes, run }] of lines.entries()) {
+    const { size } = layouts[i]!;
+    const baseline = top + layouts[i]!.top - OBJECT_TEXT_ASCENT * size;
     if (!text.trim()) continue;
     const fill = textRunColor(ctx, run);
     if (!fill) continue;

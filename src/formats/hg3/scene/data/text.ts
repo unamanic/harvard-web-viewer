@@ -189,17 +189,29 @@ export function stackRows(
   top: number,
   blankSize: number,
 ): { tops: number[]; bottom: number; height: number } {
-  // Each row's box overlaps the previous one by DATA_ROW_OVERLAP of its own height.
   const heights = rows.map((row) => (row ? rowHeight(ctx, row.size, false) : rowHeight(ctx, blankSize, true)));
-  const tops: number[] = [];
-  let y = top;
+  const tops = stackTops(heights, top);
   let bottom = top;
   rows.forEach((row, i) => {
-    if (i > 0) y -= heights[i - 1]! - DATA_ROW_OVERLAP * heights[i]!;
-    tops.push(y);
-    if (row) bottom = y - heights[i]!;
+    if (row) bottom = tops[i]! - heights[i]!;
   });
   return { tops, bottom, height: top - bottom };
+}
+
+/**
+ * Tops (page or object y, up) of boxes of the given heights stacked from
+ * `top`: each box overlaps the previous one by DATA_ROW_OVERLAP of its own
+ * height (task 14), i.e. top(next) = top(prev) − height(prev) + 0.15 ×
+ * height(next). Also used for object-layer text blocks (task 13d).
+ */
+export function stackTops(heights: readonly number[], top: number): number[] {
+  const tops: number[] = [];
+  let y = top;
+  heights.forEach((h, i) => {
+    if (i > 0) y -= heights[i - 1]! - DATA_ROW_OVERLAP * h;
+    tops.push(y);
+  });
+  return tops;
 }
 
 /**

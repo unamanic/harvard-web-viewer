@@ -7,7 +7,17 @@ import {
   type SceneElement,
   type TextElement,
 } from "../../types";
-import { OBJECT_TEXT_ASCENT, OBJECT_TEXT_LINE_SPACING, lineWidthFor, textSizeToUnits } from "../assumptions";
+import {
+  BOX_3D_SIDE_SHADE,
+  BOX_3D_TOP_SHADE,
+  DATA_ROW_OVERLAP,
+  DATA_TEXT_BOX_FACTOR,
+  DATA_TEXT_BOX_STEP,
+  OBJECT_TEXT_ASCENT,
+  SHADOW_BOX_ROLE,
+  lineWidthFor,
+  textSizeToUnits,
+} from "../assumptions";
 import { parseChart } from "../chart";
 import { DocumentType, readContainer } from "../container";
 import { DEFAULT_PALETTE, colorForRole, rgbToCss } from "../palette";
@@ -23,6 +33,7 @@ import {
   flippedMatrix,
   pieSlicePoints,
   shadeCss,
+  storedLineLayout,
   textBlockLines,
 } from "./objectLayer";
 import { type TextBlockShape, decodeShape } from "../objects";
@@ -67,8 +78,19 @@ function run(text: string, color = 1, size = 4, just = 1, raw4 = 0): Uint8Array 
   const s = cstr(text);
   return concat(s, s.length % 2 ? [0] : [], tail(text.length, color, size, just, raw4));
 }
+/** Stored layout of a line entry: box top and bottom below the extent's top, and em (all 0: none). */
+type EntryLayout = [top: number, bottom: number, em: number];
+/** 28-byte line entry: start at 4, length at 8, stored layout at 14, 18 and 26. */
+function lineEntry(start: number, length: number, [top, bottom, em]: EntryLayout = [0, 0, 0]): Uint8Array {
+  return concat([1, 0x81, 0, 0], u16(start), u16(0), [length], new Uint8Array(5), i16(top), u16(0), i16(bottom), new Uint8Array(6), u16(em));
+}
 /** Text block with the frame at 38 and the text extent at 62. */
-function textBlock(runs: Uint8Array[], lines: [number, number][], frame: number[], extent: number[]): Uint8Array {
+function textBlock(
+  runs: Uint8Array[],
+  lines: [number, number, EntryLayout?][],
+  frame: number[],
+  extent: number[],
+): Uint8Array {
   const headerLength = 82 + 28 * lines.length;
   const body = concat(...runs);
   return concat(
@@ -87,7 +109,7 @@ function textBlock(runs: Uint8Array[], lines: [number, number][], frame: number[
     box(extent[0]!, extent[1]!, extent[2]!, extent[3]!), // 70
     u16(0),
     u16(lines.length),
-    ...lines.map(([start, length]) => concat([1, 0x81, 0, 0], u16(start), u16(0), [length], new Uint8Array(19))),
+    ...lines.map(([start, length, layout]) => lineEntry(start, length, layout)),
     body,
   );
 }
@@ -174,9 +196,36 @@ describe("drawObjectLayer: shapes", () => {
     expect(lineWidthFor(2)).toBe(2 * DEFAULT_STROKE_WIDTH);
   });
 
-  it("rounds boxes whose style is not 1, scaled with the transform", () => {
-    const { elements } = draw(obj([line(32), boxShape(6, 100, 0, 0, 100, 100)], [2, 0, 0, 2, 0, 0]));
+  it("rounds style 3 boxes, scaled with the transform", () => {
+    const { elements } = draw(obj([line(32), boxShape(3, 100, 0, 0, 100, 100)], [2, 0, 0, 2, 0, 0]));
     expect(elements[0]).toMatchObject({ kind: "rect", x: 0, y: -200, width: 200, height: 200, corners: { kind: "rounded", radius: 200 } });
+  });
+
+  it("draws a style 5 box square over a drop shadow of the corner size, right and down, in role Shadow", () => {
+    const { elements } = draw(obj([line(14), fill(21), boxShape(5, 50, 0, 0, 400, 200)], [2, 0, 0, 2, 0, 0]));
+    expect(elements).toEqual([
+      { kind: "rect", x: 100, y: -300, width: 800, height: 400, fill: role(SHADOW_BOX_ROLE), stroke: null, strokeWidth: 0 },
+      { kind: "rect", x: 0, y: -400, width: 800, height: 400, fill: role(21), stroke: role(14), strokeWidth: lineWidthFor(1) },
+    ]);
+  });
+
+  it("draws a style 6 box as a 3-D box with shaded top and right faces the corner size deep", () => {
+    const { elements } = draw(obj([line(32), fill(21), boxShape(6, 100, 0, 0, 400, 200)]));
+    expect(elements).toHaveLength(3);
+    const [topFace, side, front] = elements;
+    expect(topFace).toMatchObject({
+      kind: "path",
+      closed: true,
+      points: [{ x: 0, y: -200 }, { x: 400, y: -200 }, { x: 500, y: -300 }, { x: 100, y: -300 }],
+      fill: shadeCss(role(21), BOX_3D_TOP_SHADE),
+      stroke: role(32),
+    });
+    expect(side).toMatchObject({
+      points: [{ x: 400, y: -0 }, { x: 500, y: -100 }, { x: 500, y: -300 }, { x: 400, y: -200 }],
+      fill: shadeCss(role(21), BOX_3D_SIDE_SHADE),
+    });
+    expect(front).toMatchObject({ kind: "rect", x: 0, y: -200, width: 400, height: 200, fill: role(21) });
+    expect(front).not.toHaveProperty("corners");
   });
 
   it("only outlines boxes whose sub-tag ends in 0 or 2", () => {
@@ -392,13 +441,38 @@ describe("drawObjectLayer: text", () => {
     );
     const { elements } = draw(obj([sub(0x10b0, data)], [0.5, 0, 0, 0.5, 100, 0]));
     const size = textSizeToUnits(5);
+    // No stored layout: boxes of floor(1.285 em / 100) × 100 (1500), the second overlapping the first by 0.15 of its height.
+    const h = Math.floor((DATA_TEXT_BOX_FACTOR * size) / DATA_TEXT_BOX_STEP) * DATA_TEXT_BOX_STEP;
+    expect(h).toBe(1500);
     const first = 3000 - OBJECT_TEXT_ASCENT * size;
-    const second = first - OBJECT_TEXT_LINE_SPACING * size;
+    const second = 3000 - (h - DATA_ROW_OVERLAP * h) - OBJECT_TEXT_ASCENT * size;
     expect(elements).toHaveLength(2);
     const [a, b] = elements.map(text);
     expect(a).toMatchObject({ text: "Line one", x: 100, y: -first * 0.5, size: size * 0.5, anchor: "middle", fill: role(2), italic: false });
     expect(b).toMatchObject({ text: "Line two", x: 100, y: -second * 0.5, anchor: "middle" });
     expect(a!.fontFamily).toMatch(/sans-serif|serif|monospace/);
+  });
+
+  it("draws lines at the tops and em their line entries store", () => {
+    const data = textBlock(
+      [run("Line oneLine two", 2, 3, 1)],
+      [
+        [0, 8, [0, -800, 675]],
+        [8, 8, [-680, -1480, 675]],
+      ],
+      [-5000, 4000, 5000, 0],
+      [-3000, 3000, 3000, 1520],
+    );
+    const [a, b] = draw(obj([sub(0x10b0, data)])).elements.map(text);
+    expect(a).toMatchObject({ text: "Line one", y: -(3000 - OBJECT_TEXT_ASCENT * 675), size: 675 });
+    expect(b).toMatchObject({ text: "Line two", y: -(3000 - 680 - OBJECT_TEXT_ASCENT * 675), size: 675 });
+  });
+
+  it("reads a line entry's stored layout, or none when its em is 0", () => {
+    const entry = (layout?: EntryLayout) => ({ raw: lineEntry(0, 1, layout) });
+    expect(storedLineLayout(entry([-1955, -4255, 1772]))).toEqual({ top: -1955, bottom: -4255, em: 1772 });
+    expect(storedLineLayout(entry())).toBeNull();
+    expect(storedLineLayout({ raw: new Uint8Array(20) })).toBeNull();
   });
 
   it("anchors right-justified text at the right edge", () => {

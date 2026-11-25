@@ -226,10 +226,14 @@ Add entries as `- finding (sample file checked, task number)`.
   bytes 1–3 fill, outline and line roles; 904 u16 at 2 = 3 boxes the last
   level, else it is a name list. Org text uses one chart-wide size factor
   (rule not fully known). (pie and org samples, tasks 16, 18)
-- Findings for stored-copy drawing (task 13d): lines in a multi-line text
-  block follow the stacking rule (box + 0.85 × box), not 1.28 × size, so
-  second lines are drawn about 240 units too low; box style 5 (0x1070) is a
-  drop shadow, style 3 is rounded. (tasks 16, 18)
+- Stored-copy drawing corrections (task 13d, fixed): each text line entry
+  stores the copy's own line box and em, so lines are drawn there (79
+  multi-line blocks: error 240 → 0 units); HELP1's 8/9 scale is its
+  stored em (675 vs 760), and the overlap is gone. Box style 5 is a drop
+  shadow and style 6 a 3-D box (the 3-D bar style); the 126 boxes whose
+  bounding boxes looked "off" are that extent. PLAY_ALL stores taller line
+  boxes than the stacking rule gives. Open: GALC37's 3-D bars are deeper
+  than wide (c = 1797); unconfirmed without a reference render. (task 13d)
 
 ### Samples
 
