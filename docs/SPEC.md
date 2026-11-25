@@ -286,8 +286,6 @@ Erase effects use the same drawing, changing A into the empty (black) screen; a 
 
 Slow, Medium and Fast are the overall duration of the effect; about 1.5 s, 0.75 s and 0.3 s are reasonable. \[I\]
 
-The 13 sample shows use only Replace, Overlay or blank for Draw; offsets 6 to 10 are 0 in all 430 entries, and the time is 0xFFFF everywhere except 0 on the seven sound slides of PLAY\_ALL.SH3. This matches the show editor's own screens for those shows. \[C\]
-
 ### 4.6 Destinations
 
 A destination byte in a key or button table means: \[I for all rows\]
