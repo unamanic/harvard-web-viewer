@@ -11,7 +11,7 @@ Harvard Graphics was one of the leading charting and presentation programs of th
 - **Charts (`.CH3`).** Draws the copy of the chart stored in the file (the drawn object layer, embedded charts included). When a chart has no stored copy, lays it out from its data: XY (bar, line, area, high/low, point), pie, title, bullet, organisation and table charts.
 - **Shows (`.SH3`).** Plays shows like the original Projector:
   - HyperShow keys and clickable buttons, including nested shows
-  - transitions decoded from the file (erase, then draw, with direction and speed), plus timed slides
+  - transitions decoded from the file (erase, then draw, with direction and speed), plus timed slides; auto-advance can be paused (button, or the Pause key)
   - WAV sound slides
   - a slide strip and a full-screen presentation mode
 - **Fonts.** Uses the original Bitstream Speedo fonts (`BX*.SPD`) when your files include them. Otherwise it uses the project's own clone fonts, which are fitted to the originals' measured metrics.

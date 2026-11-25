@@ -172,7 +172,7 @@ select { width: 100%; padding: 0.45rem 0.6rem; }
 .player-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 12px; margin-top: 16px; max-width: 100%; }
 .player-counter { color: var(--muted); font-size: 14px; text-align: center; font-variant-numeric: tabular-nums; min-width: 8rem; }
 .arrow-button { min-width: 44px; min-height: 44px; padding: 0; font-size: 18px; line-height: 1; }
-.player-sound, .player-enable-sound { min-height: 36px; font-size: 13px; }
+.player-sound, .player-enable-sound, .player-autoadvance { min-height: 36px; font-size: 13px; }
 .control-divider { width: 1px; height: 24px; background: rgba(250, 249, 245, 0.3); }
 .present-label { display: none; }
 

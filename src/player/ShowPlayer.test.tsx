@@ -20,6 +20,21 @@ const presentation: Presentation = {
   ],
 };
 
+describe("ShowPlayer auto-advance", () => {
+  it("offers Pause auto-advance only for shows with timed slides", () => {
+    const timed: Presentation = {
+      ...presentation,
+      slides: presentation.slides.map((s) => (s.kind === "picture" ? { ...s, waitForKey: false, displaySeconds: 15 } : s)),
+    };
+    const withTimer = renderToStaticMarkup(<ShowPlayer presentation={timed} />);
+    expect(withTimer).toContain("Pause auto-advance");
+    expect(withTimer).toContain('aria-pressed="false"');
+    expect(withTimer).not.toContain("· paused");
+    const keysOnly = renderToStaticMarkup(<ShowPlayer presentation={presentation} />);
+    expect(keysOnly).not.toContain("auto-advance");
+  });
+});
+
 describe("ShowPlayer", () => {
   it("draws the first slide in the stage panel with a counter and controls", () => {
     const html = renderToStaticMarkup(<ShowPlayer presentation={presentation} />);

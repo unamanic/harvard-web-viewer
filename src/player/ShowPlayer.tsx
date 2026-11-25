@@ -196,14 +196,23 @@ export function ShowPlayer({
   }, [player, playSounds, stopSound]);
 
   // Slides that do not wait for a key move on by themselves, their display
-  // time counted from the end of the transition that brings them in.
+  // time counted from the end of the transition that brings them in. The
+  // viewer can pause that: timed slides then wait like key slides (keys,
+  // clicks and buttons still navigate); resuming restarts the slide's time.
+  const [autoAdvancePaused, setAutoAdvancePaused] = useState(false);
+  const toggleAutoAdvance = useCallback(() => setAutoAdvancePaused((p) => !p), []);
   const drawing = !!scene && isAnimating(run, transition, hasPrevious);
   useEffect(() => {
-    if (!slide || slide.waitForKey || drawing) return;
+    if (!slide || slide.waitForKey || drawing || autoAdvancePaused) return;
     const ms = (slide.displaySeconds ?? DEFAULT_DISPLAY_SECONDS) * 1000;
     const timer = setTimeout(() => go({ kind: "next" }), ms);
     return () => clearTimeout(timer);
-  }, [slide, player, go, drawing]);
+  }, [slide, player, go, drawing, autoAdvancePaused]);
+  // Offer the control only for shows that advance by themselves somewhere.
+  const hasTimedSlides = useMemo(
+    () => presentation.slides.some((s) => s.kind === "nested" || (s.kind === "picture" && !s.waitForKey)),
+    [presentation],
+  );
 
 
   // Presentation mode: controlled by the parent when it passes `presenting`.
@@ -241,6 +250,12 @@ export function ShowPlayer({
     if (presenting && e.key === "Escape") {
       e.preventDefault();
       leave();
+      return;
+    }
+    // The Pause key pauses or resumes auto-advance (shows can't bind it).
+    if (e.key === "Pause" && hasTimedSlides) {
+      e.preventDefault();
+      toggleAutoAdvance();
       return;
     }
     // A key during a transition only completes it.
@@ -401,6 +416,7 @@ export function ShowPlayer({
           {!presenting && fileLabel ? `${fileLabel} · ` : ""}
           {status}
           {!presenting && slide && slide.label ? ` · ${slide.label}` : ""}
+          {autoAdvancePaused && hasTimedSlides && !player.ended ? " · paused" : ""}
         </span>
         <button
           type="button"
@@ -411,6 +427,17 @@ export function ShowPlayer({
         >
           <span aria-hidden="true">→</span>
         </button>
+        {hasTimedSlides && (
+          <button
+            type="button"
+            className="player-autoadvance"
+            onClick={toggleAutoAdvance}
+            aria-pressed={autoAdvancePaused}
+            title="Pause or resume moving on by itself (Pause key)"
+          >
+            {autoAdvancePaused ? "Resume auto-advance" : "Pause auto-advance"}
+          </button>
+        )}
         {soundButtons}
         {/* Entering is the header's Present button; this one only leaves. */}
         {presenting && (
