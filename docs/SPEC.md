@@ -405,7 +405,7 @@ A viewer should draw each 800 line with the colour, size, justification and font
 | 1310 | 18 | One per pie (pie 0 to 5): pie options (Options > Pie options); bytes below \[C\] |
 | 1312 | 31 | One per pie: slice percent options (Options > Slice percents); bytes below \[C\] |
 | 1314 | 43 | One per pie: slice value options (Options > Slice values); bytes below \[C\] |
-| 1316 | 32 | One per slice, in data order: u8 pie number, u8 slice number, u8 cut out 1/2 (PCUT2), u8 colour role (21 = Series1 for the first slice, then 22 and so on), u8 pattern number (the Pattern column, 0 to 11 by default), f32 value, padded string\[23\] label \[C\]. Sorting never reorders these records. \[C\] |
+| 1316 | 32 | One per slice, in data order: u8 pie number, u8 slice number, u8 cut out 1/2 (PCUT2), u8 colour role (21 = Series1 for the first slice, then 22 and so on), u8 pattern number (the Pattern column, 0 to 11 by default; PPAT5), f32 value, padded string\[23\] label \[C\]. Sorting never reorders these records. \[C\] |
 
 1304, pie style:
 
@@ -424,9 +424,9 @@ A viewer should draw each 800 line with the colour, size, justification and font
 | Offset | Meaning | Values |
 | --- | --- | --- |
 | 0 | Show legend | 1/2, default 2 (PLEG) \[C\] |
-| 1 | Placement | 1 = Inside, 2 = Outside (the default) \[C in the XY copy 1418 (XLEGPL), I for pies\] |
-| 2 | Location: one of 12 places around the plot area, counted clockwise | 5 = right side, middle (default); 6 = right side, bottom; 7 = bottom, right; 8 = bottom, middle (PLEGL1 to PLEGL3) \[C for 5 to 8, I for the rest\] |
-| 3 | Frame style | 2 = Plain (default) \[I\] |
+| 1 | Placement | 1 = Inside, 2 = Outside (the default) \[C in the XY copy 1418 (XLEGIN); the pie Legend menu has no Placement row\] |
+| 2 | Location: one of 12 places around the plot area | 1 to 12 clockwise from the top left: 1 top left, 2 top middle, 3 top right, 4 right side top, 5 right side middle (the default), 6 right side bottom, 7 bottom right, 8 bottom middle, 9 bottom left, 10 left side bottom, 11 left side middle, 12 left side top (PLEGL1 to PLEGL3, PLOC1 to PLOC12) \[C\]; where each goes is in 5.5 |
+| 3 | Frame style | 1 None, 2 Plain (the default), 3 Frame, 4 Rounded, 5 Octagonal, 6 to 9 3-D (a shadow toward each of four corners), 10 and up Page (a folded corner, in several directions), as the menu names them (PLFS3 to PLFS10) \[C\] |
 | 4 | Frame outline colour role | default 14 = Frame \[I\] |
 | 5 | Frame fill colour role | default 20 = Legend \[I\] |
 
@@ -450,7 +450,7 @@ A viewer should draw each 800 line with the colour, size, justification and font
 | --- | --- | --- | --- |
 | 0 | u8 | Pie number | 0 to 5 |
 | 1 | u8 | Show percents | 1/2, default 2 (PPCT) \[C\] |
-| 2 | u8 | Place percents | 1 Below (default), 2 Adjacent, 3 Inside (PPCTPI) \[C, 2 by analogy with 1314\] |
+| 2 | u8 | Place percents | 1 Below (default), 2 Adjacent, 3 Inside (PPCTADJ, PPCTPI) \[C\] |
 | 3 | u16 | Decimal places | default 0 (PPCTD1) \[C\] |
 | 5 | string\[13\] | Leading text | (PPCTL) \[C\] |
 | 18 | string\[13\] | Trailing text | (PPCTT) \[C\] |
@@ -474,7 +474,7 @@ A viewer should draw each 800 line with the colour, size, justification and font
 | Tag | Size | Meaning |
 | --- | --- | --- |
 | 1402 | 102 | Axis options and label format, three records: axis 0 = X, 1 = Y1, 2 = Y2; bytes below \[C\] |
-| 1404 | 3 | Axis frame (Options > Axis frame): u8 frame style (1 = Full, the default; 2 = the next choice) (XFRST), u8 outline colour role (14 = Frame) (XFROC), u8 fill colour role (15 = FrameBkg) (XFRFC) \[C\] |
+| 1404 | 3 | Axis frame (Options > Axis frame): u8 frame style (1 = Full, the default, all four edges; 2 = XY, left and bottom edges; 3 = X, bottom edge; 4 = Y, left edge; 5 = None) (XFRST, XAF3 to XAF5), u8 outline colour role (14 = Frame) (XFROC), u8 fill colour role (15 = FrameBkg) (XFRFC) \[C\] |
 | 1405 | 1 | Show frame fill colour, Yes/No (XFRSHF) \[C\] |
 | 1406 | 15 | One per series (0 to 15): series options; bytes below \[C\] |
 | 1408 | 25 | Chart style (Options > Style); bytes below \[C\] |
@@ -524,7 +524,7 @@ A viewer should draw each 800 line with the colour, size, justification and font
 | 4 | Cumulative | Yes/No, default No (XS6CU) \[C\] |
 | 5 | Data labels | Yes/No, default Yes; shown only when 1410 byte 2 is Yes \[C for the byte (XS6DL), I for the rule\] |
 | 6 | Data table | Yes/No, default Yes (XS6DT) \[C\] |
-| 7 | Fill style | 1 = Color, 2 = the next choice (XS6FS) \[C\] |
+| 7 | Fill style | 1 = Color, 2 = Pattern, 3 = Both (XFSP, XFSB) \[C\]; how each is drawn is in 5.5 |
 | 8 | Fill pattern | The number the menu shows minus 1, so 0 to 11 for series 1 to 12 (XS6FP) \[C\] |
 | 9 | Fill colour role | 21 = Series1 for series 0, then 22 and so on, repeating every 6 series (XS6FC) \[C\] |
 | 10 | Line fit | 1 = Normal, 2 = the next choice (XS6LF) \[C\]; the samples draw 2 as a least-squares trend line and 3 as a smoothed curve \[I\] |
@@ -539,15 +539,15 @@ Bar heights in the samples' drawn copies are proportional to the values, or to r
 
 | Offset | Meaning | Values |
 | --- | --- | --- |
-| 0 | Bar style | 1 = Cluster (the default), 2 = Overlap (XSBSTY) \[C\]; 3 = Stacked, 4 = 100 %, 5 = Step, 6 = Paired \[I, from the samples' drawn copies\] |
+| 0 | Bar style | 1 = Cluster (the default), 2 = Overlap, 3 = Stack, 4 = 100 %, 5 = Step (XSBSTY, XOVL, XSTK, XPCT1, XSTEP) \[C\]; 6 = Paired \[I, from the samples' drawn copies\] |
 | 1 | Bar shape | 1 = Rectangle (the default), 2 = Pyramid (XSBSHP) \[C\]; 3 = Octagon, 4 = Cylinder \[I, from the samples\] |
 | 2 | f32 bar width | Percent of the category slot, 85 by default (XSBW60) \[C\] |
 | 6 | f32 bar overlap | Percent, 50 by default (XSBO30) \[C\] |
 | 10 | Area style | 2 = Stack (the default), 3 = 100 % (XSAREA) \[C\]; 1 = Overlap \[I, from the samples\] |
 | 11 | High/Low style | 1 = Bar (the default), 2 = the next choice (XSHILO) \[C\]; the samples draw 1 as a box, 2 as a band and 3 as an I bar \[I\] |
 | 12 | Chart style | 1 = 2D, 2 = 3D (XS3D) \[C\] |
-| 13 | 2D style | 1 = Normal, 2 = the next choice (XS2DST) \[C\]; 4 = horizontal bars \[I, from the samples\] |
-| 14 | 3D style | 1 = Normal, 2 = the next choice (XS3DST) \[C\] |
+| 13 | 2D style | 1 = Normal, 2 = Shadow, 3 = Link, 4 = Horizontal (XS2D2 to XS2D4) \[C\] |
+| 14 | 3D style | 1 = Normal, 2 = Horizontal (XS3DST) \[C, names from the menu\] |
 | 15 | f32 3D object depth | 40 by default (XSOD60) \[C\]; percent of the bar's depth lane \[I\] |
 | 19 | f32 3D floor depth | 20 by default (XSFD30) \[C\]; percent of the frame height \[I\] |
 | 23 | Link line colour role | 18 = Lines (XSLINK) \[C\] |
@@ -557,7 +557,7 @@ Bar heights in the samples' drawn copies are proportional to the values, or to r
 
 | Offset | Meaning | Values |
 | --- | --- | --- |
-| 0 | Show data table | 1 = No, 2 = With chart, 3 = Table only (XDTAB, XDTONLY); Table only empties the legend area 810 \[C\]. With 2 the samples draw series names and values in a grid under the chart \[I\] |
+| 0 | Show data table | 1 = No, 2 = With chart, 3 = Table only (XDTAB2, XDTONLY); Table only empties the legend area 810 \[C\]. With 2 the samples draw series names and values in a grid under the chart \[I\] |
 | 1 | Table grid lines | 1 = Vertical, 2 = Horizontal (XDTGRID) \[C\]; 3 = Both, 4 = None in menu order \[I\] |
 | 2 | Show data labels | Yes/No, default No (XDLBL) \[C\]; the samples print values at the bar ends \[I\] |
 
@@ -566,9 +566,9 @@ Bar heights in the samples' drawn copies are proportional to the values, or to r
 | Offset | Meaning | Values |
 | --- | --- | --- |
 | 0 | Show legend | Yes/No, default Yes; No zeroes area 810 and widens the plot area 806 (XLEGNO) \[C\] |
-| 1 | Placement | 1 = Inside, 2 = Outside (the default) (XLEGPL) \[C\]. An earlier reading of the samples tied 2 to legends that list layered series bottom-up; since 2 is the default, that order must come from elsewhere \[?\] |
-| 2 | Location | 1 to 12 clockwise, 5 = right middle (the default), 6 = right bottom (XLEGFR) \[C\] |
-| 3 | Legend frame style | 2 = Plain (the default), 1 = the choice before it (XLEGOC) \[C\] |
+| 1 | Placement | 1 = Inside, 2 = Outside (the default) (XLEGIN) \[C\]. Inside puts the legend inside the axis frame and leaves the plot area its full size. It does not change the order of the entries (see 5.5) |
+| 2 | Location | 1 to 12 clockwise from the top left: 1 top left, 2 top middle, 3 top right, 4 right side top, 5 right side middle (the default), 6 right side bottom, 7 bottom right, 8 bottom middle, 9 bottom left, 10 left side bottom, 11 left side middle, 12 left side top (XLEGFR, XLOC1 to XLOC12) \[C\] |
+| 3 | Legend frame style | 1 None, 2 Plain (the default), 3 Frame, 4 Rounded, 5 Octagonal, 6 to 9 3-D (a shadow toward each of four corners), 10 and up Page (a folded corner, in several directions), as the menu names them (XLEGOC, XLFS3 to XLFS12) \[C\] |
 | 4 | Frame outline colour role | 14 = Frame (XLEGOC) \[C\] |
 | 5 | Frame fill colour role | 20 = Legend (XLEGFC) \[C\] |
 
@@ -602,10 +602,25 @@ How the stored pie is built, for checking a viewer's own drawing against the ori
 - 3D: the pie becomes an ellipse with height 0.6 × width, the edge is 0.15 × the width radius deep at depth 30, and the sides (0x1061 polygons and 0x1041 bands) are drawn back to front before the top arcs (P3DSE2, one test).
 - Each slice label is one text block holding the label, a line feed and the value, with an 0x1050 leader line from the rim; slice pointer Long adds a horizontal second segment, None removes the line. With slice labels off, only the value remains (PPTRL, PPTRN, PNOLAB).
 - Show as Column draws the slices as stacked 0x1071 boxes, bottom to top in data order, each as tall as its share (PCOLUMN).
-- Fill style Pattern or Both turns the arcs into 0x1032 with a 0x112E attribute holding the pattern number and a 0x110C attribute holding a pattern colour (PFILLP, PFILLB) \[C for what changes, I for the attribute meanings\].
+- Fill style Pattern or Both turns the arcs into 0x1032 (and XY bars into 0x1072 boxes) with the attributes given under "Fill styles" below (PFILLP, PFILLB, PPAT5, PBPAT5, PBCOL) \[C\].
 - With the legend on, the plot area (806) shrinks to make room and the legend area (810) holds the legend box; with it off, 810 is all zero (PLEG, PLEGL1 to PLEGL3).
 
 How the stored XY chart is built \[C, by the test pairs named in 5.4\]: the plot object (flag byte 3) holds one 0x1071 box per bar, 0x1050 polylines for the axes, grid lines and tick marks, and 0x10B0 text blocks for the tick labels and X names. Every XY option tried changed this geometry as on screen: no grid lines (XGRIDN) and no axis labels (XLBLNO) shrink it, a log scale (XLOG) redraws the ticks, 3D (XS3D) adds 0x1061 polygons for the bar sides and the floor, and a series shown as a line (XS6AS) replaces its three boxes with one polyline plus a 0x10A1 record, likely its markers \[I\], and changes its legend key.
+
+**Layout rules measured in 3.05.** These come from one-setting test charts saved by Harvard Graphics 3.05 and screenshots of its own screen (samples/option-tests/page-size, legend and styles). They hold on both Letter (11 × 8.5 in) and 10 × 7.5 in pages. \[C unless marked\]
+
+- **Text metrics.** A line's em is the text size as a percent of the page's short side, rounded down (25321 units on Letter, 24576 on 10 × 7.5; sizes 6, 12 and 2.5 give 1519, 3038 and 632 on Letter, 1474, 2948 and 614 on 10 × 7.5; one Letter value is a unit lower than the rule gives) (PT6 to PT25, PMT6 to PMT25). For Swiss 721 Roman the stored ascent is the em rounded up to a multiple of 100 and the descent is 0.275 × em rounded up to a multiple of 50; the line box height is (1.25 × em + 50) rounded up to a multiple of 100 \[I, fitted to every test line from em 614 to 3038\]. Lines after the first are 0.85 × the line box apart (Line spacing 85 in Setup > Chart default settings).
+- **Areas.** The page margin (802) is 1 % of the short side (253 on Letter, 246 on 10 × 7.5). The title area (804) runs from the 802 top down by the title's line box; the plot area (806) starts 1 % of the short side below that, and the title rule is drawn on the line between them.
+- **Pie size.** The radius is a share of the plot area height: 0.34 with two label lines, 0.40 with one, 3-D width radius 0.44, and a cut slice shrinks the pie to 0.7 × 0.34 (PMBASE, PM3D, PMCUT, PMVADJ, with their Letter originals). The page size does not change these shares.
+- **Older samples.** The 10 × 7.5 in gallery samples were laid out by an earlier build: their stored drawings round the ascent down and make the line box 1.25 × em rounded up to a multiple of 100 \[I\] (a title line box of 2800, not 2900, so their 804 and 806 sit 100 units higher, and label lines of 1100, not 1200), pie shares 0.32, 0.42 and 0.85, and data tables with an 1100-unit row pitch. When 3.05 lays one of them out again (any edit, then save), it gives the rules above (checked on GALD211, 221, 241, 317 and 367; those copies stay private with the samples). A viewer drawing a chart with no stored drawing should use the 3.05 rules.
+- **Legend place.** The legend box (810) is sized by its entries and sits inside the band left by the page margin and the title. Locations on the sides (4 to 6, 10 to 12) align its top, middle or bottom with that band; the plot area then loses the box width plus 1 % of the short side on that side. Locations on the top and bottom (1 to 3, 7 to 9) align its left, centre or right; the plot area loses the box height plus 1 %. Placement Inside leaves the plot area whole and puts the box inside the axis frame against its right edge (XLEGIN). On Letter with two XY series the box is 5392 × 3772 in a column and 10252 × 2212 in a row (XLOC1 to XLOC12, PLOC1 to PLOC12).
+- **Legend order.** In a column legend, series are listed bottom-up when the bar style is Stack or 100 % and top-down otherwise, whatever the placement (XSTK, XSTKIN, XPCT1, XOVL, XOVLIN, XSTEP). A row legend always lists left to right (XSTKL8).
+- **Data table with swatches** (legend off). The table spans from the plot area's left edge to the axis frame's right edge, its bottom 4.5 % of the plot area height above the plot area's bottom, one row per series at the label line box (1200 on 10 × 7.5 at size 3.5). Each swatch is an 840-unit square ending 240 units left of the frame, inset 180 from its row. XMLEGNO and the 3.05 layout of GALD317 follow the same rule.
+- **Axis frame styles** (1404 byte 0). XY draws only the left and bottom edges, X only the bottom, Y only the left, None no edges. Where the top edge is missing, the top grid line is drawn as an ordinary grid line (XAF3 to XAF5).
+- **2D styles** (1408 byte 13). Shadow adds a drop shadow to each bar (0.15 × the bar width to the right and 0.15 × its height down, role Shadow) \[I, from the drawn copy\]. Link draws a line (role Lines, 1408 byte 23) from the top right corner of each stacked segment to the top left corner of the same series' segment in the next bar; on clustered bars it changes nothing (XS2D3, XSTKLK). Horizontal turns the bars sideways, first category at the top, values along the bottom (XS2D4).
+- **Goal range.** With both minimum and maximum set, a box spans the axis frame's width between the two values, filled and outlined in the goal colour role (1402 byte 61), drawn after the frame fill and before the grid lines and bars. With only one bound set, nothing is drawn (XGOALB, XGOALMN, XGOALMX).
+- **Pie labels.** The value always comes before the percent, joined by two spaces, in whichever place they share: "40  40%" on line 2 when both are Below, "Alpha  40  40%" when both are Adjacent, and one "40  40%" block at 2/3 of the radius when both are Inside (PBOTHIN, PPCTADJ, PVPADJ).
+- **Fill styles** (pie 1304 byte 4, XY 1406 byte 7). Patterned shapes are 0x1032 arcs and 0x1072 boxes, with 0x112E = the pattern number (0 = the first; XY menus show it plus 1), 0x110C byte 0 = the pattern colour role and 0x110B byte 0 = the fill colour role. Pattern number 0 is a solid fill in the pattern colour (0x110B = that colour); any other number is the pattern drawn over role 0, the background (0x110B = 0). With Pattern, the pattern colour is FF, which draws white, the outline is white too, and the slice or series colour is ignored (PPATC). With Both, the pattern colour is the slice or series colour and the outline is the usual outline role (PFILLP, PFILLB, PPAT5, PBPAT5, PBCOL, XFSP, XFSPP, XFSB, XFSBP, XFSBC). Patterns seen: 1 thin diagonal lines, 2 dots, 3 dense diagonal lines, 5 vertical lines.
 
 The original lays out data charts itself; the stored areas (5.2) tell a viewer where each part goes. For a data chart without a drawn copy, use this method: \[I unless marked\]
 
@@ -752,7 +767,7 @@ Series beyond the sixth reuse Series1 to Series6 in turn. \[C from the series re
 ### 6.4 Text
 
 - Each text line names its font by font key (section 2) and its size as an f32.
-- The size unit is not confirmed. Sizes of 9 (titles), 5 (subtitles), 3.5 to 4 (footnotes and labels) fit **percent of the page's shorter side** in page units (24576 on a 10 × 7.5 in page, about 25321 on Letter; the stored text box heights on Letter pages only fit the latter): a size-9 title on a 7.5 in page is about 0.68 in (49 points) tall. \[I\] Use that until reference renders say otherwise.
+- The size is a **percent of the page's shorter side** in page units (24576 on a 10 × 7.5 in page, 25321 on Letter): the stored em of a line is that share, rounded down, and a size-9 title on a 7.5 in page is about 0.68 in (49 points) tall. \[C, by test charts at sizes 2.5, 6 and 12 on both pages\] Ascent, descent and line spacing are in 5.5, "Layout rules measured in 3.05".
 - Lines are laid out as the sum of the glyph advances; kerning is not applied. \[I\]
 - Justification is relative to the area the text belongs to (title area, plot area, or the text box of a text object). \[I\]
 - Characters are 8-bit codes in the Harvard Graphics character set; the font index maps them to glyphs (section 2). Its upper half is close to code page 850 (for example 0xB5 Á, 0xC6 ã, 0xD0 ð, 0xE0 Ó, 0x9B ø, 0x9E ×, 0xB8 ©, 0xA9 ®), with codes of its own: 0xB9 Œ, 0xCA and 0xCB curly double quotes, 0xEE and 0xEF curly single quotes, 0xF0 ‰, 0xF2 ≥, 0xF3 ≤, 0xF4 ¶, 0xF5 §, 0xF9 ►, 0xFD minus sign, and 0xFF a pictograph with no Unicode equivalent. \[C, from the glyphs the Speedo fonts draw for each code\] The full table is in the viewer's src/formats/hg3/charset.ts; 0xFA is a medium round bullet (•) and 0x07 a larger one (●).
@@ -787,10 +802,10 @@ In rough order of how much they matter to a viewer:
 
 1. **Remaining slide-entry bytes:** 702 offsets 3, 4, 13, 16 and 17 (3 and 4 look like sound options) and 708 bytes 0 and 1. The transition and timing bytes are decoded (4.2, 4.5).
 2. **Data chart layout.** How the original places axes, tick marks, labels, legends, pie slices (start angle, direction, 3-D depth, exploded slices) and organization boxes. Largely answered for pie and XY charts: the drawn copy holds the original's own layout (5.1, 5.5), and the pie and XY option records are decoded (5.4). Still open: the original's layout for a chart without a drawn copy, and organization charts.
-3. **Series types and chart styles:** decoded by test pairs for pie (1304 to 1316) and XY (1402 to 1418) in 5.4. Still open: XY 1414, and some menu values past the first two choices that are known only from the samples.
+3. **Series types and chart styles:** decoded by test pairs for pie (1304 to 1316) and XY (1402 to 1418) in 5.4. Still open: XY 1414 (no setting tried changes it), the High/Low styles and line fits past the second choice, and Paired bars, which are known only from the samples.
 4. **Object attributes** 0x1100 to 0x1140: line width and style, fill kinds, gradients, shadows, patterns.
 5. **Text block** 0x10B0 header fields and text record 800 offsets 6 and 7.
-6. **Text size unit** (6.4).
+6. **Text metrics** for fonts other than Swiss 721 Roman (the size unit itself is confirmed, 6.4).
 7. **Animated drawings**: where the Draw/Erase animation steps of a drawing are stored.
 8. **FN3 stroke fonts**: glyph layout.
 9. The remaining small records: 402, 516 boxes, 708 to 714, 820, 822, 824, the 1554 fields, 614, 1700, and the meaning of destinations 0x96 and 0x97.

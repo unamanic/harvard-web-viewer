@@ -20,6 +20,8 @@ Early pairs differ from XBASE by one setting. From the data table pairs on, each
 | XLEAD / XTRAIL | Y1 leading "AB" / trailing "CD" | 1402 string at [75] / [88] |
 | XDTGRID, XDLBL, XDTNO, XDTONLY | Data table/labels | 1410 [1], [2], [0] |
 | XLEGNO, XLEGPL, XLEGFR, XLEGOC, XLEGFC | Legend | 1418 [0] to [5], areas 806/810 |
+
+XDTAB and XLEGPL turned out to be the same as XBASE; clean saves of those two changes (XDTAB2, XLEGIN) are in ../legend.
 | XFRST, XFROC, XFRFC, XFRSHF | Axis frame | 1404 [0] to [2], 1405 [0] |
 | XSBSTY to XSOUT (XSR0 to XSRC reverts) | Style, rows 0 to 12 | 1408 |
 | XS6SH to XS6MK (XS6R0 to XS6RD reverts) | Series 1, rows 0 to 13 | 1406 series 0 [1] to [14] |
