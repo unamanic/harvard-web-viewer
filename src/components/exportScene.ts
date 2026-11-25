@@ -26,7 +26,7 @@ export function sceneToSvg(scene: Scene, width: number): string {
   }
 }
 
-function download(blob: Blob, name: string): void {
+export function download(blob: Blob, name: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -38,31 +38,34 @@ function download(blob: Blob, name: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-function svgToPng(svgText: string, width: number, height: number): Promise<Blob> {
+/** An SVG file's text loaded as an image (for drawing on a canvas). */
+export function svgToImage(svgText: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(new Blob([svgText], { type: "image/svg+xml" }));
     const img = new Image();
     img.onload = () => {
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) throw new Error("This browser cannot draw the PNG.");
-        ctx.drawImage(img, 0, 0, width, height);
-        canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("The PNG could not be made."))), "image/png");
-      } catch (e) {
-        reject(e instanceof Error ? e : new Error(String(e)));
-      } finally {
-        URL.revokeObjectURL(url);
-      }
+      URL.revokeObjectURL(url);
+      resolve(img);
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(new Error("The slide could not be drawn as a PNG."));
+      reject(new Error("The slide could not be drawn as a picture."));
     };
     img.src = url;
   });
+}
+
+async function svgToPng(svgText: string, width: number, height: number): Promise<Blob> {
+  const img = await svgToImage(svgText);
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("This browser cannot draw the PNG.");
+  ctx.drawImage(img, 0, 0, width, height);
+  return new Promise((resolve, reject) =>
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("The PNG could not be made."))), "image/png"),
+  );
 }
 
 /** Save the scene as the chosen file; `fileName` is the document's (e.g. "SALES93.CH3"). */

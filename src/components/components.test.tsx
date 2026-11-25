@@ -21,6 +21,8 @@ import { Inspector, RawBytesDrawer } from "./Inspector";
 import { RecordTree } from "./RecordTree";
 import { PageCards, SlideCards } from "./SlidesColumn";
 import { Viewer, isReload } from "./Viewer";
+import { VideoExportDialog } from "./VideoExportDialog";
+import { show as videoShow, wavBytes } from "../video/testing";
 
 const empty = new Uint8Array();
 const chartBytes = (description = "Hello", palette?: string) =>
@@ -112,6 +114,59 @@ describe("ExportMenu", () => {
   it("is a disabled button when there is nothing to export", () => {
     const html = renderToStaticMarkup(<ExportMenu viewBox={null} onExport={() => {}} />);
     expect(html).toMatch(/^<button[^>]*disabled=""/);
+  });
+
+  it("offers Video… for a show, even on a slide without a picture", () => {
+    const html = renderToStaticMarkup(<ExportMenu viewBox={LANDSCAPE_VIEW_BOX} onExport={() => {}} onExportVideo={() => {}} />);
+    expect(html).toContain("Export</summary>");
+    expect(html).toContain("PNG, 640 × 480");
+    expect(html).toContain('aria-haspopup="dialog"');
+    expect(html).toContain("Video…");
+    const noPicture = renderToStaticMarkup(<ExportMenu viewBox={null} onExport={() => {}} onExportVideo={() => {}} />);
+    expect(noPicture).toContain("<details");
+    expect(noPicture).toContain("No picture on this slide");
+    expect(noPicture).toContain("Video…");
+  });
+});
+
+describe("VideoExportDialog", () => {
+  const presentation = videoShow("S", [
+    { label: "s", kind: "sound", fileName: "HELLO.WAV" },
+    { label: "m", kind: "sound", fileName: "TUNE.MID" },
+    { label: "a" },
+    { label: "b", waitForKey: false, displaySeconds: 2, effects: { draw: { effect: "wipe", speed: "fast" } } },
+  ]);
+  const resolveFile = (name: string) => (name === "HELLO.WAV" ? wavBytes([[0, 0.5]], 8000) : null);
+
+  it("is a modal dialog with the options, defaults and the estimate", () => {
+    const html = renderToStaticMarkup(
+      <VideoExportDialog presentation={presentation} fileName="S.SH3" displayMode="vga" transitionMode="file" resolveFile={resolveFile} onClose={() => {}} />,
+    );
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain('aria-modal="true"');
+    expect(html).toContain("Export the show as a video");
+    expect(html).toMatch(/type="number"[^>]*value="5"/);
+    expect(html).toContain("Include transitions <span class=\"muted\">(From the file)</span>");
+    expect(html).toContain("1 WAV sound");
+    expect(html).toContain("640 × 480");
+    expect(html).toContain("1280 × 960");
+    expect(html).toContain("WebM");
+    // MP4 only once the browser says it can encode H.264.
+    expect(html).not.toContain("MP4 <span");
+    expect(html).toContain("About 0:07 · 2 slides · 219 frames at 30 fps");
+    expect(html).toContain("Missing sound: TUNE.MID.");
+    expect(html).toContain("Checking what this browser can encode");
+    expect(html).toMatch(/<button type="submit"[^>]*disabled=""[^>]*>Make video/);
+  });
+
+  it("leaves sound off when the show plays none", () => {
+    const silent = videoShow("Q", [{ label: "a" }]);
+    const html = renderToStaticMarkup(
+      <VideoExportDialog presentation={silent} fileName="Q.SH3" displayMode="vga" transitionMode="off" onClose={() => {}} />,
+    );
+    expect(html).toContain("the show plays no WAV sound");
+    expect(html).toMatch(/type="checkbox" disabled=""/);
+    expect(html).toContain("About 0:05 · 1 slide · 150 frames");
   });
 });
 

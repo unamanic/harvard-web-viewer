@@ -21,7 +21,7 @@ Harvard Graphics was one of the leading charting and presentation programs of th
   - **Hercules monochrome**: 720×348
   - **Modern**: 24-bit colour, exactly as stored
 - **Greyscale palettes.** Redraw any chart with the program's MONOCHRB or MONOCHRW palette, as an original user could.
-- **Export** the current slide as PNG or SVG.
+- **Export** the current slide as PNG or SVG, or a whole show as a video (WebM, or MP4 where the browser can encode it). The video plays the show as if nobody pressed a key, with the show's transitions, timing and WAV sound, in the display mode you've chosen; slides that wait for a key are held for a time you set. It is made in your browser tab; browsers with WebCodecs encode faster than real time, others record in real time.
 - **Whole folders.** Drop a folder (or choose one) and the viewer finds the palettes, fonts, bitmaps (`.PCX`/`.PCC`), sounds and nested shows that a chart or show names, case-insensitively.
 - **Inspection tools.** A record tree, a hex inspector and a diagnostics panel that lists warnings, missing files and where each font came from.
 

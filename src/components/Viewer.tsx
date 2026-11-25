@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
+import { type ReactNode, Suspense, lazy, useCallback, useMemo, useRef, useState } from "react";
 import type { PathedFile } from "../files/fromBrowser";
 import type { PresentationSlide, Scene } from "../formats/types";
 import type { LoadedFile } from "../loadFile";
@@ -20,6 +20,9 @@ import { ScenePresentation } from "./ScenePresentation";
 import { PageCards, SlideCards, SlidesColumn } from "./SlidesColumn";
 
 export { detectedText } from "../ui/fileFacts";
+
+// Loaded on first use, with the encoders behind it: keeps video export out of the first screen.
+const VideoExportDialog = lazy(() => import("./VideoExportDialog"));
 
 export interface ViewerProps {
   file: LoadedFile;
@@ -88,6 +91,7 @@ export function Viewer({
   const [rawOpen, setRawOpen] = useState(false);
   const [page, setPage] = useState(0);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [videoOpen, setVideoOpen] = useState(false);
   const control = useRef<ShowControl>(null);
 
   // The slide shown, and a counter bumped whenever building pictures may
@@ -117,6 +121,7 @@ export function Viewer({
     }
     setSlide(null);
     setExportError(null);
+    setVideoOpen(false);
   }
 
   // Sound slides name files beside the show; look them up in the opened set.
@@ -150,6 +155,9 @@ export function Viewer({
       .then(({ exportScene: save }) => save(exportScene, choice, file.name, number))
       .catch((e: unknown) => setExportError(e instanceof Error ? e.message : String(e)));
   };
+
+  // Video export: for shows only (a chart is a single still).
+  const onExportVideo = presentation ? () => setVideoOpen(true) : undefined;
 
   const entries = file.fileSet.entries();
   const fileSwitcher =
@@ -200,7 +208,7 @@ export function Viewer({
       <AppHeader>
         <span className="header-wide">
           {present()}
-          <ExportMenu viewBox={exportScene?.viewBox ?? null} onExport={onExport} />
+          <ExportMenu viewBox={exportScene?.viewBox ?? null} onExport={onExport} onExportVideo={onExportVideo} />
         </span>
         {onOpenFiles && <OpenButton onFiles={onOpenFiles} />}
       </AppHeader>
@@ -291,8 +299,26 @@ export function Viewer({
           Details
         </a>
         {present("tab")}
-        <ExportMenu viewBox={exportScene?.viewBox ?? null} onExport={onExport} label="Export" className="tab-menu" />
+        <ExportMenu
+          viewBox={exportScene?.viewBox ?? null}
+          onExport={onExport}
+          onExportVideo={onExportVideo}
+          label="Export"
+          className="tab-menu"
+        />
       </nav>
+      {videoOpen && presentation && (
+        <Suspense fallback={null}>
+          <VideoExportDialog
+            presentation={presentation}
+            fileName={file.name}
+            displayMode={displayMode}
+            transitionMode={transitionMode}
+            resolveFile={resolveFile}
+            onClose={() => setVideoOpen(false)}
+          />
+        </Suspense>
+      )}
       {rawOpen && <RawBytesDrawer bytes={file.bytes} fileName={file.name} onClose={() => setRawOpen(false)} />}
     </>
   );
