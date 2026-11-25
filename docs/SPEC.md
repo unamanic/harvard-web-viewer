@@ -286,6 +286,8 @@ Erase effects use the same drawing, changing A into the empty (black) screen; a 
 
 Slow, Medium and Fast are the overall duration of the effect; about 1.5 s, 0.75 s and 0.3 s are reasonable. \[I\]
 
+The 13 sample shows use only Replace, Overlay or blank for Draw; offsets 6 to 10 are 0 in all 430 entries, and the time is 0xFFFF everywhere except 0 on the seven sound slides of PLAY\_ALL.SH3. This matches the show editor's own screens for those shows. \[C\]
+
 ### 4.6 Destinations
 
 A destination byte in a key or button table means: \[I for all rows\]
@@ -741,6 +743,8 @@ Entries 0 to 41 are roles with fixed meanings; their names are usually "colour d
 
 Series beyond the sixth reuse Series1 to Series6 in turn. \[C from the series records\]
 
+**On screen** \[C from renders made in Harvard Graphics 3.05 in VGA ScreenShow, EGA and Hercules modes\]. On a 16-colour display the original never shows the palette's RGB as such. In VGA ScreenShow mode it loads one fixed set of 16 display colours for every chart: black, white, red, orange, yellow, yellow-green, green, spring green, cyan, azure, blue, violet, magenta, rose, dark grey and light grey. Every other palette colour is drawn as a one-pixel checkerboard of two of these. EGA (640 × 350) draws with its own 16 colours the same way; Hercules (720 × 348) is black and white, with colours turned into fill patterns. A viewer that draws the palette's true RGB will not match a screenshot pixel for pixel: compare after a 2 × 2 blur, or by colour role.
+
 ### 6.3 Fills, patterns and bitmaps
 
 - Solid fills use a colour role (5.6). \[I\]
@@ -795,8 +799,8 @@ In rough order of how much they matter to a viewer:
 
 ### 7.3 Samples and evidence still needed
 
-- **Reference pictures from the original program** for a handful of the sample files (GALD111 in particular, to see where GALBUTN2's button bar sits relative to the chart title): the tutorial charts (PIETUT, XYTUT, ORGTUT, DRAWTUT), a few gallery charts of each type, and GALLERY.SH3 played through. Screenshots taken in DOSBox at 640 × 480 are enough. These would settle chart layout, text size, line widths and fills.
-- **The show editor's slide list for GALB1.SH3 and PLAY\_ALL.SH3**, showing each slide's transition, direction, speed and time. That pins down the 702 fields.
+- **Reference pictures from the original program** for a handful of the sample files (GALD111 in particular, to see where GALBUTN2's button bar sits relative to the chart title): the tutorial charts (PIETUT, XYTUT, ORGTUT, DRAWTUT), a few gallery charts of each type, and GALLERY.SH3 played through. Screenshots taken in DOSBox at 640 × 480 are enough. These would settle chart layout, text size, line widths and fills. Done: every sample chart and show slide is rendered in VGA, EGA and Hercules modes, kept privately with the samples; the layout rules themselves are still to be derived from them.
+- **The show editor's slide list for GALB1.SH3 and PLAY\_ALL.SH3**, showing each slide's transition, direction, speed and time. Done: captured for all 13 shows, and the 702 fields are pinned down (4.5).
 - **Pairs of files that differ in one setting**, made in Harvard Graphics 3 (for example the same pie with the start angle changed, or the same slide with only the transition changed). These are the fastest way to decode the remaining option bytes. Done for transitions, timing, pie and XY options: the test files are in samples/option-tests. Still needed for organization charts.
 - The Harvard Graphics 3 user manual, if available, for the meaning of options and limits.
 
