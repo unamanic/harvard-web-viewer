@@ -51,7 +51,7 @@ Open the folder in VS Code and choose **Reopen in Container** (or use GitHub Cod
 | --- | --- |
 | `src/formats/types.ts` | `Scene` model and the `FormatParser` interface |
 | `src/formats/registry.ts` | Parser list and format detection |
-| `src/formats/hg-dos/` | Harvard Graphics for DOS parser (stub) |
+| `src/formats/hg3/` | Harvard Graphics 3 parser (detection and record container; drawing in progress) |
 | `src/render/` | Draws a `Scene` as SVG |
 | `src/components/` | React UI (dropzone, viewer, hex inspector) |
 | `docs/formats.md` | Verified notes on file formats |
@@ -62,7 +62,7 @@ Open the folder in VS Code and choose **Reopen in Container** (or use GitHub Cod
 
 ## Contributing sample files
 
-The biggest obstacle is sample data. If you have Harvard Graphics files (`.CH3`, `.SY3`, `.PL3`, or anything else it produced), they are very welcome for building and testing the parsers. Please only share files you have the right to share.
+The biggest obstacle is sample data. If you have Harvard Graphics files (`.CH3`, `.SH3`, `.PL3`, `.PC3`, or anything else it produced), they are very welcome for building and testing the parsers. Please only share files you have the right to share.
 
 ## License
 

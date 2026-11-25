@@ -33,7 +33,7 @@ This is the clean side of a clean-room process. The analyst examined the origina
 
 - All integers are little-endian. u8/u16/u32 are unsigned; i16 is signed 16-bit.
 - f32 and f64 are IEEE 754 single and double precision, little-endian.
-- A "string" is NUL-terminated 8-bit text in the IBM PC code page 437 unless noted. A "padded string\[n\]" occupies exactly n bytes, NUL-terminated, with the rest filled with NUL or spaces.
+- A "string" is NUL-terminated 8-bit text. Codes 0x20 to 0x7E are ASCII; the upper half is the Harvard Graphics character set, which is close to code page 850 but not the same (see 6.4). Earlier drafts said code page 437; the font index shows otherwise. A "padded string\[n\]" occupies exactly n bytes, NUL-terminated, with the rest filled with NUL or spaces.
 - Offsets are in bytes from the start of the record's data, not counting its 4-byte header.
 - Tag numbers are given in decimal; sub-tags inside objects are given in hexadecimal (0x1050), because they are easier to read that way.
 
@@ -68,15 +68,15 @@ File names inside documents are stored in upper or lower case without a director
   - offset 0: u16 font source: 3 = Bitstream Speedo outline font, 2 = Harvard Graphics stroke font.
   - offset 2: u16 font number (for Speedo fonts, the number in the file name BX000nnn.SPD).
   - offset 4: u16 style word (see below).
-  - offset 6: 4 bytes of classification \[?\].
+  - offset 6: 4 bytes of classification \[I\]: byte 0 flags (bit 0 italic, also set for HG Script; 0x04 serif, 0x02 monospace, 0x08 Gothic), byte 1 a generic family (0x02 serif, 0x04 sans, 0x08 monospace, 0x10 script, 0x20 decorative), byte 2 the weight class (always the style word's low byte shifted right by 4), byte 3 always 0x08.
   - offset 10: padded string\[48\], the display name, "Family|Style" (for example "Dutch 801|Bold").
   - offset 58: padded string\[18\], the font file name.
   - offset 76: 256 u16 values, one per character code 0 to 255, giving the font's own character identifier; 0xFFFF means the font has no glyph for that code. \[I\]
-- The style word: bit 0 set means italic; the low byte encodes weight (0x28 thin, 0x48 light, 0x58 bold for stroke fonts, 0x68 regular, 0x78 medium, 0xA8 bold); the high byte is 0x42 for Speedo fonts and 0x58 for stroke fonts. \[I for the meaning of individual bits, C that the triple identifies the entry\]
+- The style word: bit 0 set means italic; the low byte encodes weight (0x28 thin, 0x48 light, 0x58 bold for stroke fonts, 0x68 regular, 0x78 medium, 0xA8 bold; HG Gothic Bold is the one entry whose name disagrees, using 0x78); the high byte is 0x42 for Speedo fonts and 0x58 for stroke fonts. \[I for the meaning of individual bits, C that the triple identifies the entry\]
 
 A document names a font by the triple (source, number, style word), called the **font key** in this spec. A viewer finds the matching FGF entry and draws with that font. The sample charts use two keys: (3, 3, 0x4268) = Swiss 721 Roman, used almost everywhere, and (3, 13, 0x42A8) = Dutch 801 Bold. \[C\]
 
-Speedo font files follow Bitstream's published Speedo format, which open-source font libraries (for example FreeType's historical Speedo driver and the X11 Speedo rasteriser) can read. The FN3 stroke fonts start with the ASCII signature "FNTF" and a name and credit line; their glyph layout has not been documented here (see section 7).
+The FGF character map values for Speedo fonts are indexes into the Speedo file's character directory. The sample .SPD files are format "D1.0" with 1000 outline units per em, and their character data is encrypted with keys that can be recovered from the file itself (the header stores the file size both plainly and encrypted). \[C\] Speedo font files follow Bitstream's published Speedo format, which open-source font libraries (for example FreeType's historical Speedo driver and the X11 Speedo rasteriser) can read. The FN3 stroke fonts start with the ASCII signature "FNTF" and a name and credit line; their glyph layout has not been documented here (see section 7).
 
 ## 3. Common file structure
 
@@ -137,7 +137,10 @@ Some tags come in pairs that open and close a block, with no data of their own. 
 | 524 | 525 | Palette body |
 | 608 | 610 | A group of drawn objects (may nest) |
 
-Tag 516 is the one exception: it opens the object layer and also carries 16 bytes of data, two bounding boxes of four i16 each (x1, y1, x2, y2) \[I: the first is the extent of all objects, the second is the canvas\].
+Two open tags are exceptions and carry 16 bytes of data: \[C for the lengths, from all 237 516 records and all 213 608 records in the samples\]
+
+- 516 opens the object layer: two bounding boxes of four i16 each (x1, y1, x2, y2) \[I: the first is the extent of all objects, the second is the canvas\].
+- 608 opens a group of drawn objects: 16 bytes \[? meaning; likely the group's bounding box, as for 516\].
 
 **Header records (inside 500/501)**
 
@@ -160,7 +163,7 @@ Used in charts and shows to name another file:
 | --- | --- | --- |
 | 1 | Charts | A chart drawn as a button face \[I\] (galbutn1.ch3, galbutn2.ch3) |
 | 2 | Charts | The chart's palette file (HG3.PL3, MONOCHRW.PL3 and so on) |
-| 4 | Charts | A page-setup template chart (PORTRAIT.CH3, LANDSCAP.CH3) \[I\] |
+| 4 | Charts | Another chart embedded in this one: in the object layer, a 616 transform, a 404 kind 4 and an empty 608 group place that chart, scaled, on the page (LDOUBLEP, LFOURL, PDOUBLEL, PFOURP embed PORTRAIT.CH3 and LANDSCAP.CH3) \[I\] |
 | 5 | Charts | A bitmap used by a drawn object, such as a background or pattern fill (.PCX, .PCC) |
 | 20 | Shows | The file for one slide; the index is the slide number |
 
@@ -182,10 +185,10 @@ The show body starts with four settings records, then one group of records per s
 
 | Tag | Size | Meaning |
 | --- | --- | --- |
-| 708 | 3 | Show settings; "00 01 02" in every sample \[?\] |
-| 710 | 1941 | Show settings; mostly zero \[?\] |
-| 712 | 52 | 4 bytes \[?\], then three 16-byte text style entries (format in 5.3) \[I: styles for show-level text\] |
-| 714 | 2 | Show settings \[?\] |
+| 708 | 3 | Show settings; "00 01 02" in 10 sample shows, "01 01 01" in 3 \[?\] |
+| 710 | 1941 | Show settings; mostly zero. Non-zero only at offsets 0 to 2 (value 2) and at 4 + 323k (value 16), suggesting six 323-byte entries, 1 to 6 in use \[?\] |
+| 712 | 52 | 4 bytes (02 02 02 00 in every sample) \[?\], then three 16-byte text style entries (format in 5.3) \[I: styles for show-level text\] |
+| 714 | 2 | Show settings; 02 02 in every sample \[?\] |
 | 702 | variable | Slide entry: starts a slide's group |
 | 404 | variable | File reference, kind 20: the slide's file (optional) |
 | 704 | variable | Key table for the slide (optional) |
@@ -201,16 +204,16 @@ Length is 103 bytes when the description is empty, longer otherwise. \[C\]
 | --- | --- | --- | --- |
 | 0 | u16 | Slide number, counting from 0 in file order | C |
 | 2 | u8 | Kind of slide (table below) | C |
-| 3 | u8 | 0 or 1 \[?\] | ? |
-| 4 | u8 | 0, 3 or 255 \[?\] | ? |
+| 3 | u8 | 0, or 1 on sound and MIDI slides \[?\] | ? |
+| 4 | u8 | 0; 3 on every slide 0 and some chart slides; 255 on sound and MIDI slides \[?\] | ? |
 | 5 | u8 | 0, 1 or 2; may be transition speed (Slow, Medium, Fast) | I |
 | 6 | 5 bytes | Zero in samples | ? |
-| 11 | u8 | 0 to 12; transition into this slide (see 4.5) | I |
-| 12 | u8 | 0 to 18; transition, second effect (see 4.5) | I |
+| 11 | u8 | 0 to 12; 1 on every nested-show, sound and MIDI slide; mostly 0 on chart slides. Does not fit the transition guess of 4.5 | ? |
+| 12 | u8 | 0 to 18; 9 on 162 chart slides, 0 on slides without a picture; the more likely transition field (4.5) | ? |
 | 13 | u8 | Zero in samples | ? |
-| 14 | i16 | 0xFFFF in almost all slides, 0 in a few; may be display time, with 0xFFFF meaning "wait for a key" | I |
+| 14 | i16 | 0xFFFF on every slide except the 7 sound and MIDI slides, which have 0. Likely 0xFFFF = wait for a key, 0 = continue at once | I |
 | 16 | u8 | Almost always 0 | ? |
-| 17 | u8 | 0, 1 or 3 | ? |
+| 17 | u8 | 0; 1 on most slide 0s; 3 on sound and MIDI slides; 128 once | ? |
 | 18 | 84 bytes | Zero in samples | ? |
 | 102 | string | Slide description, as shown in the slide list | C |
 
@@ -237,7 +240,7 @@ A list of 4-byte entries; the count is length / 4. \[C for the size\] Each entry
 | 2 | u8 | Destination (4.6) | I |
 | 3 | u8 | Not meaningful (varies at random) | I |
 
-An entry of all zeros, or with first byte 0xFE, is unused. \[I\] The key table straight after slide 0 applies to the whole show; a key table after any other slide applies while that slide is showing. \[I\]
+An entry whose first two bytes are both 0 (whatever bytes 2 and 3 hold), or whose first byte is 0xFE, is unused. \[I, consistent with the samples\] The key table straight after slide 0 applies to the whole show; a key table after any other slide applies while that slide is showing. \[I\]
 
 Example from the gallery: keys "1" to "9" go to slides 2 to 10, F2 goes to the last slide viewed, F3 to the previous slide and F4 to the next.
 
@@ -258,7 +261,7 @@ The Projector offers these effects, by these names: Replace, Overlay, Wipe, Scro
 
 The drawing editor also animates the objects of one chart, with Draw and Erase steps using Replace, Wipe, Fade, Open, Close and Blinds, and a "Wait for key" or a delay in tenths of a second between steps. \[C for the names\] How these are stored is not yet mapped (see section 7).
 
-How the slide entry encodes the effect is **not confirmed**. The values at offsets 11 and 12 (0 to 18) fit this reading: one number per effect and direction, in menu order, starting at 0: Replace, Overlay, Wipe ×4 directions, Scroll ×4, Fade, Open ×2, Close ×2, Blinds ×2, Iris ×2 (In, Out). \[I, needs checking\]
+How the slide entry encodes the effect is **not known**. The samples do not support the reading below: offsets 11 and 12 do not vary together, offset 11 is 1 on slides without a picture, and the most common chart-slide value of offset 12 (9) would read as Scroll Down. Offset 12 alone is the more likely field. The earlier guess, kept for reference: one number per effect and direction, in menu order, starting at 0: Replace, Overlay, Wipe ×4 directions, Scroll ×4, Fade, Open ×2, Close ×2, Blinds ×2, Iris ×2 (In, Out). \[I, needs checking\]
 
 Suggested drawing of each effect, for a viewer, with the old slide A and new slide B:
 
@@ -283,7 +286,8 @@ A destination byte in a key or button table means: \[I for all rows\]
 
 | Value | Go to |
 | --- | --- |
-| Below the slide count | That slide number (counting from 0) |
+| 0 | No destination (slide 0 is the show itself; many unused key entries point here) \[I\] |
+| 1 to below the slide count | That slide number (counting from 0) |
 | 0xF3 | The slide viewed before this one (button name "lastview") |
 | 0xF4 | The next slide ("nextpal") |
 | 0xF5 | The previous slide ("prevpal") |
@@ -310,10 +314,10 @@ A destination byte in a key or button table means: \[I for all rows\]
 Signature HGB3, version record (type = chart type), header block (500, 400, 402, 501), then the page block 504 ... 505, then the end record. Inside the page block, in this order: \[C\]
 
 1. Optional 814 (button name list, see 4.4).
-2. The object layer 516 ... 517 (5.6). Present in every chart; often empty or holding a few annotations in data charts, and holding everything in drawings.
+2. The object layer 516 ... 517 (5.6). Present in almost every chart (one sample drawing has none); often empty or holding a few annotations in data charts, and holding everything in drawings.
 3. The chart block 508 ... 509: text lines (800), page areas (802 to 810), page setup (816), file references (404), colour settings (820, 822, 824), and the records of the chart type (5.4).
 
-Charts of type XY, pie, organization, title, bullet and table store **data, not pictures**: the viewer must lay out and draw the chart from the data (5.5). Drawings (type 0x29) store only objects. \[C\]
+Charts of type XY, pie, organization, title, bullet and table store their **data**, and every sample data chart (171 of 171) also stores **a drawn copy of the chart as objects** in its object layer: title, axes, bars, slices, boxes, labels and legend. Drawing the object layer alone reproduces the chart. A viewer can draw the stored copy and lay out the chart from its data (5.5) only when no copy is present. Drawings (type 0x29) store only objects. \[C for the copies; I that a chart without a copy can exist\]
 
 ### 5.2 Page records
 
@@ -330,6 +334,8 @@ Charts of type XY, pie, organization, title, bullet and table store **data, not 
 | 824 | 2 | Always 0x55, 0x00 \[?\] | ? |
 | 1700 | 8 | In drawings only; zero in samples \[?\] | ? |
 
+Records 802 to 810 appear in every data chart and never in drawings; 824 appears in every data chart and never in drawings; 1700 appears only in drawings; 814 sits in the 504 block, outside 508. \[C\]
+
 An area of all zeros means the chart has no such area. The areas use page coordinates (6.1). The tutorial pie chart, for example, has its title area across the top quarter of the page, its plot area below it and its footnote area in the bottom left corner. \[C for the values\]
 
 ### 5.3 Text
@@ -341,8 +347,8 @@ An area of all zeros means the chart has no such area. The areas use page coordi
 | 0 | u16 | Text slot: which part of the chart the line belongs to (table below) | C |
 | 2 | u16 | Line or row number within the slot, from 0 | C |
 | 4 | u16 | Column number (tables), else 0 | C |
-| 6 | u8 | Varies (0 to 7); line spacing or bullet setting \[?\] | ? |
-| 7 | u8 | 0x10 to 0x12; text attributes \[?\] | ? |
+| 6 | u8 | Number of rows this line's group spans, 0 to 33 in the samples: 3 on title line 0, the total row count on the first bullet line (0 on the others), 4/8/4 on the title chart's section starts, rows to the next stored row in tables, 1 on XY axis titles and series names | I |
+| 7 | u8 | 0x10 in general, 0x11 on every table cell, 0x12 on every XY series name \[?\] | ? |
 | 8 | string | The text | C |
 | then | u16 | Length of the text, not counting the NUL | C |
 | +2 | u16 | Text colour: a colour role number (6.2) | C |
@@ -350,7 +356,7 @@ An area of all zeros means the chart has no such area. The areas use page coordi
 | +6 | u16 | Second colour role, usually equal to the text colour (shadow or fill colour \[I\]) | ? |
 | +8 | u16 | 0 | ? |
 | +10 | f32 | Text size (6.4) | C size, I unit |
-| +14 | u16 | Justification: 1 = left, 2 = centre, 3 = right \[I for 3\]; bit 0x2000 is sometimes set \[?\] | I |
+| +14 | u16 | Justification: 1 = left, 2 = centre, 3 = right \[I for 3; never seen in the samples\]; bit 0x2000 is set only on some table cells \[?\] | I |
 | +16 | 6 bytes | Font key (section 2) | C |
 
 Text slots: \[C for which chart types use them, I for the names\]
@@ -370,7 +376,7 @@ The colour roles in the samples match their names: titles use role 1 (Title), su
 
 **Text style tables** \[C for the layout\]
 
-Tags 906 (organization), 1002 (title), 1102 (bullet), 1202 (table), 1308 (pie), 1412 (XY) and part of 712 (show) hold a list of 16-byte entries, one per text slot or level, with the defaults used for new text:
+Tags 906 (organization), 1002 (title), 1102 (bullet), 1202 (table), 1308 (pie), 1412 (XY) and part of 712 (show) hold a list of 16-byte entries, one per text role (not per slot number), with the defaults used for new text. In every table the first three entries are title, subtitle 1 and subtitle 2; the meaning of the rest depends on the chart type and is given by their default colour roles (for example footnote, pie titles, slice labels, axis titles, series names) \[I\]:
 
 | Offset | Type | Meaning |
 | --- | --- | --- |
@@ -400,6 +406,7 @@ A viewer should draw each 800 line with the colour, size, justification and font
 | --- | --- | --- |
 | 1402 | 102 | One per series or axis: u8 number, then axis settings; holds several f64 "not set" values (axis minimum, maximum, increment chosen automatically) \[I\] |
 | 1404, 1410, 1414, 1418 | 3 to 6 | Chart-wide options \[?\] |
+| 1420 | ? | Present in 2 sample XY charts only \[?\] |
 | 1406 | 15 | One per series: u8 series number, then style bytes; byte 9 and byte 13 are the series colour role (21 to 26, repeating every 6 series) \[C\], byte 14 a marker or pattern number \[I\]. The series type (bar, line, area, point) is among bytes 1 to 7 \[?\] |
 | 1408 | 25 | Frame and axis placement, including f32 85.0, 50.0, 40.0, 15.0 \[?\] |
 | 1422 | 25 | One per row: u16 row number, padded string\[23\] X label |
@@ -417,7 +424,7 @@ The tree is given by the order of 914 records and the level byte: each box is a 
 
 **Title (type 0x1F) and bullet (type 0x20).**
 
-- Title charts use only text slot 7 and the style table 1002. \[C\]
+- Title charts use only text slot 7 and the style table 1002. \[C\] Their lines fall in three sections starting at rows 0, 4 and 12 (top, middle, bottom), matching the three 1002 entries. \[I\]
 - Bullet charts use slot 8 for lines, 1102 for styles, 1106 (22 bytes, options) and 1108 (8 bytes per line: bullet shape \[I\], colour role 16 = Bullet \[C\], line number \[C\], indent level \[I\]). \[I unless marked\]
 
 **Table (type 0x21).** Slot 6 holds the cell text by row and column. 1202 is the style table; 1206, 1210 and 1212 are options; 1208 and 1214 hold f64 values that are likely column widths and row positions \[?\].
@@ -441,17 +448,20 @@ The original lays out data charts itself; the stored areas (5.2) tell a viewer w
 
 The object layer (between 516 and 517) is a list of drawn objects, optionally grouped with 608 ... 610. Each object is a sequence of records: \[C\]
 
-1. 616 (24 bytes): the object's transform, six f32 values a, b, c, d, e, f.
+1. Optional 616 (24 bytes): the object's transform, six f32 values a, b, c, d, e, f. Objects in data charts have none; use the identity transform. \[C\]
 2. Optional 618: the object's button name (string; see 4.4).
-3. Optional 614: extra data for some text objects \[?\].
+3. Optional 404 kind 5: the bitmap the object draws (always present for bitmap objects, between 616 and 612). \[C\]
 4. 612: the object itself.
+5. Optional 614: a continuation of the 612. When a 612's sub-record list does not reach 0x1FFF, the next 614 carries the rest of the sub-records and ends with 0x1FFF; drawing state carries over. \[C, from the 3 occurrences in the samples\]
+
+A 616 and 618 may also come straight before a 608 group, and then apply to the whole group (7 button groups and 12 empty bitmap groups in the samples). The 608 data is the union of the members' bounding boxes as four i16 (x1, y1, x2, y2), then 8 zero bytes. \[C\]
 
 **Transform (616)** \[C\] Each point (x, y) inside the object is mapped to page coordinates by:
 
 - page x = a · x + c · y + e
 - page y = b · x + d · y + f
 
-This was checked by recomputing the stored bounding box of many objects from their points. All samples have b = c = 0 (no rotation or slant); a viewer should still apply the full formula.
+This was checked by recomputing the stored bounding box of many objects from their points. About 375 drawing objects are rotated by 90° (a = d = 0, b < 0, c > 0), so a viewer must apply the full formula. \[C\]
 
 **Object record (612)** \[C for the layout\]
 
@@ -461,41 +471,46 @@ This was checked by recomputing the stored bounding box of many objects from the
 | 8 | 8 bytes | Object flags; usually zero, first byte sometimes 1 to 5 \[?\] |
 | 16 | sub-records | Each: u16 sub-tag, u16 length, data. The list ends with sub-tag 0x1FFF. |
 
-Each object has one shape sub-record and any number of attribute sub-records.
+The sub-records are a **display list**, not one shape: attribute sub-records set the current drawing state, and each shape sub-record is drawn with the state at that point. For example 0x112D, 0x1100, 0x110B, 0x1071, 0x110B, 0x1071, 0x10B0 draws two boxes with different fills and then a text block. 427 of the 3,712 sample objects have two or more shapes, 217 have ten or more. \[C\]
 
-**Shape sub-records.** Point lists are i16 pairs in the object's own coordinates (before the transform). The low hex digit of the sub-tag varies (for example 0x1070, 0x1071, 0x1072, 0x1077, 0x1078); it most likely selects outline, fill or both \[I\]. Draw the shape filled if an attribute gives a fill and outlined if it gives a line.
+The 516 extent box contains every object's bounding box but is not a tight fit. \[C\]
+
+**Shape sub-records.** Point lists are i16 pairs in the object's own coordinates (before the transform). The low hex digit of the sub-tag varies (for example 0x1070, 0x1071, 0x1072, 0x1077, 0x1078); it selects how the shape is painted: 0 or 2 = outline only (0x1072 boxes carry a meaningless fill byte), 1 = filled, and outlined if a line is set, 7 = direct fill without a line, 8 = gradient fill (always with 0x1110). \[I, consistent with every sample\]
 
 | Sub-tag | Shape | Data | Mark |
 | --- | --- | --- | --- |
 | 0x1021, 0x1022, 0x1028 | Ellipse | i16 centre x, centre y, radius x, radius y | C |
-| 0x1031 | Elliptical arc | centre x, centre y, radius x, radius y, u16 1, start angle, end angle | C |
+| 0x1031 | Elliptical arc | centre x, centre y, radius x, radius y, u16 arc style, start angle, end angle. Style 1 (every sample, all filled) is a pie slice: the arc closed through the centre \[I for the meaning\] | C |
 | 0x1041 | Elliptical band (the side of a cylinder or a 3-D pie edge): the arc from start to end angle, extruded straight down by the depth | centre x, centre y, radius x, radius y, start angle, end angle, u16 depth | C |
-| 0x1050 | Open polyline | u16 point count n, u16 1, u16 n, then n points | C |
+| 0x1050 | Open polyline, possibly in several parts | u16 point count n, u16 part count k, k × u16 points per part (summing to n), then n points. Most have k = 1; 160 sample polylines have k from 5 to 19 | C |
 | 0x1061, 0x1068 | Polygon (closed) | same as 0x1050 | C |
-| 0x1070 to 0x1078 | Box | u16 box style (1 = square corners; 5, 6 = other corner styles \[I\]), u16 corner size \[I\], i16 x1, y1, x2, y2 | C for the rectangle |
-| 0x1080 | Curve through points \[I\] | same as 0x1050 | I |
-| 0x1091, 0x1098 | Closed curve \[I\] | same as 0x1050 | I |
-| 0x10A0, 0x10A1 | Curve \[I\] | u16 point count n, n points, then 6 bytes \[?\] | I |
+| 0x1070 to 0x1078 | Box | u16 box style (1 = square corners; 2, 3, 5, 6 also seen; 5 and 6 extend beyond the rectangle, likely rounded or shadowed corners \[I\]), u16 corner size \[I\], i16 x1, y1, x2, y2 | C for the rectangle |
+| 0x1080 | Cubic Bézier curve: points are P0, C1, C2, P1, C1, C2, P2 … (3k + 1 points) | same as 0x1050 | C |
+| 0x1091, 0x1098 | Closed cubic Bézier curve, same point order (pie slices use circle handles of 0.552 × radius) | same as 0x1050 | C |
+| 0x10A0, 0x10A1 | Smooth curve through its points (data series lines) \[I\] | u16 point count n, n points, then 6 bytes: u16 about 500 to 630, u16 0 to 4, u16 0 or 1 \[?\] | I |
 | 0x10B0 | Text block | see below | I |
 
 Angles are in tenths of a degree, measured counter-clockwise from the positive x axis (0 = 3 o'clock, 900 = 12 o'clock). \[C\]
 
-**Text block (0x10B0).** Starts with u16 110, then u16 (length of the sub-record − 22), then layout fields including the text box corners in object coordinates \[?\]. It ends with one text run per line, each the string followed by the 22-byte text tail of 5.3 (length, colours, size, justification, font key). Draw each run in the text box with its justification. \[I\]
+**Text block (0x10B0).** Starts with u16 (offset of the first text run: 82 + 28 × number of wrapped lines, so 110, 138 or 166 in the samples), then u16 (length of the sub-record − 22, correct in every sample). Known header fields: offset 14 u16 total text length, 16 u16 run count (always 1), 38 the text frame box (4 × i16), 62 a second box that equals the object's bounding box for most text-only objects (likely the actual text extent), 80 u16 line count, then one 28-byte entry per line with a u32 start offset at +4 and a u8 length at +8. \[I for the field meanings, C for the run offset\] The text colour of a run is the 4-byte value formed by the tail's colour u16 and the u16 after it (byte 0 = 0xFF means direct RGB, else the low byte is a role). Lines are about 1.28 × the text size apart. \[I\] The runs follow: each is the string, padded with a NUL to an even length, followed by the 22-byte text tail of 5.3 (length, colours, size, justification, font key). Draw each run in the text box with its justification; right justification (3) does occur here. \[I\] Bullet markers in bullet charts are separate one-character text blocks: colour role 16, right-justified in a narrow box left of the line, same font and size as the line; the character is 0xFA (round bullet) or 0xF9 (►), or text such as "1." for numbered styles. \[C\] Header byte 34 varies with the text's role (9 normal, 10 titles, 19 bullet markers, 20 or 25 axis labels, 146 in drawings) and byte 32 is 1 for titles and bullet markers \[?\].
 
 **Attribute sub-records** \[? unless marked\]
 
 | Sub-tag | Size | Notes |
 | --- | --- | --- |
-| 0x1100 | 4 | Line (outline) settings: byte 0 is a colour role (seen: 14 Frame, 18 Lines, 23, 26, 32 Outlines) \[I\]; byte 1 is 0 to 3 or 255, likely line width or style \[I\] |
-| 0x110B | 4 | Fill settings: colour roles \[I\] |
-| 0x110C | various | Fill settings \[?\] |
-| 0x1110 | 10 | Pattern or gradient fill, e.g. FF 00 00 20 FF 00 00 40 00 00 \[?\] |
-| 0x1120 | various | \[?\] |
-| 0x112A | 2 | u16, e.g. 90 or 63; likely a rotation angle in degrees or a number of steps \[?\] |
-| 0x112B, 0x112D, 0x112E, 0x112F | various | \[?\] |
-| 0x1140 | 8 | Bitmap fill; appears with a 404 kind 5 bitmap reference \[I\] |
+| 0x1100 | 4 | Line (outline) settings: byte 0 is a colour (see below; roles seen most: 32 Outlines, 14 Frame, 26, 18 Lines, 23, 24, 15) \[I\]; byte 1 is 0, 1, 2 or 255 mostly, likely line width or style \[I\]; bytes 2 and 3 are not meaningful unless byte 0 is 0xFF |
+| 0x110B | 4 | Fill colour, byte 0 (see below) \[I\] |
+| 0x110C | 4 | Fill colour for bitmap objects (always before 0x1140; often FF 55 55 55) \[I\]; also on 3-D pie faces with byte 0 = 0 \[?\] |
+| 0x1110 | 10 | Two direct colours (FF R G B, FF R G B) and a u16 from 0 to 1800; likely a two-colour gradient with its angle in tenths of a degree \[I\] |
+| 0x1120 | 2 | u16: 0, 1, 25, 147 and others \[?\] |
+| 0x112A | 2 | Fill brightness in percent: 100 on flat faces, lower only on 3-D faces (bar sides, cylinder walls, pyramid faces, 3-D pie walls and edges), varying with the face's direction like a lighting model. Scale the fill towards black by it \[I\] |
+| 0x112B, 0x112D | 2 | u16 0 or 1 \[?\] |
+| 0x112E, 0x112F | 2 | u16 (0 or 3; 1) \[?\] |
+| 0x1140 | 8 | Bitmap fill, mostly zero; the bitmap is the 404 kind 5 reference before the 612 \[I\] |
 
-Until the attributes are fully decoded, a viewer can draw every closed shape filled with the colour in the first byte of 0x110B (or of 0x1100 when there is no 0x110B) and outlined with the colour in the first byte of 0x1100.
+**Colours in attributes** \[C\]: a colour is 4 bytes. If byte 0 is 0xFF, bytes 1 to 3 are a direct red, green, blue value (as in palette record 1555); otherwise byte 0 is a colour role.
+
+Until the attributes are fully decoded, a viewer can draw every closed shape filled with the current 0x110B colour (or the 0x1100 colour when no 0x110B has been set) and outlined with the current 0x1100 colour.
 
 ## 6. Rendering model
 
@@ -516,15 +531,17 @@ Signature HGA2, version type 0x33 (.PL3) or 0x34 (.PC3), header block, palette b
 
 | Tag | Size | Meaning | Mark |
 | --- | --- | --- | --- |
-| 1551 | 2 | u16 number of colours (64) | C |
+| 1551 | 2 | u16 number of colours: 64 in .PL3 files, but some have fewer (50 and 57 in the samples) | C |
 | 1553 | 18 | One per colour: u16 index (0 to 63), padded string\[16\] name | C |
-| 1552 | 6 | One per colour: u16 index, u8 role number (index + 1), u8 red, u8 green, u8 blue, each 0 to 255 | C |
-| 1554 | 14 | Palette options \[?\] | ? |
-| 1555 | 64 | 16 entries of 4 bytes; possibly the 16 colours used on 16-colour displays \[?\] | ? |
+| 1552 | 6 | One per colour: u16 index, u8 role number (index + 1 in .PL3; 0xFF in every .PC3), u8 red, u8 green, u8 blue, each 0 to 255 | C |
+| 1554 | 14 | Background settings \[I\]: u16 mode (1 plain, 2 in the shaded palettes, likely a gradient), two colours each stored as 0xFF R G B, u16 (90 in almost all files, possibly an angle), u16 (12 in all files, possibly a step count). Absent in .PC3 | I |
+| 1555 | 64 | 16 entries of 4 bytes, each 0xFF R G B. The same 16 colours (black, white, a 12-step hue wheel, two greys) in most files, monochrome palettes included, so this is not a 16-colour display mapping; likely the colour editor's custom swatches \[I\]. Absent in .PC3 | C layout, I meaning |
+
+Custom palettes (.PC3) are plain colour lists, not role palettes: every role byte is 0xFF and the names have no "|role" part ("White", "Gray LL"). No sample chart names a .PC3. \[C\]
 
 A role number r refers to palette entry r − 1. Role 0 means "none" (do not draw). \[C for r − 1, I for 0\]
 
-Entries 0 to 41 are roles with fixed meanings; their names are "colour description|role", for example "Yel  L|Title". Entries 42 to 63 are extra named colours for drawings. The role names, by role number: \[C\]
+Entries 0 to 41 are roles with fixed meanings; their names are usually "colour description|role", for example "Yel  L|Title" (26 of the 31 sample .PL3 files; a few use other naming, such as "1. Title"). Names may have junk bytes after the NUL. Entries 42 to 63 are extra named colours for drawings. The role names, by role number: \[C\]
 
 | Role | Name | Role | Name |
 | --- | --- | --- | --- |
@@ -557,8 +574,9 @@ Series beyond the sixth reuse Series1 to Series6 in turn. \[C from the series re
 
 - Each text line names its font by font key (section 2) and its size as an f32.
 - The size unit is not confirmed. Sizes of 9 (titles), 5 (subtitles), 3.5 to 4 (footnotes and labels) fit **percent of the page's shorter side**: a size-9 title on a 7.5 in page is about 0.68 in (49 points) tall. \[I\] Use that until reference renders say otherwise.
+- Lines are laid out as the sum of the glyph advances; kerning is not applied. \[I\]
 - Justification is relative to the area the text belongs to (title area, plot area, or the text box of a text object). \[I\]
-- Characters are 8-bit codes in the IBM PC code page 437; the font index maps them to glyphs (section 2). \[I\]
+- Characters are 8-bit codes in the Harvard Graphics character set; the font index maps them to glyphs (section 2). Its upper half is close to code page 850 (for example 0xB5 Á, 0xC6 ã, 0xD0 ð, 0xE0 Ó, 0x9B ø, 0x9E ×, 0xB8 ©, 0xA9 ®), with codes of its own: 0xB9 Œ, 0xCA and 0xCB curly double quotes, 0xEE and 0xEF curly single quotes, 0xF0 ‰, 0xF2 ≥, 0xF3 ≤, 0xF4 ¶, 0xF5 §, 0xF9 ►, 0xFD minus sign, and 0xFF a pictograph with no Unicode equivalent. \[C, from the glyphs the Speedo fonts draw for each code\] The full table is in the viewer's src/formats/hg3/charset.ts; 0xFA is a medium round bullet (•) and 0x07 a larger one (●).
 - If a font file is missing, substitute a similar modern font: Swiss 721 ≈ Helvetica or Arial, Dutch 801 ≈ Times, Geo Slab 712 ≈ Rockwell or Memphis, Monospace 821 ≈ a sans-serif monospace, HG Roman/Sans/Script/Gothic ≈ single-stroke Hershey fonts. \[I\]
 
 ### 6.5 Drawing order
@@ -596,11 +614,11 @@ In rough order of how much they matter to a viewer:
 6. **Text size unit** (6.4).
 7. **Animated drawings**: where the Draw/Erase animation steps of a drawing are stored.
 8. **FN3 stroke fonts**: glyph layout.
-9. The remaining small records: 402, 516 boxes, 708 to 714, 820, 822, 824, 1554, 1555, 614, 1700, and the meaning of destinations 0x96 and 0x97.
+9. The remaining small records: 402, 516 boxes, 708 to 714, 820, 822, 824, the 1554 fields, 614, 1700, and the meaning of destinations 0x96 and 0x97.
 
 ### 7.3 Samples and evidence still needed
 
-- **Reference pictures from the original program** for a handful of the sample files: the tutorial charts (PIETUT, XYTUT, ORGTUT, DRAWTUT), a few gallery charts of each type, and GALLERY.SH3 played through. Screenshots taken in DOSBox at 640 × 480 are enough. These would settle chart layout, text size, line widths and fills.
+- **Reference pictures from the original program** for a handful of the sample files (GALD111 in particular, to see where GALBUTN2's button bar sits relative to the chart title): the tutorial charts (PIETUT, XYTUT, ORGTUT, DRAWTUT), a few gallery charts of each type, and GALLERY.SH3 played through. Screenshots taken in DOSBox at 640 × 480 are enough. These would settle chart layout, text size, line widths and fills.
 - **The show editor's slide list for GALB1.SH3 and PLAY\_ALL.SH3**, showing each slide's transition, direction, speed and time. That pins down the 702 fields.
 - **Pairs of files that differ in one setting**, made in Harvard Graphics 3 (for example the same pie with the start angle changed, or the same slide with only the transition changed). These are the fastest way to decode the remaining option bytes.
 - The Harvard Graphics 3 user manual, if available, for the meaning of options and limits.

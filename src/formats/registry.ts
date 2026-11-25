@@ -1,8 +1,8 @@
 import type { Confidence, FormatParser } from "./types";
-import { hgDosParser } from "./hg-dos";
+import { hg3Parser } from "./hg3";
 
 /** Every known parser. Add new formats here. */
-export const parsers: readonly FormatParser[] = [hgDosParser];
+export const parsers: readonly FormatParser[] = [hg3Parser];
 
 export interface Detection {
   parser: FormatParser;

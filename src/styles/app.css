@@ -1,7 +1,211 @@
-body { font-family: system-ui, sans-serif; margin: 0; background: #f6f6f4; color: #1a1a1a; }
-main { max-width: 56rem; margin: 0 auto; padding: 2rem 1rem; }
-.dropzone { display: block; padding: 2.5rem; border: 2px dashed #888; border-radius: 8px; text-align: center; cursor: pointer; }
-.dropzone.over { border-color: #06c; background: #e8f1fb; }
-.scene { width: 100%; border: 1px solid #ccc; margin: 1rem 0; }
-.hex { background: #111; color: #9f9; padding: 1rem; overflow: auto; font-size: 0.8rem; }
-.error { color: #b00020; }
+/* Harvard Web Viewer: plain styles, colours as variables, light and dark. */
+:root {
+  color-scheme: light dark;
+  --bg: #f6f6f4;
+  --surface: #ffffff;
+  --surface-2: #eeeeea;
+  --text: #1a1a1a;
+  --muted: #5c5c58;
+  --border: #d0d0ca;
+  --accent: #0b5cad;
+  --accent-text: #ffffff;
+  --accent-soft: #e3eefa;
+  --warn: #8a5a00;
+  --warn-soft: #fff6e0;
+  --error: #b00020;
+  --focus: #0b5cad;
+  --stage: #000000;
+  --stage-text: #dddddd;
+  --hex-bg: #111111;
+  --hex-text: #9f9;
+  --hex-mark: #ffd54a;
+  --radius: 6px;
+  --sidebar: 15rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161616;
+    --surface: #202020;
+    --surface-2: #2a2a2a;
+    --text: #e8e8e4;
+    --muted: #a3a39d;
+    --border: #3d3d3a;
+    --accent: #6aa8ec;
+    --accent-text: #0b1a2a;
+    --accent-soft: #1d2f44;
+    --warn: #f0c060;
+    --warn-soft: #3a2f16;
+    --error: #ff7a8a;
+    --focus: #8cc0ff;
+    --hex-bg: #0b0b0b;
+  }
+}
+
+* { box-sizing: border-box; }
+body { font-family: system-ui, sans-serif; margin: 0; background: var(--bg); color: var(--text); line-height: 1.4; }
+h1, h2, h3, h4 { line-height: 1.2; }
+code { font-family: ui-monospace, monospace; }
+.muted { color: var(--muted); font-weight: normal; }
+.error { color: var(--error); }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* Buttons: real buttons, file-input labels and summaries share one look. */
+button, .button, select {
+  font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 0.35rem 0.8rem; cursor: pointer;
+}
+button:hover:not(:disabled), .button:hover { border-color: var(--accent); }
+button:disabled { opacity: 0.5; cursor: default; }
+.button { display: inline-block; }
+.button-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.button:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
+.button:has(:focus:not(:focus-visible)) { outline: none; }
+
+.skip-link { position: absolute; left: -999px; top: 0.5rem; background: var(--surface); padding: 0.4rem 0.8rem; z-index: 20; }
+.skip-link:focus { left: 0.5rem; }
+
+/* App shell: header, then sidebar + main (stacked on narrow screens). */
+.app { min-height: 100vh; display: flex; flex-direction: column; }
+.app-header {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem;
+  padding: 0.6rem 1rem; background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.app-name { font-size: 1.15rem; margin: 0; }
+.app-actions, .file-pickers { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.app-body { flex: 1; display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr); }
+.app-empty .app-body, .app-body:not(:has(.app-sidebar)) { grid-template-columns: minmax(0, 1fr); }
+.app-sidebar { border-right: 1px solid var(--border); background: var(--surface); padding: 0.75rem; overflow: auto; max-height: calc(100vh - 3.5rem); position: sticky; top: 0; }
+.sidebar-note { font-size: 0.8rem; margin: 1rem 0 0; }
+.app-main { padding: 1rem; min-width: 0; max-width: 64rem; width: 100%; margin: 0 auto; }
+.app-main:focus { outline: none; }
+.status { margin: 0; min-height: 0; color: var(--muted); }
+.status:empty { display: none; }
+@media (max-width: 48rem) {
+  .app-body { grid-template-columns: minmax(0, 1fr); }
+  .app-sidebar { position: static; max-height: 12rem; border-right: none; border-bottom: 1px solid var(--border); }
+  .app-main { padding: 0.75rem; }
+}
+.dragging .dropzone, .dropzone.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop-overlay {
+  position: fixed; inset: 0.5rem; display: flex; align-items: center; justify-content: center; z-index: 30;
+  border: 3px dashed var(--accent); border-radius: 12px; background: color-mix(in srgb, var(--accent-soft) 85%, transparent);
+  font-size: 1.25rem; pointer-events: none;
+}
+
+/* Settings drop-down. */
+.settings { position: relative; }
+.settings > summary { list-style: none; }
+.settings > summary::-webkit-details-marker { display: none; }
+.settings > summary::after { content: " ▾"; }
+.settings-panel {
+  position: absolute; right: 0; top: calc(100% + 0.4rem); z-index: 10; width: min(17rem, calc(100vw - 2rem));
+  display: grid; gap: 0.6rem; padding: 0.8rem; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: 0 6px 20px rgb(0 0 0 / 0.2);
+}
+.settings-panel label { display: grid; gap: 0.2rem; }
+.settings-panel .settings-check { display: flex; align-items: center; gap: 0.5rem; }
+.settings-note { font-size: 0.8rem; margin: 0; }
+
+/* File list. */
+.file-group h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0.75rem 0 0.3rem; }
+.file-group:first-child h2 { margin-top: 0; }
+.file-group ul { list-style: none; margin: 0; padding: 0; }
+.file-button {
+  display: block; width: 100%; text-align: left; border: 1px solid transparent; background: none; padding: 0.3rem 0.5rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.file-button[aria-current="page"] { background: var(--accent-soft); border-color: var(--accent); font-weight: 600; }
+.file-dir { display: block; font-size: 0.75rem; color: var(--muted); font-weight: normal; overflow: hidden; text-overflow: ellipsis; }
+
+/* Empty state. */
+.dropzone {
+  max-width: 40rem; margin: 2rem auto; padding: 2rem 1.5rem; border: 2px dashed var(--border); border-radius: 12px;
+  background: var(--surface); text-align: center;
+}
+.dropzone h2 { margin-top: 0; }
+.dropzone-buttons { display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; }
+.dropzone-list { text-align: left; display: inline-block; margin: 0.5rem auto; padding-left: 1.2rem; }
+.privacy { font-weight: 600; }
+
+/* The file shown. */
+.viewer-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.5rem 1rem; margin-bottom: 0.75rem; }
+.viewer-title h2 { margin: 0; font-size: 1.3rem; overflow-wrap: anywhere; }
+.viewer-title p { margin: 0.2rem 0 0; }
+.notice { border-left: 4px solid var(--warn); background: var(--warn-soft); padding: 0.5rem 1rem; margin: 1rem 0; }
+.page { margin: 0 0 1rem; }
+/* Scene SVGs letterbox their page (xMidYMid meet); the dark ground shows as bars. */
+.scene { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; max-height: 80vh; background: #444; border: 1px solid var(--border); margin: 0; }
+
+/* Collapsible panels (diagnostics, file structure). */
+.panel { margin: 1rem 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.panel > summary { padding: 0.5rem 0.8rem; cursor: pointer; font-weight: 600; }
+.panel[open] > summary { border-bottom: 1px solid var(--border); }
+.panel-body { padding: 0.25rem 1rem 0.75rem; }
+.panel-body h4 { margin: 0.75rem 0 0.25rem; }
+.panel-body ul { margin: 0.25rem 0; padding-left: 1.2rem; }
+.badge { display: inline-block; margin-left: 0.3rem; padding: 0 0.45rem; border-radius: 999px; font-size: 0.8rem; font-weight: normal; background: var(--surface-2); }
+.badge-warn { background: var(--warn-soft); color: var(--warn); font-weight: 600; }
+
+/* Inspector: record tree beside the hex dump (stacked when narrow). */
+.inspector-body { display: grid; grid-template-columns: minmax(14rem, 22rem) minmax(0, 1fr); gap: 1rem; padding: 0.75rem; }
+@media (max-width: 60rem) { .inspector-body { grid-template-columns: minmax(0, 1fr); } }
+.inspector-body h4 { margin: 0 0 0.4rem; }
+.inspector-note { margin: 0; }
+.record-list { list-style: none; margin: 0; padding: 0; max-height: 28rem; overflow: auto; font-family: ui-monospace, monospace; font-size: 0.8rem; border: 1px solid var(--border); border-radius: var(--radius); }
+.record-row { display: flex; align-items: center; gap: 0.2rem; }
+.record-toggle { flex: none; width: 1.4rem; padding: 0; border: none; background: none; text-align: center; }
+.record-select { flex: 1; min-width: 0; text-align: left; border: none; border-radius: 0; background: none; padding: 0.15rem 0.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.record-select[aria-pressed="true"] { background: var(--accent-soft); outline: 1px solid var(--accent); }
+.record-block > .record-select .record-tag { font-weight: 700; }
+.record-detail { color: var(--muted); }
+.hex { background: var(--hex-bg); color: var(--hex-text); padding: 0.75rem; margin: 0; overflow: auto; max-height: 28rem; font-size: 0.8rem; border-radius: var(--radius); }
+.hex mark { background: var(--hex-mark); color: #000; }
+
+/* Show player: the stage keeps the 4:3 page. */
+.player { margin: 0 0 1rem; border-radius: var(--radius); }
+.player:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.player-stage { position: relative; aspect-ratio: 4 / 3; max-height: 80vh; margin: 0 auto; background: var(--stage); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.player-stage .scene { border: none; width: 100%; height: 100%; max-height: none; }
+.player-message { color: var(--stage-text); text-align: center; }
+/* Sound notes ("MIDI music … is not played"): over the slide, never in the way. */
+.player-note { position: absolute; left: 50%; bottom: 0.75rem; transform: translateX(-50%); max-width: calc(100% - 2rem); margin: 0; padding: 0.3rem 0.7rem; border-radius: 4px; background: rgba(0, 0, 0, 0.75); color: #fff; font-size: 0.85rem; pointer-events: none; z-index: 1; }
+.player-enable-sound { font-weight: bold; }
+/* Transitions: old and new slide stacked; inline clip-path / transform per frame. */
+.transition-stage { position: absolute; inset: 0; overflow: hidden; }
+.transition-layer { position: absolute; inset: 0; }
+.transition-previous { pointer-events: none; }
+.player-controls, .presentation-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.5rem; }
+.player-counter { flex: 1; min-width: 8rem; text-align: center; font-variant-numeric: tabular-nums; }
+
+/* Slide strip: a scrolling row of thumbnails under the player. */
+.slide-strip { margin-top: 0.75rem; }
+.slide-strip-list { display: flex; gap: 0.5rem; list-style: none; margin: 0; padding: 0.25rem 0.25rem 0.5rem; overflow-x: auto; scroll-behavior: smooth; }
+.slide-thumb { flex: none; }
+.slide-thumb button { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; padding: 0.25rem; width: 8.5rem; background: var(--surface); }
+.slide-thumb button[aria-current="step"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent); }
+.slide-thumb-picture { display: flex; align-items: center; justify-content: center; width: 100%; aspect-ratio: 4 / 3; background: var(--stage); color: var(--stage-text); font-size: 0.75rem; overflow: hidden; }
+.slide-thumb-picture .scene { border: none; height: 100%; max-height: none; }
+.slide-thumb-number { font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+
+/* Presentation mode (shows and charts): the window, black, the 4:3 page letterboxed. */
+.player.presenting, .presentation {
+  position: fixed; inset: 0; z-index: 100; margin: 0; border-radius: 0; background: #000; color: var(--stage-text);
+  display: flex; align-items: center; justify-content: center;
+}
+.player.presenting .player-stage, .presentation-stage {
+  width: min(100vw, calc(100vh * 4 / 3)); height: auto; aspect-ratio: 4 / 3; max-height: 100vh; position: relative;
+  display: flex; align-items: center; justify-content: center; background: #000;
+}
+.presentation-stage .scene { border: none; width: 100%; height: 100%; max-height: none; }
+.player.presenting .player-controls, .presentation-controls {
+  position: absolute; left: 50%; bottom: 1rem; transform: translateX(-50%); width: min(44rem, calc(100% - 2rem)); margin: 0;
+  padding: 0.5rem 0.75rem; border-radius: var(--radius); background: rgb(20 20 20 / 0.85); color: #eee; transition: opacity 0.3s;
+}
+.player.presenting .player-controls button, .presentation-controls button { background: #2a2a2a; color: #eee; border-color: #555; }
+.controls-hidden { cursor: none; }
+.controls-hidden .player-controls, .controls-hidden .presentation-controls { opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .player.presenting .player-controls, .presentation-controls { transition: none; }
+  .slide-strip-list { scroll-behavior: auto; }
+}

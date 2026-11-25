@@ -5,3 +5,8 @@ dist
 .DS_Store
 *.log
 .idea
+
+# Non-shareable sample files (kept local only)
+samples-private/*
+!samples-private/.gitkeep
+samples-private/
