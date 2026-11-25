@@ -5,6 +5,9 @@
  * footnote text, then the chart-type drawing in the plot area), then the
  * object layer, then the button chart's objects (task 20), then one
  * transparent click area per button (assumptions.ts BUTTON_HIT_AREAS).
+ * The data chart is drawn only when the chart is laid out from its data
+ * (dataLayout.ts: by default only when its object layer holds no drawn
+ * copy of it, which every sample chart has).
  * Embedded charts (task 13c)
  * are drawn by the object layer through `ctx.drawChart` = drawChartElements,
  * i.e. like a chart of their own minus the background and button overlay. The per-part builders below
@@ -24,6 +27,9 @@ import { DocumentType } from "../container";
 import { ROLE } from "../palette";
 import { TextSlot } from "../text";
 import { type ChartSceneContext, type ChartSceneOptions, createButtonChartContext, createChartSceneContext } from "./context";
+import { drawTableChart } from "./data/table";
+import { drawBulletChart, drawTitleAndFootnote, drawTitleChart } from "./data/textCharts";
+import { type DataLayoutMode, drawsFromData, drawsObjectLayer } from "./dataLayout";
 import { drawObjectLayer, loadReferencedChart } from "./objectLayer";
 import { areaToRect } from "./page";
 
@@ -58,15 +64,15 @@ export type ChartPart =
   | "object layer"
   | "button chart overlay";
 
-/** Parts with a stub builder. Each task deletes its entry when it lands. */
+/**
+ * Parts with a stub builder. Each task deletes its entry when it lands.
+ * They matter only for charts drawn from their data (dataLayout.ts): a
+ * chart with a drawn copy shows every part through its object layer.
+ */
 const NOT_YET_DRAWN: ReadonlySet<ChartPart> = new Set<ChartPart>([
-  "title and footnote text", // task 14
   "XY data", // task 17
   "pie data", // task 16
   "organization data", // task 18
-  "title chart text", // task 15
-  "bullet data", // task 15
-  "table data", // task 19
 ]);
 
 const DATA_PART: ReadonlyMap<number, ChartPart> = new Map<number, ChartPart>([
@@ -78,7 +84,7 @@ const DATA_PART: ReadonlyMap<number, ChartPart> = new Map<number, ChartPart>([
   [DocumentType.Table, "table data"],
 ]);
 
-/** The parts this chart actually has, in drawing order. */
+/** The parts this chart actually has, in drawing order (data parts whether or not they are drawn from data). */
 export function chartParts(chart: Chart): ChartPart[] {
   const parts: ChartPart[] = [];
   const dataPart = DATA_PART.get(chart.chartType);
@@ -91,8 +97,13 @@ export function chartParts(chart: Chart): ChartPart[] {
   return parts;
 }
 
-/** Parts of this chart that no task draws yet, in drawing order. */
-export function notYetDrawn(chart: Chart): ChartPart[] {
+/**
+ * Parts of this chart that no task draws yet, in drawing order: none when
+ * the chart is not drawn from its data under `mode` (its drawn copy shows
+ * them).
+ */
+export function notYetDrawn(chart: Chart, mode: DataLayoutMode = "auto"): ChartPart[] {
+  if (!drawsFromData(chart, mode)) return [];
   return chartParts(chart).filter((p) => NOT_YET_DRAWN.has(p));
 }
 
@@ -123,10 +134,6 @@ function drawDebugAreas(ctx: ChartSceneContext): RectElement[] {
 // Stubs for later tasks
 // ---------------------------------------------------------------------------
 
-/** Task 14: slot 1 text in the title area, slot 2 in the footnote area. */
-function drawTitleAndFootnote(_ctx: ChartSceneContext): SceneElement[] {
-  return [];
-}
 /** Task 17. */
 function drawXYChart(_ctx: ChartSceneContext): SceneElement[] {
   return [];
@@ -137,18 +144,6 @@ function drawPieChart(_ctx: ChartSceneContext): SceneElement[] {
 }
 /** Task 18. */
 function drawOrgChart(_ctx: ChartSceneContext): SceneElement[] {
-  return [];
-}
-/** Task 15. */
-function drawTitleChart(_ctx: ChartSceneContext): SceneElement[] {
-  return [];
-}
-/** Task 15. */
-function drawBulletChart(_ctx: ChartSceneContext): SceneElement[] {
-  return [];
-}
-/** Task 19. */
-function drawTableChart(_ctx: ChartSceneContext): SceneElement[] {
   return [];
 }
 
@@ -203,7 +198,12 @@ function drawDataChart(ctx: ChartSceneContext): SceneElement[] {
  * only). Also used for embedded charts (task 13c).
  */
 export function drawChartElements(ctx: ChartSceneContext): SceneElement[] {
-  return [...drawFrame(ctx), ...drawTitleAndFootnote(ctx), ...drawDataChart(ctx), ...drawObjectLayer(ctx)];
+  const fromData = drawsFromData(ctx.chart, ctx.dataLayout);
+  return [
+    ...drawFrame(ctx),
+    ...(fromData ? [...drawTitleAndFootnote(ctx), ...drawDataChart(ctx)] : []),
+    ...(drawsObjectLayer(ctx.chart, ctx.dataLayout) ? drawObjectLayer(ctx) : []),
+  ];
 }
 
 /**

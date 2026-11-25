@@ -339,6 +339,14 @@ look-alike. Needs a scene element for glyph paths or text rendered as a path.
 > for charts without a stored copy; none exists in the samples, so they come
 > after the show tasks.
 
+### 12b. Page size from 816
+
+Letter pages (816 width × height 11 × 8.5 in, and portrait 8.5 × 11) use a
+taller unit range: y up to about ±12660 for landscape Letter, so the fixed
+±12288 viewBox clips them, and text sizes are a percentage of 25321
+(32768 × 8.5/11) there, not 24576. Derive the viewBox and the text size base
+from 816 (§6.1 [I]).
+
 ### 13b. Object drawing fixes
 
 Pie slices draw unfilled (only an outline circle); bullet markers draw as tiny

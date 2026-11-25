@@ -194,6 +194,21 @@ Add entries as `- finding (sample file checked, task number)`.
   the monochrome drivers is undocumented. MONOCHRB/MONOCHRW are greyscale
   palettes (13 and 16 greys) for authors to pick, not a screen mapping.
   The sample set has no .SC3/.CLR/.B&W files. (CGA research)
+- Layout from data (title, bullet, table charts; task 14/15/19) matches the
+  stored copies: slot 1/2 text dx 0, dy ≤ 45 units on all 171 data charts;
+  GALD151 and GALD171 within 2 units; bullets within 75. Fitted rules:
+  text box height floor(1.285 × em / 100) × 100; rows overlap by 0.15 of
+  the next row's height, a blank row is 1 em; non-title data charts draw a
+  role 18 line under the title area; bullet marker column + 0.143 em gap +
+  widest line are centred as one block; table numeric cells right-aligned,
+  inset 0.1 em, a role 18 rule under the header band, range backgrounds
+  outlined in role 32. Unexplained: LANDSCAP/PORTRAIT middle line sits 1.5
+  blank rows higher; GALD181 cells drawn at size 6.19 though stored as 10;
+  HELP1's copy is laid out at 8/9 scale though its runs say size 3 (its
+  stored copy overlaps when drawn as stored). (task 14/15/19)
+- Letter pages: text sizes are a percentage of 25321 (32768 × 8.5/11), not
+  24576, and drawing extends to about y ±12660 (frames at ±12406), beyond
+  the fixed ±12288 viewBox. Open bug, task 12b. (task 14/15/19)
 
 ### Samples
 

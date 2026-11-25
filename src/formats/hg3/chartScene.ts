@@ -23,7 +23,7 @@ export function chartScene(
   warnings.push(...parsed.warnings);
   const { scene, warnings: sceneWarnings } = buildChartScene(parsed.chart, context, options);
   warnings.push(...sceneWarnings);
-  const missing = notYetDrawn(parsed.chart);
+  const missing = notYetDrawn(parsed.chart, options.dataLayout ?? context?.layoutFromData);
   if (missing.length > 0) warnings.push(`Not drawn yet: ${missing.join(", ")}.`);
   return scene;
 }

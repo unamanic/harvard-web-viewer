@@ -468,7 +468,17 @@ export interface ParseContext {
    * format decides what it means and reports, once, if it cannot be used.
    */
   paletteOverride?: string;
+  /**
+   * Viewer option for formats whose charts store both their data and a
+   * drawn copy of themselves: "auto" (default) lays a chart out from its
+   * data only when it has no drawn copy, "always" lays it out from data and
+   * skips the copy (for comparison), "never" draws the copy only.
+   */
+  layoutFromData?: LayoutFromData;
 }
+
+/** See `ParseContext.layoutFromData`. */
+export type LayoutFromData = "auto" | "always" | "never";
 
 /**
  * Look a file up without recording it as missing (`ParseContext.find`); a

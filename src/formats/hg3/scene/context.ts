@@ -15,6 +15,7 @@ import {
   rgbToCss,
   uniqueWarningSink,
 } from "../palette";
+import type { DataLayoutMode } from "./dataLayout";
 import { type PageGeometry, pageGeometry } from "./page";
 import { type TextFaces, createTextFaces } from "./textFaces";
 
@@ -56,6 +57,12 @@ export interface ChartSceneContext {
    * scene's coordinates; absent for embedded charts.
    */
   buttonHitAreas?: GroupElement[];
+  /**
+   * When to lay data charts out from their data (dataLayout.ts): from
+   * ChartSceneOptions.dataLayout, else ParseContext.layoutFromData, else
+   * "auto". Embedded charts and the button chart share the host's.
+   */
+  dataLayout: DataLayoutMode;
 }
 
 /** Options of a chart scene beyond its parse context. */
@@ -69,6 +76,12 @@ export interface ChartSceneOptions {
    * chart's.
    */
   paletteOverride?: ResolvedPalette | null;
+  /**
+   * When to lay a data chart out from its data instead of (or as well as)
+   * drawing the copy stored in its object layer; see dataLayout.ts. When
+   * absent, `parseContext.layoutFromData`, else "auto".
+   */
+  dataLayout?: DataLayoutMode;
 }
 
 /** The chart's palette: the viewer's palette option if one applies (task 6c), else its own. */
@@ -119,6 +132,7 @@ export function createChartSceneContext(
     warn,
     page: pageGeometry(chart),
     embedChain: parseContext ? [parseContext.path.toUpperCase()] : [],
+    dataLayout: options.dataLayout ?? parseContext?.layoutFromData ?? "auto",
   };
   return { context, warnings };
 }

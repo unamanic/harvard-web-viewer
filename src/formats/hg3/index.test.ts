@@ -42,7 +42,8 @@ describe("hg3Parser.parse", () => {
     expect(doc.scenes).toHaveLength(1);
     expect(doc.scenes[0].viewBox).toEqual(LANDSCAPE_VIEW_BOX);
     // The object layer is drawn (task 13); its stray 616 adds object layer warnings first.
-    expect(doc.warnings.at(-1)).toBe("Not drawn yet: title and footnote text, pie data.");
+    // It holds no drawn copy, so the chart is laid out from data: title text yes (task 14), pie not yet.
+    expect(doc.warnings.at(-1)).toBe("Not drawn yet: pie data.");
   });
 
   it("collects chart and palette warnings and omits the info when nothing is left to draw", () => {
@@ -71,7 +72,7 @@ describe("hg3Parser.parse", () => {
     expect(doc.formatName).toBe("Harvard Graphics 3 chart");
     expect(doc.warnings[0]).toMatch(/^The file is damaged/);
     expect(doc.warnings.some((w) => w.startsWith("damaged: record 400"))).toBe(true);
-    expect(doc.warnings.at(-1)).toBe("Not drawn yet: title chart text.");
+    expect(doc.warnings.some((w) => w.startsWith("Not drawn yet"))).toBe(false);
     expect(doc.scenes).toHaveLength(1);
   });
 });

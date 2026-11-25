@@ -327,3 +327,118 @@ export const TRANSITION_SPEED_MS: readonly number[] = [1500, 750, 300];
 
 /** Duration for any other offset 5 value: Medium [I]. */
 export const TRANSITION_DEFAULT_MS = 750;
+
+// ---------------------------------------------------------------------------
+// Tasks 14, 15, 19: charts laid out from their data (fallback, SPEC §5.5)
+// ---------------------------------------------------------------------------
+//
+// Every sample data chart stores a drawn copy of itself (SPEC §5.1), so the
+// layout from data is only drawn for charts without one (scene/dataLayout.ts).
+// The values below were fitted to the copies of the 13 sample title, bullet
+// and table charts (GALD111-191, HELP1/2, LANDSCAP, PORTRAIT): the copies'
+// text boxes (0x10B0 header offset 62) give each line's box, and the scene
+// comparison (stored copy vs layout from data) gives the offsets reported
+// with task 14/15/19. Page units throughout.
+
+/**
+ * Height of a text line's box: floor(DATA_TEXT_BOX_FACTOR × em / 100) × 100,
+ * em = size / 100 × the short side of a page 32768 long with the 816 aspect
+ * (24576 on 10 × 7.5 in, 25321 on Letter). Every box height in the copies is
+ * a multiple of 100 (2200 for size 7, 2800 for 9, 3700 for 12, 1200 for 4,
+ * and on Letter 2600 for 8, 2000 for 6.19, 900 for 3); a factor in
+ * [1.2835, 1.2885) reproduces all of them, the Letter ones only with the
+ * 25321 base [I]. (Glyph sizes stay textSizeToUnits, as for object text:
+ * the copies' widths on Letter pages agree with the 24576 base.)
+ */
+export const DATA_TEXT_BOX_FACTOR = 1.285;
+export const DATA_TEXT_BOX_STEP = 100;
+
+/**
+ * Stacked rows overlap: each row's box starts DATA_ROW_OVERLAP of its OWN
+ * height above the previous row's box bottom, i.e. top(next) = top(prev) −
+ * height(prev) + 0.15 × height(next) [I]. Equal rows then step by 0.85 ×
+ * their height (1870 for size 7 boxes of 2200 in GALD111-191, 765 for the
+ * 900 boxes of HELP2), and a size 9 title over a size 5 subtitle (box
+ * 1600) by 2560 (2530 in ORGTUT, PIETUT, XYTUT; 0.85 × 2800 = 2380 would be
+ * 150 off).
+ */
+export const DATA_ROW_OVERLAP = 0.15;
+
+/**
+ * Height of a blank row in a stack, in ems of its style's size [I]: with
+ * DATA_ROW_OVERLAP this reproduces text, blank, text steps of 3331 for size
+ * 7 (GALD111, GALD191) and 1408 for size 3 on Letter (HELP2) to 3 units.
+ */
+export const DATA_BLANK_ROW_HEIGHT = 1;
+
+/** Baseline below the top of a line's box, as a multiple of the glyph size (as OBJECT_TEXT_ASCENT). */
+export const DATA_TEXT_ASCENT = OBJECT_TEXT_ASCENT;
+
+/**
+ * The copies' text boxes are wider than our glyph advances (from the
+ * original .SPD fonts) by about 24 page units per character, at every size
+ * (median of (box − advance) / characters over the 10 × 7.5 in sample
+ * copies: 18 to 30 for sizes 2.5 to 12; perhaps a device-pixel rounding of
+ * each advance). On Letter pages the boxes also scale with the 25321 base
+ * (DATA_TEXT_BOX_FACTOR). Used to centre bullet blocks [I].
+ */
+export const DATA_TEXT_CHAR_EXTRA = 24;
+
+/** Advance per character, in ems, of text drawn with a CSS look-alike (only used to centre blocks) [I]. */
+export const DATA_TEXT_CSS_ADVANCE_EM = 0.5;
+
+/**
+ * Line along the bottom of the title area, across the frame, in role Lines:
+ * every sample copy of a data chart other than a title chart has one (184
+ * of 184), with 0x1100 byte 1 = 1 in almost all [I].
+ */
+export const TITLE_SEPARATOR_LINE_STYLE = 1;
+
+/** Bullet characters for 1108 shapes 1 and 4 (SPEC §5.4): HG3 codes 0xFA and 0xF9. */
+export const BULLET_MARKER_TEXT = { bullet: "•", triangle: "►" } as const;
+
+/**
+ * Space between a bullet marker's right edge and its line, in ems of the
+ * line's glyph size, per 1108 shape [I]. The copies centre marker column,
+ * gap and widest line as one block in the plot area; the gap is 246 for
+ * size 7 (0.143 em) for numbers, roman numbers, triangles and "none"
+ * (shape 9, which still indents by the gap), while the round bullet's
+ * marker box ends right at its line.
+ */
+export const BULLET_MARKER_GAP_EM = {
+  bullet: 0,
+  triangle: 0.143,
+  number: 0.143,
+  roman: 0.143,
+  none: 0.143,
+} as const;
+
+/**
+ * Inset of left- and right-aligned table cell text from its column edge, in
+ * ems of the cell's glyph size: 172 for size 7 in GALD171 (0.1 em); GALD181
+ * insets by 223 at its drawn size 6.19 [I]. The header rule is inset the same.
+ */
+export const TABLE_CELL_MARGIN_EM = 0.1;
+
+/**
+ * Numeric table cells are right-aligned whatever their justification: every
+ * number in both sample copies is (justification 3), the text cells keep
+ * theirs [I].
+ */
+export const TABLE_NUMBERS_RIGHT_ALIGNED = true;
+
+/** Rule under the first row band (the header), role Lines, 0x1100 byte 1 = 2 in both sample copies [I]. */
+export const TABLE_HEADER_RULE_STYLE = 2;
+
+/** Value-range cell backgrounds (1212) are outlined in role Outlines, 0x1100 byte 1 = 1 (GALD181) [I]. */
+export const TABLE_CELL_OUTLINE_STYLE = 1;
+
+/**
+ * Text that would overflow its area is shrunk by one factor for the whole
+ * list or table, down to this factor at most [I]. HELP1's 33 rows of size 3
+ * would run past its plot area; its copy's boxes are 8/9 of HELP2's (800 vs
+ * 900 high, widths about 0.88), as if drawn at size 2.67, although the runs
+ * still say 3. GALD181's cells (size 10) are drawn at 6.19 in its copy,
+ * more than fitting needs; that rule is not known.
+ */
+export const DATA_FIT_MIN_SCALE = 0.25;

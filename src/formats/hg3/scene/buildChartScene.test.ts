@@ -97,7 +97,8 @@ describe("buildChartScene: colours", () => {
 
   it("warns once for a role the palette lacks and uses the default palette's colour", () => {
     const chart = pieWithAreas([ref(2, "SHORT.PL3")]);
-    const { scene, warnings } = buildChartScene(chart, fakeContext({ "SHORT.PL3": paletteFile(10) }));
+    // "never": no data layout (its title separator would ask for role 18 too).
+    const { scene, warnings } = buildChartScene(chart, fakeContext({ "SHORT.PL3": paletteFile(10) }), { dataLayout: "never" });
     expect(scene.background).toBe(rgbToCss(colorForRole(DEFAULT_PALETTE, ROLE.FrameBkg)!));
     const roleWarnings = warnings.filter((w) => w.startsWith("colour role"));
     expect(roleWarnings).toEqual([
@@ -137,7 +138,7 @@ describe("buildChartScene: frame", () => {
 
   it("outlines every page area on top when SCENE_DEBUG.showPageAreas is set", () => {
     SCENE_DEBUG.showPageAreas = true;
-    const { scene } = buildChartScene(pieWithAreas(), undefined);
+    const { scene } = buildChartScene(pieWithAreas(), undefined, { dataLayout: "never" });
     // Frame + 4 debug outlines (802, 804, 806, 808; no 810).
     expect(scene.elements).toHaveLength(5);
     expect(scene.elements.slice(1).map((e) => e.kind === "rect" && e.y)).toEqual([-12000, -12000, -6000, 9000]);
