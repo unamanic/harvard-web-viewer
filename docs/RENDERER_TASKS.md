@@ -422,8 +422,12 @@ Split into:
 - **17d Legend:** in the 810 area with slot 4 names and series colours
   (roles 21 to 26, repeating).
 
-Until the series type byte is decoded (§7.2 item 3), draw every series as a
-bar and keep the type switch in `assumptions.ts`.
+**Done** (scene/data/xy.ts): bars (cluster, overlap, stacked, 100 %, step;
+2-D and 3-D boxes, pyramids, octagons, cylinders), lines (straight, trend,
+curve; 3-D ribbons), areas (2-D and 3-D), high/low/close, legend, data table,
+value labels, Y2 axis, log and numeric X axes, horizontal charts; 92 of the
+141 sample XY charts match their drawn copy exactly (formats.md). Not yet:
+paired bars, horizontal 3-D (drop-shadow) bars, time-of-day X labels.
 
 ### 18. Organisation chart
 

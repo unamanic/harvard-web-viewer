@@ -42,8 +42,8 @@ describe("hg3Parser.parse", () => {
     expect(doc.scenes).toHaveLength(1);
     expect(doc.scenes[0].viewBox).toEqual(LANDSCAPE_VIEW_BOX);
     // The object layer is drawn (task 13); its stray 616 adds object layer warnings first.
-    // It holds no drawn copy, so the chart is laid out from data: title text yes (task 14), XY data not yet.
-    expect(doc.warnings).toContain("Not drawn yet: XY data.");
+    // It holds no drawn copy, so the chart is laid out from data (tasks 14, 17): nothing is left undrawn.
+    expect(doc.warnings.some((w) => w.startsWith("Not drawn yet"))).toBe(false);
   });
 
   it("collects chart and palette warnings and omits the info when nothing is left to draw", () => {

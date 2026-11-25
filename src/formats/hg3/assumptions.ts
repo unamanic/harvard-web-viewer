@@ -645,3 +645,61 @@ export const ORG_LINE_STYLE = 1;
 /** Box size when 912 is missing: fractions of the smallest column / level spacing (912 gives 0.8 and 0.59 in the samples) [I]. */
 export const ORG_DEFAULT_BOX_WIDTH_OF_PITCH = 0.8;
 export const ORG_DEFAULT_BOX_HEIGHT_OF_PITCH = 0.588;
+
+// ---------------------------------------------------------------------------
+// Task 17: XY charts laid out from their data
+// ---------------------------------------------------------------------------
+
+// Fallback layout (scene/data/xy.ts) for charts without a drawn copy;
+// fitted to the copies of the 141 sample XY charts (GALD311-946, XYTUT).
+// Page units throughout; W, H = plot area (806) size, FW, FH = frame size.
+
+/** Frame margins in the plot area: right and top XY_FRAME_MARGIN × W / H, left the same plus the widest Y1 label (category label when horizontal) [I]. */
+export const XY_FRAME_MARGIN = 0.09;
+/** Bottom margin: XY_FRAME_BOTTOM_MARGIN × H plus the label box height [I]. */
+export const XY_FRAME_BOTTOM_MARGIN = 0.045;
+/** Gap between the frame and its tick labels, fraction of the frame width (left labels) or height (bottom labels) [I]. */
+export const XY_LABEL_GAP = 0.01;
+/** Gap between the frame top and the Y axis title box, fraction of H [I]. */
+export const XY_TITLE_GAP = 0.045;
+/** Horizontal charts: gap between the value labels and the Y axis title under (Y1) or over (Y2) them, ems of the title (GALD871: 215 units at size 3.5) [I]. */
+export const XY_HTITLE_GAP_EM = 0.25;
+/** Label box widths: each character's advance rounded up to this many page units (all sample label boxes are multiples of 50) [I]. */
+export const XY_TEXT_WIDTH_STEP = 50;
+/**
+ * Axis top: the first tick step above max + (XY_Y_MARGIN − 1) × range. 157
+ * gives 180 (step 20) while 75 gives 80 and 47.74 gives 50, so the margin
+ * lies between 1.9 % and 4.7 % [I].
+ */
+export const XY_Y_MARGIN = 1.03;
+/** Line style (0x1100 byte 1) of frame, grid, outlines and data lines [I]. */
+export const XY_LINE_STYLE = 1;
+/** Curve series (1406 byte 10 = 3): spline samples per segment [I]. */
+export const XY_CURVE_STEPS = 8;
+/** Curve tangents: XY_CURVE_TENSION × (next − previous) / 2 (1 = Catmull-Rom); fitted to GALD421's overshoot (491 units where Catmull-Rom gives 1094) [I]. */
+export const XY_CURVE_TENSION = 0.45;
+/** Legend, fractions of the label box height h: left margin, swatch size, swatch-to-text gap (items across: 2 × gap between items), row pitch, swatch top below the text box top [I]. */
+export const XY_LEGEND_MARGIN = 491 / 1100;
+export const XY_LEGEND_SWATCH = 0.7;
+export const XY_LEGEND_GAP = 0.2;
+export const XY_LEGEND_PITCH = 1.3;
+export const XY_LEGEND_SWATCH_DROP = 30 / 1100;
+/** Data table (1410 byte 0 = 2): left edge XY_TABLE_LEFT × row height right of the plot's; names padded by XY_TABLE_NAME_PAD × the widest name each side (GALD317, GALD367) [I]. */
+export const XY_TABLE_LEFT = 0.18;
+export const XY_TABLE_NAME_PAD = 0.1;
+/** 3-D areas: top faces (and the end faces) at 0x112A 63 % (GALD541) [I]. */
+export const XY_3D_TOP_SHADE = 0.63;
+/** 3-D pyramid face brightness (front, right, left), 0x112A 100, 63, 38 [I]. */
+export const XY_3D_PYRAMID_SHADES = [1, 0.63, 0.38] as const;
+/**
+ * 3-D: bars, line ribbons and areas are 1408 f32 at 15 percent of their
+ * depth lane deep, centred in it (bars as 0x1070 style 6 with that corner
+ * size; GALD312 40 %, GALD313 25 %, GALD316 20 %, GALD372 80 %, GALD541
+ * 100 %). Cylinder tops have radius y = XY_3D_CYLINDER_RY × that depth,
+ * shaded 50 % [I].
+ */
+export const XY_3D_CYLINDER_RY = 0.5;
+export const XY_3D_CYLINDER_TOP_SHADE = 0.5;
+/** 3-D octagonal bar: depth radius = XY_3D_OCTAGON_Z × bar depth; top face 63 % [I]. */
+export const XY_3D_OCTAGON_Z = 0.5;
+export const XY_3D_OCTAGON_TOP_SHADE = 0.63;

@@ -19,7 +19,7 @@ viewer's own code has verified so far.
 | Record container | §3 | Yes (task 2) | Yes: all 287 sample documents parse to the last byte with no warnings |
 | Palettes (.PL3, .PC3) | §6.2 | Yes (task 6) | Yes: all 36 sample palettes parse with no warnings |
 | Font index (HG3.FGF) | §2 | Yes (task 7); text drawn with the original fonts or our clones (task 7f) | Yes: the sample HG3.FGF parses with no warnings |
-| Charts (.CH3) | §5 | Parsed and drawn from the object layer, embedded charts included (tasks 9, 10, 12, 13, 13b, 13c); layout from data not yet | All 238 sample charts parse and render; visually checked by type |
+| Charts (.CH3) | §5 | Parsed and drawn from the object layer, embedded charts included (tasks 9, 10, 12, 13, 13b, 13c); laid out from data when they have no drawn copy (tasks 14 to 19; XY task 17) | All 238 sample charts parse and render; visually checked by type |
 | Shows (.SH3) | §4 | Parsed and played (tasks 21, 22); transitions with a guessed mapping, off by default (23); WAV sound plays, MIDI not (24); button charts drawn and clickable (20) | Yes: all 13 sample shows play to the end |
 | PCX bitmaps | §6.3 | Yes (task 8) | Yes: all 69 sample .PCX/.PCC decode with no warnings |
 | Speedo fonts (.SPD) | §2 | Reader (task 7b); draws chart text when loaded (task 7f) | Yes: all 15 sample fonts decode with no warnings |
@@ -226,6 +226,26 @@ Add entries as `- finding (sample file checked, task number)`.
   bytes 1–3 fill, outline and line roles; 904 u16 at 2 = 3 boxes the last
   level, else it is a name list. Org text uses one chart-wide size factor
   (rule not fully known). (pie and org samples, tasks 16, 18)
+- XY charts from data (task 17) match the stored copies of the 141 sample
+  XY charts: 92 exactly (every text within 40 units, every shape's
+  bounding box within 40), 18 more within 400 units, 17 partly, 14 not
+  (paired bars, horizontal 3-D drop-shadow bars, a time-of-day X axis,
+  one hidden Y2 axis, one 3-D 100 % chart's depth). Decoded [I]: 1408
+  bytes 0, 1, 10, 11, 12, 13 and f32 at 2, 6, 15, 19 (see SPEC §5.4); 1406
+  byte 10 line style (straight, trend, curve) and byte 13 line colour;
+  1402 byte 1 = 2 log scale; 1410 byte 0 data table, byte 2 value labels;
+  1414 byte 0 = 13 numeric X; 1418 byte 1 bottom-up legend. Rules: frame
+  margins 9 % of the plot (4.5 % at the bottom) plus label sizes; axis
+  step = range / 5 rounded to 1, 2, 5 × 10^k (geometric midpoints), top
+  the next step above max + 3 % of the range; label boxes are each
+  character's advance rounded up to 50 units; bars fill 85 % (1408) of
+  the slot; 3-D walls offset up-right by depth % × frame height, one depth
+  lane per line, bar group (per series if overlapped) and area (one for
+  stacked areas), front to back lines, bars, areas, the solid part
+  centred in its lane at 1408 f32 at 15 %; 0x1070 style 6 boxes are the
+  3-D bars. Copy quirks not reproduced: 3-D pyramids show a left face on
+  the first bar only (more in overlapped lanes); I-bar high/low marks are
+  stored twice. (all XY samples, task 17)
 - Stored-copy drawing corrections (task 13d, fixed): each text line entry
   stores the copy's own line box and em, so lines are drawn there (79
   multi-line blocks: error 240 → 0 units); HELP1's 8/9 scale is its

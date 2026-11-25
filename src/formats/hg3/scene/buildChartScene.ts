@@ -30,6 +30,7 @@ import { type ChartSceneContext, type ChartSceneOptions, createButtonChartContex
 import { drawOrgChart } from "./data/org";
 import { drawPieChart } from "./data/pie";
 import { drawTableChart } from "./data/table";
+import { drawXYChart } from "./data/xy";
 import { drawBulletChart, drawTitleAndFootnote, drawTitleChart } from "./data/textCharts";
 import { type DataLayoutMode, drawsFromData, drawsObjectLayer } from "./dataLayout";
 import { drawObjectLayer, loadReferencedChart } from "./objectLayer";
@@ -71,9 +72,7 @@ export type ChartPart =
  * They matter only for charts drawn from their data (dataLayout.ts): a
  * chart with a drawn copy shows every part through its object layer.
  */
-const NOT_YET_DRAWN: ReadonlySet<ChartPart> = new Set<ChartPart>([
-  "XY data", // task 17
-]);
+const NOT_YET_DRAWN: ReadonlySet<ChartPart> = new Set<ChartPart>([]);
 
 const DATA_PART: ReadonlyMap<number, ChartPart> = new Map<number, ChartPart>([
   [DocumentType.XY, "XY data"],
@@ -128,15 +127,6 @@ function drawDebugAreas(ctx: ChartSceneContext): RectElement[] {
     out.push({ kind: "rect", ...areaToRect(area), fill: null, stroke: DEBUG_AREA_COLORS[key], strokeWidth: FRAME_STROKE_WIDTH });
   }
   return out;
-}
-
-// ---------------------------------------------------------------------------
-// Stubs for later tasks
-// ---------------------------------------------------------------------------
-
-/** Task 17. */
-function drawXYChart(_ctx: ChartSceneContext): SceneElement[] {
-  return [];
 }
 
 // ---------------------------------------------------------------------------
