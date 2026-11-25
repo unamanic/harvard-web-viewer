@@ -313,6 +313,21 @@ Add entries as `- finding (sample file checked, task number)`.
   seconds (0xFFFF wait); 708 byte 2 = HyperShow recalculation. All 52 test
   shows decode to their README settings; the 13 sample shows use only
   Replace (373 slides) and Overlay (44). SPEC.md §4 updated. (test shows)
+- Monochrome and EGA, fitted to renders/hercules and renders/ega (harness
+  median per-chart difference: Hercules 8.36% → 2.16%, EGA 5.14% → 2.45%):
+  - Hercules (720×348, pixels about 1.55× taller than wide): each colour
+    becomes one of 9 patterns on the 4×4 Bayer matrix by brightness only,
+    level floor((floor(luma/4) + 3) / 8), level L lighting 2·L of 16 cells,
+    aligned to the screen; hue and the palette's screen colours don't
+    matter. Thin lines and outlines (up to about 1.5 px) are solid white,
+    or black at level 0; thicker strokes are patterned. Gradients use 64
+    levels on the 8×8 matrix. Flat fills match 99.98% of pixels.
+  - EGA (640×350, pixels 1.37× taller): dithers exactly like VGA
+    ScreenShow (same 16 slots and rules), each slot shown as the nearest
+    of the 64 EGA colours.
+  - Open: bitmaps are not yet patterned in these modes (FLOOR 27%); text
+    sits 2–3 px off on 348/350-row screens; EGA PLANET's colours.
+    (Hercules and EGA reference renders)
 
 ### Samples
 

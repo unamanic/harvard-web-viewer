@@ -175,8 +175,8 @@ become screen colours, applied after task 6.
 | Mode | Colours | Rule |
 | --- | --- | --- |
 | VGA ScreenShow (default) | 16 at once, dithered | The palette's 1555 DAC colours with the original's 4×4 Bayer dither (fitted to the reference renders, 99.71% of fill pixels exact) |
-| EGA | 16 at once, chosen from 64 | Each role maps to the nearest of the 64 EGA colours (2 bits per channel); if a scene uses more than 16, keep the 16 most used |
-| Monochrome screen (EGA Mono / Hercules), imitation | 2 | Text and lines always in the foreground colour; fills as ordered-dither patterns by brightness. How the program itself drew colour charts on these displays is unknown \[I\] |
+| EGA | 16 of 64, dithered | The VGA ScreenShow dither, each slot shown as the nearest EGA colour (fitted to the EGA reference renders) |
+| Hercules monochrome (720 × 348) | 2 | Brightness → 9 patterns on the 4×4 Bayer matrix; thin lines solid; 64-level gradients (fitted to the Hercules reference renders; flat fills 99.98% exact) |
 | Modern | Full 24-bit | Stored RGB unchanged |
 
 The MONOCHRB and MONOCHRW palettes are greyscale palettes a chart author

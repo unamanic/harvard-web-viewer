@@ -13,11 +13,11 @@
  * transformed groups (FillPattern.transform), as on the real screen.
  *
  * Screens so far: the Harvard Graphics 3 VGA ScreenShow driver
- * (vgaScreenShow.ts). A monochrome screen is another `Screen` with two
- * colours (and, if need be, another matrix); the current imitation mono mode
- * (displayMode.ts) builds its tiles with `ditherRows`.
+ * (vgaScreenShow.ts) and its Hercules driver (hercules.ts: two colours,
+ * non-square pixels, solid lines).
  */
 import {
+  DEFAULT_STROKE_WIDTH,
   GRADIENT_FILL_PREFIX,
   PATTERN_FILL_PREFIX,
   type FillGradient,
@@ -78,6 +78,13 @@ export interface Screen {
   /** How a stored colour is shown on shapes, lines and text. */
   dither(rgb: RGB): Dither;
   /**
+   * How a stored colour is shown on thin lines and outlines (shape strokes
+   * at most `maxWidth` screen pixel heights wide), when that differs from
+   * `dither` (the Hercules driver draws them solid). Wider strokes, and
+   * glyph outlines (stroke fonts, which count as text), use `dither`.
+   */
+  line?: { maxWidth: number; dither(rgb: RGB): Dither };
+  /**
    * Gradient fills (Scene.gradients) and the page background, when the
    * screen shows them with their own threshold matrix and colour rule (for
    * the VGA ScreenShow driver, 64 levels on an 8 × 8 matrix); when absent,
@@ -89,6 +96,11 @@ export interface Screen {
    * background is dithered like a gradient band (`gradient`, else `dither`).
    */
   background?(rgb: RGB): number;
+  /**
+   * The page background is dithered like shapes (`matrix` and `dither`)
+   * instead of like a gradient band. Ignored when `background` is given.
+   */
+  backgroundLikeShapes?: boolean;
 }
 
 /** Number of cells (thresholds) of a matrix. */
@@ -197,6 +209,9 @@ function tidy(v: number): number {
   return Object.is(r, -0) ? 0 : r;
 }
 
+/** What a colour is used for: shapes and text, lines (shape strokes), gradients and the background. */
+type Role = "shape" | "line" | "gradient";
+
 export interface ApplyScreenOptions {
   /** Prefix of the pattern ids added to the scene (default: the screen's id). */
   idPrefix?: string;
@@ -205,9 +220,12 @@ export interface ApplyScreenOptions {
 /**
  * The scene as `screen` shows it. Pure: the input is not modified.
  *
- * - The background becomes a solid screen colour (Screen.background).
+ * - The background becomes a solid screen colour (Screen.background), or
+ *   is dithered like a gradient band (like shapes with
+ *   Screen.backgroundLikeShapes).
  * - Fills, outlines and text (glyph paths, fallback text) become the
- *   screen colour of their dither when it is solid, else a pattern of one
+ *   screen colour of their dither (outlines: Screen.line when given) when
+ *   it is solid, else a pattern of one
  *   tile per dither, one tile pixel per screen pixel, aligned to the
  *   screen's pixel grid (patterns get a transform inside transformed
  *   groups and glyph lines).
@@ -224,6 +242,7 @@ export function applyScreen(scene: Scene, screen: Screen, options: ApplyScreenOp
   type Entry = { solid: string } | { tileKey: string; tile: number[][] } | null;
   const ditherCache = new Map<string, Entry>();
   const gradientCache = new Map<string, Entry>();
+  const lineCache = new Map<string, Entry>();
   const fine = screen.gradient ?? { matrix: screen.matrix, dither: screen.dither };
 
   const entryOf = (rgb: RGB, dither: Screen["dither"], matrix: ThresholdMatrix): Entry => {
@@ -234,13 +253,22 @@ export function applyScreen(scene: Scene, screen: Screen, options: ApplyScreenOp
     return { tileKey: tile.map((r) => r.map((c) => c.toString(16)).join("")).join("/"), tile };
   };
 
-  /** How the screen shows `css`: on shapes, lines and text, or (`gradient`) in gradients and the background. */
-  const ditherOf = (css: string, gradient = false): Entry => {
-    const cache = gradient ? gradientCache : ditherCache;
+  /**
+   * How the screen shows `css`: on shapes and text, on lines (`role`
+   * "line", Screen.line), or in gradients and the background ("gradient").
+   */
+  const ditherOf = (css: string, role: Role = "shape"): Entry => {
+    const cache = role === "gradient" ? gradientCache : role === "line" ? lineCache : ditherCache;
     let entry = cache.get(css);
     if (entry !== undefined) return entry;
     const rgb = parseCssColor(css);
-    entry = rgb ? (gradient ? entryOf(rgb, fine.dither, fine.matrix) : entryOf(rgb, screen.dither, screen.matrix)) : null;
+    entry = !rgb
+      ? null
+      : role === "gradient"
+        ? entryOf(rgb, fine.dither, fine.matrix)
+        : role === "line" && screen.line
+          ? entryOf(rgb, screen.line.dither, screen.matrix)
+          : entryOf(rgb, screen.dither, screen.matrix);
     cache.set(css, entry);
     return entry;
   };
@@ -249,8 +277,8 @@ export function applyScreen(scene: Scene, screen: Screen, options: ApplyScreenOp
    * Paint for `css` used in a coordinate system mapped to the scene's by
    * `toScene`: a screen colour, a "pattern:<id>", or `css` unchanged.
    */
-  const paint = (css: string, toScene: Matrix, gradient = false): string => {
-    const d = ditherOf(css, gradient);
+  const paint = (css: string, toScene: Matrix, role: Role = "shape"): string => {
+    const d = ditherOf(css, role);
     if (d === null) return css;
     if ("solid" in d) return d.solid;
     // Pattern units are scene units shifted to the screen's origin; map them
@@ -281,7 +309,7 @@ export function applyScreen(scene: Scene, screen: Screen, options: ApplyScreenOp
     if (!g) return fill;
     const from = parseCssColor(g.from);
     const to = parseCssColor(g.to);
-    if (!from || !to || !box) return paint(g.from, toScene, true);
+    if (!from || !to || !box) return paint(g.from, toScene, "gradient");
     const span = gradientSpan(box, g.angle);
     // Screen pixels along the direction: the span mapped to the scene, over the pixel size.
     const vx = toScene[0] * span.dir.x + toScene[2] * span.dir.y;
@@ -292,12 +320,19 @@ export function applyScreen(scene: Scene, screen: Screen, options: ApplyScreenOp
     for (let k = 0; k < steps; k++) {
       const t = (k + 0.5) / steps;
       const css = formatCssColor([0, 1, 2].map((c) => from[c] + (to[c] - from[c]) * t) as unknown as RGB);
-      const p = paint(css, toScene, true);
+      const p = paint(css, toScene, "gradient");
       if (bands.length === 0 || bands[bands.length - 1].paint !== p) bands.push({ offset: k / steps, paint: p });
     }
     const newId = `${prefix}-g${Object.keys(gradients).length}`;
     gradients[newId] = { ...g, bands };
     return GRADIENT_FILL_PREFIX + newId;
+  };
+
+  /** Whether a shape's stroke counts as a thin line (Screen.line). */
+  const isThinLine = (el: { strokeWidth?: number }, toScene: Matrix): boolean => {
+    if (!screen.line) return false;
+    const scale = Math.sqrt(Math.abs(toScene[0] * toScene[3] - toScene[1] * toScene[2]));
+    return ((el.strokeWidth ?? DEFAULT_STROKE_WIDTH) * scale) / geo.pixelHeight <= screen.line.maxWidth + 1e-9;
   };
 
   const mapEl = (el: SceneElement, toScene: Matrix): SceneElement => {
@@ -327,7 +362,7 @@ export function applyScreen(scene: Scene, screen: Screen, options: ApplyScreenOp
               : el.fill.startsWith(GRADIENT_FILL_PREFIX)
                 ? gradientPaint(el.fill, shapeBounds(el), toScene)
                 : paint(el.fill, toScene),
-          stroke: el.stroke === null ? null : paint(el.stroke, toScene),
+          stroke: el.stroke === null ? null : paint(el.stroke, toScene, isThinLine(el, toScene) ? "line" : "shape"),
         };
     }
   };
@@ -339,7 +374,7 @@ export function applyScreen(scene: Scene, screen: Screen, options: ApplyScreenOp
   } else {
     const bgRgb = parseCssColor(background);
     if (bgRgb && screen.background) background = screen.colors[screen.background(bgRgb)];
-    else if (bgRgb) background = paint(background, IDENTITY, true);
+    else if (bgRgb) background = paint(background, IDENTITY, screen.backgroundLikeShapes ? "shape" : "gradient");
   }
 
   const elements = scene.elements.map((el) => mapEl(el, IDENTITY));

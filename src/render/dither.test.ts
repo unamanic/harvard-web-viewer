@@ -183,7 +183,33 @@ describe("applyScreen with a 2-colour screen", () => {
     const out = applyScreen(scene([], "#ffffff"), { ...mono, background: () => 0 });
     expect(out.background).toBe("#000000");
   });
+
+  it("dithers the background like shapes with Screen.backgroundLikeShapes", () => {
+    const fine = { matrix: BAYER_8X8, dither: mono.dither };
+    const asGradient = applyScreen(scene([], "#808080"), { ...mono, gradient: fine });
+    const asShape = applyScreen(scene([], "#808080"), { ...mono, gradient: fine, backgroundLikeShapes: true });
+    expect(asGradient.patterns![asGradient.background.slice("pattern:".length)].rows).toHaveLength(8);
+    expect(asShape.patterns![asShape.background.slice("pattern:".length)].rows).toHaveLength(4);
+  });
+
+  it("uses Screen.line for strokes up to line.maxWidth screen pixels wide, `dither` for wider ones", () => {
+    const screen: Screen = { ...mono, line: { maxWidth: 1.5, dither: () => [{ color: 1, cells: 16 }] } };
+    const px = LANDSCAPE_VIEW_BOX.height / 480;
+    const stroke = (w: number): SceneElement => ({ kind: "rect", x: 0, y: 0, width: 10, height: 10, fill: null, stroke: "#808080", strokeWidth: w * px });
+    const out = applyScreen(scene([stroke(1), stroke(1.5), stroke(2), glyph()]), screen);
+    const strokes = out.elements.map((el) => (el as { stroke: string | null }).stroke);
+    expect(strokes.slice(0, 2)).toEqual(["#ffffff", "#ffffff"]);
+    expect(strokes[2]).toMatch(/^pattern:/);
+    expect(strokes[3]).toMatch(/^pattern:/); // glyph outlines count as text
+    // Scaled groups scale the width.
+    const inGroup = applyScreen(scene([{ kind: "group", transform: [2, 0, 0, 2, 0, 0], children: [stroke(1)] }]), screen);
+    expect((inGroup.elements[0] as { children: { stroke: string }[] }).children[0].stroke).toMatch(/^pattern:/);
+  });
 });
+
+function glyph(): SceneElement {
+  return { kind: "glyphs", d: "M0 0", text: "A", advance: 1, em: 1000, fill: null, stroke: "#808080" };
+}
 
 describe("applyScreen with gradients", () => {
   it("samples a gradient once per screen pixel along it and merges equal paints into bands", () => {
