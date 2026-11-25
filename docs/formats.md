@@ -294,6 +294,19 @@ Add entries as `- finding (sample file checked, task number)`.
   - Show context does not change drawing (221 of 240 slides
     pixel-identical to the standalone chart; the rest differ only on
     glyph edges).
+- Fixes from the reference renders (harness median per-chart difference
+  3.28% → 1.04%, p90 6.25% → 1.88%): palette 1554 is the page background
+  (mode 1 plain / 2 shaded, colour 1 at the top); 0x1110 gradient angle in
+  tenths counter-clockwise from up, across the bounding box; VGA gradients
+  dither in 64 levels on an 8×8 matrix; monochrome bitmaps draw black
+  pixels in the 0x110C colour and white in 0x110B, at native pixel size
+  (tiling not implemented); box style 5 is an extruded 3-D box (faces 25%
+  and 50%), style 2 a double outline; paper code 1 with a 10×7.5 in page
+  shows the Letter area at 0.971; button-bar fit 440/480 rows; baseline =
+  line top − stored ascent; glyph advances round up to screen pixels;
+  0x112B = line style (1 dotted); 0x10A0 trailer = marker size and shape.
+  Open: PLANET's sphere, bitmap tiling, PALVIEW's dot period, partly
+  yellow titles in GALD721/852. (reference renders)
 
 ### Samples
 
