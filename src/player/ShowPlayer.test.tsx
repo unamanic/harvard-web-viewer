@@ -25,7 +25,9 @@ describe("ShowPlayer", () => {
     const html = renderToStaticMarkup(<ShowPlayer presentation={presentation} />);
     expect(html).toContain("<svg");
     expect(html).toContain("Slide 1 of 2 · first");
-    expect(html).toContain(">Present</button>");
+    // Entering presentation mode is the viewer's job; the player has no Present button.
+    expect(html).not.toContain(">Present</button>");
+    expect(html).not.toContain("Leave presentation");
     expect(html).toContain('aria-label="Slides"');
     expect(html).toContain('aria-current="step"');
     // Slide warnings moved to the viewer's diagnostics panel.

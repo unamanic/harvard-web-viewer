@@ -310,9 +310,12 @@ export function ShowPlayer({
         >
           {muted ? "Sound off" : "Sound on"}
         </button>
-        <button type="button" onClick={() => setPresenting(!presenting)} aria-pressed={presenting}>
-          {presenting ? "Leave presentation (Esc)" : "Present"}
-        </button>
+        {/* Entering is the viewer's single Present button; this one only leaves. */}
+        {presenting && (
+          <button type="button" onClick={() => setPresenting(false)}>
+            Leave presentation (Esc)
+          </button>
+        )}
       </div>
       {showStrip && !presenting && !player.empty && (
         <SlideStrip
