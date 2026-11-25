@@ -6,13 +6,15 @@ import { SceneRenderer } from "../render/SceneRenderer";
 import {
   type PlayerAction,
   type PlayerState,
+  type SavedPosition,
   clickButton,
   currentSlide,
   describePosition,
   jumpTo,
   navigate,
   pressKey,
-  startPlayer,
+  restorePlayer,
+  savePosition,
 } from "./player";
 import type { ResolveFile } from "./sound/controller";
 import { useShowSound } from "./sound/useShowSound";
@@ -46,6 +48,15 @@ export interface ShowPlayerProps {
   onPresentingChange?: (presenting: boolean) => void;
   /** Called after the shown slide changes (null when ended or empty). */
   onSlideChange?: (slide: PresentationSlide | null) => void;
+  /**
+   * Where to start when the player mounts or gets a new presentation (e.g.
+   * the same file parsed again with another palette): restored if the
+   * presentation has the same structure, else playing starts over. Later
+   * changes are ignored until the next presentation.
+   */
+  initialPosition?: SavedPosition | null;
+  /** Called after the position changes (null for an empty show), e.g. to pass back as `initialPosition`. */
+  onPositionChange?: (position: SavedPosition | null) => void;
   /** Show the slide strip under the controls. Defaults to true. */
   showStrip?: boolean;
   /** Called when the slide strip builds a thumbnail (it may find missing files). */
@@ -60,8 +71,8 @@ interface State {
   run: TransitionRun;
 }
 
-function initialState(presentation: Presentation): State {
-  return { player: startPlayer(presentation), previous: null, run: INITIAL_RUN };
+function initialState(presentation: Presentation, position?: SavedPosition | null): State {
+  return { player: restorePlayer(presentation, position), previous: null, run: INITIAL_RUN };
 }
 
 function sceneOf(player: PlayerState): Scene | null {
@@ -86,17 +97,19 @@ export function ShowPlayer({
   presenting: presentingProp,
   onPresentingChange,
   onSlideChange,
+  initialPosition,
+  onPositionChange,
   showStrip = true,
   onThumbnailBuilt,
 }: ShowPlayerProps) {
-  const [state, setState] = useState<State>(() => initialState(presentation));
+  const [state, setState] = useState<State>(() => initialState(presentation, initialPosition));
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Restart when another presentation is passed in.
+  // Restart when another presentation is passed in (at `initialPosition` if it still fits).
   const [shown, setShown] = useState(presentation);
   if (shown !== presentation) {
     setShown(presentation);
-    setState(initialState(presentation));
+    setState(initialState(presentation, initialPosition));
   }
 
   const step = useCallback((update: (p: PlayerState) => PlayerState) => {
@@ -171,6 +184,9 @@ export function ShowPlayer({
   useEffect(() => {
     onSlideChange?.(slide);
   }, [slide, scene, onSlideChange]);
+  useEffect(() => {
+    onPositionChange?.(savePosition(player));
+  }, [player, onPositionChange]);
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.ctrlKey || e.altKey || e.metaKey) return;

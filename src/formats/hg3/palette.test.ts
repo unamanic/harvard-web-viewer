@@ -307,6 +307,19 @@ describe("resolveChartPalette", () => {
     expect(bad.warnings.join("\n")).toMatch(/HG3\.PL3 is empty/);
   });
 
+  it("looks HG3.PL3 up without recording it (find), but records another named palette", () => {
+    const asked: string[] = [];
+    const ctx = {
+      path: "A.CH3",
+      resolve: (name: string) => (asked.push(`resolve ${name}`), null),
+      find: (name: string) => (asked.push(`find ${name}`), null),
+    };
+    expect(resolveChartPalette(null, ctx).source).toBe("built-in");
+    expect(resolveChartPalette("HG3.PL3", ctx).source).toBe("built-in");
+    expect(resolveChartPalette("GONE.PL3", ctx).source).toBe("built-in");
+    expect(asked).toEqual(["find HG3.PL3", "find HG3.PL3", "resolve GONE.PL3", "find HG3.PL3"]);
+  });
+
   it("does not look up HG3.PL3 twice when the chart names it", () => {
     const ctx = fakeContext({});
     const r = resolveChartPalette("HG3.PL3", ctx);

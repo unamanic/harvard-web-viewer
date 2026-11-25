@@ -12,7 +12,7 @@
  * `cssFamily` look-alike as a last resort) is decided by
  * scene/textFaces.ts (task 7f).
  */
-import type { ParseContext, ResolvedFile } from "../types";
+import { type ParseContext, type ResolvedFile, findFile } from "../types";
 import { BUILT_IN_FONTS, type FgfEntry, parseFgf } from "./fgf";
 import { type FontKey, FontSource, fontKeyString } from "./fontKey";
 
@@ -153,6 +153,12 @@ interface IndexEntry {
  * Create a resolver. Nothing is asked of `ctx` until the first `resolve`:
  * then HG3.FGF once, and each font file only when a key that uses it is
  * resolved, so the missing-file list names only fonts that matter.
+ *
+ * HG3.FGF is first looked up without recording it as missing: the built-in
+ * table is a copy of the original index. It is recorded as missing only
+ * when it would have made a difference: a key the built-in table lacks
+ * (a font installed later), or an original .SPD file that was found but
+ * cannot be used without the index's character map.
  */
 export function createFontResolver(ctx?: ParseContext, options: FontResolverOptions = {}): FontResolver {
   const lookAlikes = options.lookAlikes ?? LOOK_ALIKES;
@@ -161,11 +167,15 @@ export function createFontResolver(ctx?: ParseContext, options: FontResolverOpti
   const files = new Map<string, ResolvedFile | null>();
   let index: Map<string, IndexEntry> | null = null;
   let indexSource: "file" | "built-in" = "built-in";
+  /** Without HG3.FGF from the file set: list it as missing (once) because it matters. */
+  const indexNeeded = () => {
+    if (indexSource === "built-in") ctx?.resolve(FONT_INDEX_NAME, "font index");
+  };
 
   const loadIndex = (): Map<string, IndexEntry> => {
     if (index) return index;
     index = new Map();
-    const file = ctx?.resolve(FONT_INDEX_NAME, "font index") ?? null;
+    const file = findFile(ctx, FONT_INDEX_NAME, "font index");
     let entries: FgfEntry[] | null = null;
     if (file) {
       try {
@@ -191,7 +201,7 @@ export function createFontResolver(ctx?: ParseContext, options: FontResolverOpti
     return index;
   };
 
-  const findFile = (fileName: string): ResolvedFile | null => {
+  const fontFile = (fileName: string): ResolvedFile | null => {
     const k = fileName.toUpperCase();
     if (!files.has(k)) files.set(k, ctx?.resolve(fileName, "font") ?? null);
     return files.get(k) ?? null;
@@ -212,8 +222,12 @@ export function createFontResolver(ctx?: ParseContext, options: FontResolverOpti
     const label = family ? `${family} ${style}`.trim() : `font ${k}`;
 
     // What substitutes (clone or CSS look-alike) is reported by scene/textFaces.ts.
-    if (!entry) warnings.add(`font ${k} is not in the font index; using a substitute`);
-    const file = fileName ? findFile(fileName) : null;
+    if (!entry) {
+      warnings.add(`font ${k} is not in the font index; using a substitute`);
+      indexNeeded();
+    }
+    const file = fileName ? fontFile(fileName) : null;
+    if (file && /\.spd$/i.test(file.name)) indexNeeded();
     if (fileName && !file && ctx) warnings.add(`font file ${fileName} (${label}) not found; using a substitute`);
 
     const font: ResolvedFont = { key, family, style, weight, italic, kind, fileName, file, cssFamily };

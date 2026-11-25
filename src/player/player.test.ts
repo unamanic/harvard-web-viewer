@@ -18,6 +18,8 @@ import {
   navigate,
   pressKey,
   resolveKey,
+  restorePlayer,
+  savePosition,
   startPlayer,
 } from "./player";
 
@@ -400,5 +402,46 @@ describe("player", () => {
       expect(jumpTo(s, 0)).toBe(s);
       expect(jumpTo(s, 9)).toBe(s);
     });
+  });
+});
+
+describe("savePosition / restorePlayer", () => {
+  const build = (innerCount = 2, outerExtra: SlideSpec[] = []) => {
+    const inner = show("IN", Array.from({ length: innerCount }, (_, i) => ({ label: `in${i + 1}` })));
+    return show("OUT", [{ label: "a1" }, { label: "nest", kind: "nested", nested: () => inner }, { label: "a3" }, ...outerExtra]);
+  };
+
+  it("saves the slide index and slide count at each level", () => {
+    const s = keys(startPlayer(build()), "ArrowRight", "ArrowRight");
+    expect(label(s)).toBe("in2");
+    expect(savePosition(s)).toEqual({ indices: [2, 2], counts: [4, 3], ended: false });
+    expect(savePosition(startPlayer(show("E", [{ label: "x", kind: "empty" }])))).toBeNull();
+  });
+
+  it("restores the position on a re-parse with the same structure", () => {
+    const saved = savePosition(keys(startPlayer(build()), "ArrowRight", "ArrowRight"));
+    const restored = restorePlayer(build(), saved);
+    expect(label(restored)).toBe("in2");
+    expect(restored.history).toEqual([]);
+    expect(restored.sounds).toEqual([]);
+    // It plays on from there.
+    expect(label(keys(restored, "ArrowRight"))).toBe("a3");
+  });
+
+  it("restores the outer position and the ended state", () => {
+    const ended = keys(startPlayer(build()), "Escape");
+    const restored = restorePlayer(build(), savePosition(ended));
+    expect(restored.ended).toBe(true);
+    expect(label(keys(restored, "ArrowLeft"))).toBe("a1");
+  });
+
+  it("starts over when the structure differs or the position no longer fits", () => {
+    const saved = savePosition(keys(startPlayer(build()), "ArrowRight", "ArrowRight"))!;
+    expect(label(restorePlayer(build(3), saved))).toBe("a1");
+    expect(label(restorePlayer(build(2, [{ label: "a4" }]), saved))).toBe("a1");
+    expect(label(restorePlayer(build(), { ...saved, indices: [3, 2] }))).toBe("a1");
+    expect(label(restorePlayer(build(), { indices: [2], counts: [4], ended: false }))).toBe("a1");
+    expect(label(restorePlayer(build(), { indices: [0], counts: [4], ended: false }))).toBe("a1");
+    expect(label(restorePlayer(build(), null))).toBe("a1");
   });
 });

@@ -45,6 +45,13 @@ describe("ShowPlayer", () => {
     expect(html).not.toContain("#ff0000");
   });
 
+  it("starts at initialPosition when it fits the presentation, else at the start", () => {
+    const at = (indices: number[], counts: number[]) =>
+      renderToStaticMarkup(<ShowPlayer presentation={presentation} initialPosition={{ indices, counts, ended: false }} />);
+    expect(at([2], [3])).toContain("Slide 2 of 2 · second");
+    expect(at([2], [4])).toContain("Slide 1 of 2 · first");
+  });
+
   it("takes the mute setting from the parent when given", () => {
     const html = renderToStaticMarkup(<ShowPlayer presentation={presentation} muted onMutedChange={() => {}} />);
     expect(html).toContain('aria-pressed="true"');

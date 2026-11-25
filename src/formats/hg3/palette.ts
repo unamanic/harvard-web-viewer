@@ -10,8 +10,8 @@
  *   kind 2 reference use HG3.PL3) and SPEC §7.1 (missing, empty or
  *   out-of-range palette falls back to the default palette).
  *
- * The result keeps RGB exactly as stored. A display mode (CGA/EGA/VGA, task
- * 6b) is applied afterwards by mapping the RGB returned by `colorForRole`;
+ * The result keeps RGB exactly as stored. A display mode (VGA, EGA or mono,
+ * task 6b, src/render/displayMode.ts) is applied afterwards by mapping the RGB returned by `colorForRole`;
  * the raw 1554/1555 records are kept on the Palette for that purpose.
  */
 import { DEFAULT_PALETTE_ENTRIES } from "./defaultPalette";
@@ -28,7 +28,7 @@ import {
   readContainer,
   readDescription,
 } from "./container";
-import type { ParseContext } from "../types";
+import { type ParseContext, findFile } from "../types";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -459,6 +459,10 @@ export interface ResolvedPalette {
  *    empty: HG3.PL3 from the file set.
  * 3. Otherwise the built-in copy of HG3.PL3.
  *
+ * HG3.PL3 (whether named or the default) is looked up with `findFile`, so a
+ * missing HG3.PL3 is not listed as a missing file: the built-in copy is the
+ * original HG3.PL3. Another palette the chart names is listed.
+ *
  * Warnings name the missing or bad file; the parse warnings of the palette
  * used are included, prefixed with its name.
  */
@@ -466,7 +470,10 @@ export function resolveChartPalette(paletteRefName: string | null, ctx?: ParseCo
   const warnings: string[] = [];
 
   const tryLoad = (name: string): { palette: Palette; path: string } | null => {
-    const file = ctx?.resolve(name, "palette") ?? null;
+    const file =
+      name.trim().toUpperCase() === DEFAULT_PALETTE_NAME
+        ? findFile(ctx, name, "palette")
+        : (ctx?.resolve(name, "palette") ?? null);
     if (!file) return null;
     try {
       const parsed = parsePalette(file.bytes);
@@ -533,10 +540,14 @@ export function builtInPalette(name: string): Palette | null {
  * The palette that replaces every chart's own when the viewer's palette
  * option names one (ParseContext.paletteOverride):
  *
- * 1. The named file from the file set (`ctx.resolve(name, "palette")`).
+ * 1. The named file from the file set.
  * 2. Else the built-in copy, if the viewer has one (MONOCHRB.PL3,
  *    MONOCHRW.PL3).
  * 3. Else null: charts keep their own palette.
+ *
+ * A name with a built-in copy is looked up with `findFile`, so it is not
+ * listed as a missing file when absent; any other name is
+ * (`ctx.resolve(name, "palette")`).
  *
  * The warnings (at most a couple: the file's parse warnings, or one line
  * saying what was used instead) are meant to be reported once per
@@ -548,7 +559,8 @@ export function resolvePaletteOverride(
 ): { palette: ResolvedPalette | null; warnings: string[] } {
   const warnings: string[] = [];
   const wanted = name.trim();
-  const file = wanted ? (ctx?.resolve(wanted, "palette") ?? null) : null;
+  const quiet = builtInPalette(wanted) !== null;
+  const file = !wanted ? null : quiet ? findFile(ctx, wanted, "palette") : (ctx?.resolve(wanted, "palette") ?? null);
   if (file) {
     try {
       const parsed = parsePalette(file.bytes);

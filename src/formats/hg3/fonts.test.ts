@@ -178,6 +178,29 @@ describe("createFontResolver", () => {
     ]);
   });
 
+  it("lists HG3.FGF as missing only when the built-in table is not enough", () => {
+    const quiet = (files: Record<string, Uint8Array>) => {
+      const ctx = fakeContext(files);
+      ctx.find = (name) => {
+        ctx.asked.push(`find ${name}`);
+        return null;
+      };
+      return ctx;
+    };
+    // Stock fonts, no original files: the built-in table does as well.
+    const stock = quiet({});
+    createFontResolver(stock).resolve(DUTCH_BOLD);
+    expect(stock.asked).toEqual(["find HG3.FGF", "BX000013.SPD:font"]);
+    // An original .SPD needs the index's character map.
+    const withSpd = quiet({ "BX000003.SPD": spd });
+    createFontResolver(withSpd).resolve(SWISS);
+    expect(withSpd.asked).toEqual(["find HG3.FGF", "BX000003.SPD:font", "HG3.FGF:font index"]);
+    // A key the built-in table lacks (a font installed later).
+    const unknown = quiet({});
+    createFontResolver(unknown).resolve({ source: 3, number: 99, style: 0x4268 });
+    expect(unknown.asked).toEqual(["find HG3.FGF", "HG3.FGF:font index"]);
+  });
+
   it("falls back to the built-in table when HG3.FGF is unreadable", () => {
     const r = createFontResolver(fakeContext({ "HG3.FGF": new Uint8Array(8) }));
     expect(r.resolve(SWISS).family).toBe("Swiss 721");

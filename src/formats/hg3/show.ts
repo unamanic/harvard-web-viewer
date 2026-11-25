@@ -11,6 +11,7 @@
  * anything. Unknown records and the 702 bytes whose meaning is not known are
  * kept raw. Fields marked [I] are tentative readings from SPEC §4.2.
  */
+import { TRANSITION_MENU_ORDER, type TransitionGuess } from "./assumptions";
 import { ByteReader } from "./ByteReader";
 import {
   type Container,
@@ -153,9 +154,9 @@ export interface Slide {
   fileRefIndex: number | null;
   /** Offset 5: 0, 1 or 2; maybe transition speed Slow/Medium/Fast [I]. */
   speed: number;
-  /** Offset 11: transition into this slide [I] (see `guessTransition`). */
+  /** Offset 11: maybe part of the transition [?] (SPEC §4.5). */
   transitionA: number;
-  /** Offset 12: transition, second effect [I]. */
+  /** Offset 12: the more likely transition field [I] (SPEC §4.5; see `guessTransition`). */
   transitionB: number;
   /**
    * Offset 14 as i16; null for −1 (0xFFFF), read as "wait for a key". Units
@@ -249,55 +250,14 @@ export function decodeDestination(byte: number, slideCount: number): Destination
   return { kind: "unknown", raw };
 }
 
-export type TransitionEffect =
-  | "replace"
-  | "overlay"
-  | "wipe"
-  | "scroll"
-  | "fade"
-  | "open"
-  | "close"
-  | "blinds"
-  | "iris";
-
-export interface TransitionGuess {
-  effect: TransitionEffect;
-  /** Direction where the menu offers one; null for Open/Close/Blinds, whose two variants are unnamed. */
-  direction: "left" | "right" | "up" | "down" | "in" | "out" | null;
-  /** 1 or 2 for the two unnamed variants of Open, Close and Blinds; 0 otherwise. */
-  variant: number;
-}
+export type { TransitionGuess } from "./assumptions";
 
 /**
- * [I] GUESS, NOT CONFIRMED (SPEC §4.5): 702 offsets 11/12 read as one number
- * per effect and direction in Projector menu order, starting at 0. The
- * player decides whether and how to use this.
+ * [I] Guessed effect for a 702 transition value (SPEC §4.5; the table and
+ * which field to read are in assumptions.ts); null outside 0..18.
  */
-const TRANSITION_GUESS: readonly TransitionGuess[] = [
-  { effect: "replace", direction: null, variant: 0 },
-  { effect: "overlay", direction: null, variant: 0 },
-  { effect: "wipe", direction: "left", variant: 0 },
-  { effect: "wipe", direction: "right", variant: 0 },
-  { effect: "wipe", direction: "up", variant: 0 },
-  { effect: "wipe", direction: "down", variant: 0 },
-  { effect: "scroll", direction: "left", variant: 0 },
-  { effect: "scroll", direction: "right", variant: 0 },
-  { effect: "scroll", direction: "up", variant: 0 },
-  { effect: "scroll", direction: "down", variant: 0 },
-  { effect: "fade", direction: null, variant: 0 },
-  { effect: "open", direction: null, variant: 1 },
-  { effect: "open", direction: null, variant: 2 },
-  { effect: "close", direction: null, variant: 1 },
-  { effect: "close", direction: null, variant: 2 },
-  { effect: "blinds", direction: null, variant: 1 },
-  { effect: "blinds", direction: null, variant: 2 },
-  { effect: "iris", direction: "in", variant: 0 },
-  { effect: "iris", direction: "out", variant: 0 },
-];
-
-/** [I] Guessed effect for a 702 offset 11/12 value (SPEC §4.5); null outside 0..18. */
 export function guessTransition(a: number): TransitionGuess | null {
-  return TRANSITION_GUESS[a] ?? null;
+  return TRANSITION_MENU_ORDER[a] ?? null;
 }
 
 function kindInfo(kind: number): { kindName: SlideKindName; chartType: number | null; chartTypeName: string | null } {

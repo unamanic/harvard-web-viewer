@@ -165,6 +165,21 @@ describe("palette option on a chart", () => {
     expect(doc.warnings.filter((w) => w.includes("NOSUCH.PL3"))).toEqual(["NOSUCH.PL3 not found; using the chart's palette"]);
   });
 
+  it("does not list a greyscale palette with a built-in copy as missing, nor HG3.PL3", () => {
+    const set = new FileSet([
+      { path: "A.CH3", bytes: chartBytes() },
+      { path: "B.CH3", bytes: chartBytes("OWN.PL3") },
+    ]);
+    const grey = openEntry(set, set.get("A.CH3")!, { paletteOverride: "MONOCHRW.PL3" });
+    expect(grey.warnings).toContain("MONOCHRW.PL3 was not opened; using the viewer's built-in copy");
+    expect(grey.missing).toEqual([]);
+    // Switching back: still nothing listed.
+    expect(openEntry(set, set.get("A.CH3")!).missing).toEqual([]);
+    // A palette the chart names, and an override without a built-in copy, still are.
+    const other = openEntry(set, set.get("B.CH3")!, { paletteOverride: "NOSUCH.PL3" });
+    expect(other.missing.map((m) => m.name).sort()).toEqual(["NOSUCH.PL3", "OWN.PL3"]);
+  });
+
   it("goes through loadFile's options", () => {
     const set = new FileSet(Object.entries(files).map(([path, bytes]) => ({ path, bytes })));
     const asSaved = openEntry(set, set.get("A.CH3")!);

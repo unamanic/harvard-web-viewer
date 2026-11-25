@@ -77,7 +77,8 @@ export function App({ initialFile = null }: AppProps = {}) {
   };
 
   // The palette changes how charts are parsed: open the file again with it.
-  // A show restarts from its first slide.
+  // The viewer keeps a show's position and presentation mode across the
+  // reload (Viewer, isReload).
   const onPaletteChange = (p: PaletteSetting) => {
     setPalette(p);
     savePaletteSetting(p);

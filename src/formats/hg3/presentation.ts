@@ -18,8 +18,15 @@ import type {
   PresentationSlideKind,
   ResolvedFile,
   Scene,
+  SlideTransition,
 } from "../types";
 import { LANDSCAPE_VIEW_BOX } from "../types";
+import {
+  TRANSITION_DEFAULT_MS,
+  TRANSITION_GUESS_FIELD,
+  TRANSITION_SPEED_MS,
+  TRANSITION_VARIANT_DIRECTIONS,
+} from "./assumptions";
 import { chartScene } from "./chartScene";
 import { type Container, readContainer } from "./container";
 import { HG3_CHARSET } from "./charset";
@@ -30,6 +37,7 @@ import {
   type KeyEntry,
   type Show,
   type Slide,
+  guessTransition,
   parseShow,
 } from "./show";
 
@@ -39,7 +47,7 @@ import {
  */
 export const MAX_NESTING_DEPTH = 8;
 
-/** The 702 fields that may hold the transition (§4.5), kept raw for the transitions task. */
+/** The 702 fields that may hold the transition (§4.5), kept raw (see `guessSlideTransition`). */
 export interface Hg3Transition {
   /** Offset 5 [I: speed 0..2]. */
   speed: number;
@@ -47,6 +55,19 @@ export interface Hg3Transition {
   transitionA: number;
   /** Offset 12 [I: the more likely transition field]. */
   transitionB: number;
+}
+
+/**
+ * The guessed transition into a slide (SPEC §4.5 [I]; every guess is in
+ * assumptions.ts), as the format-independent shape the player draws, or
+ * undefined if the stored value is not in the guessed numbering.
+ */
+export function guessSlideTransition(slide: Pick<Slide, "speed" | "transitionA" | "transitionB">): SlideTransition | undefined {
+  const guess = guessTransition(slide[TRANSITION_GUESS_FIELD]);
+  if (!guess) return undefined;
+  const durationMs = TRANSITION_SPEED_MS[slide.speed] ?? TRANSITION_DEFAULT_MS;
+  const direction = guess.direction ?? (guess.variant ? TRANSITION_VARIANT_DIRECTIONS[guess.variant] : undefined);
+  return direction ? { effect: guess.effect, direction, durationMs } : { effect: guess.effect, durationMs };
 }
 
 /** PC scan codes of extended keys (§4.3) → `KeyboardEvent.key` names. */
@@ -186,6 +207,8 @@ interface BuildOptions {
 /** A context for a file of the show: same file set and palette option, own path. */
 function contextAt(context: ParseContext, path: string): ParseContext {
   const out: ParseContext = { path, resolve: (n, p) => context.resolve(n, p) };
+  const { find } = context;
+  if (find) out.find = (n) => find.call(context, n);
   if (context.paletteOverride !== undefined) out.paletteOverride = context.paletteOverride;
   return out;
 }
@@ -267,6 +290,8 @@ function buildSlide(slide: Slide, context: ParseContext, options: BuildOptions, 
     waitForKey: slide.displayTime === null,
     transition: { speed: slide.speed, transitionA: slide.transitionA, transitionB: slide.transitionB } satisfies Hg3Transition,
   };
+  const transitionGuess = guessSlideTransition(slide);
+  if (transitionGuess) out.transitionGuess = transitionGuess;
   if (kind === "nested") out.nested = nested;
   // Units of other display times are unknown; only 0 ("at once") is understood.
   if (slide.displayTime === 0) out.displaySeconds = 0;

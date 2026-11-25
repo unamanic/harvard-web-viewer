@@ -3,6 +3,7 @@ import type { PresentationSlide } from "../formats/types";
 import type { LoadedFile } from "../loadFile";
 import { DEFAULT_DISPLAY_MODE, applyDisplayMode, type DisplayMode } from "../render/displayMode";
 import { SceneRenderer } from "../render/SceneRenderer";
+import type { SavedPosition } from "../player/player";
 import { ShowPlayer } from "../player/ShowPlayer";
 import { DEFAULT_TRANSITION_MODE, type TransitionMode } from "../player/transitions/mode";
 import { collectDiagnostics } from "../ui/diagnostics";
@@ -26,6 +27,11 @@ export function detectedText(file: LoadedFile): string {
   if (file.formatName && !file.error) return file.formatName;
   if (file.formatName) return `Could not open as ${file.formatName}`;
   return "Format not recognised";
+}
+
+/** `next` is `previous` opened again (same path in the same file set), e.g. with other load options. */
+export function isReload(previous: LoadedFile, next: LoadedFile): boolean {
+  return previous.path === next.path && previous.fileSet === next.fileSet;
 }
 
 /**
@@ -57,11 +63,19 @@ export function Viewer({
   }, []);
   const onThumbnailBuilt = useCallback(() => setBuilds((n) => n + 1), []);
 
-  // A new file starts outside presentation mode with no slide.
+  // Where the show is, so that a reload of the same file (the palette
+  // option re-parses it) carries on from there if the show still fits.
+  const [position, setPosition] = useState<SavedPosition | null>(null);
+
+  // A new file starts outside presentation mode with no slide; the same
+  // file loaded again from the same set keeps both.
   const [shownFile, setShownFile] = useState(file);
   if (shownFile !== file) {
     setShownFile(file);
-    setPresenting(false);
+    if (!isReload(shownFile, file)) {
+      setPresenting(false);
+      setPosition(null);
+    }
     setSlide(null);
   }
 
@@ -112,6 +126,8 @@ export function Viewer({
           presenting={presenting}
           onPresentingChange={setPresenting}
           onSlideChange={onSlideChange}
+          initialPosition={position}
+          onPositionChange={setPosition}
           onThumbnailBuilt={onThumbnailBuilt}
         />
       ) : (

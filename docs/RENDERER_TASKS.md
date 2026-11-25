@@ -187,8 +187,11 @@ as an option.
 
 **Done.** Settings → Palette: as saved, MONOCHRB or MONOCHRW. Built-in
 copies of both palettes are generated like the HG3.PL3 copy. Colours stored
-as direct RGB (not roles) stay in colour; changing the palette restarts a
-show from its first slide.
+as direct RGB (not roles) stay in colour. Changing the palette keeps the
+show's position and presentation mode when the show's structure is
+unchanged. Palettes with a built-in copy (MONOCHRB, MONOCHRW, HG3.PL3) are
+looked up without being listed as missing files; HG3.FGF is listed only when
+it matters (an unknown font key, or an .SPD found without it).
 
 Draw a chart with the program's own MONOCHRW.PL3 or MONOCHRB.PL3 in place of
 its palette (role for role), as a 1991 user would by changing palettes. Falls
@@ -448,6 +451,11 @@ Render the old and new slide as two stacked SVG layers and animate with CSS
 clip-path and transforms: Replace, Overlay, Wipe ×4, Scroll ×4, Fade
 (dissolve), Open, Close, Blinds, Iris In/Out, and Keep (§4.5). Durations 1.5 s,
 0.75 s and 0.3 s. The 702 offset 11/12 mapping goes in `assumptions.ts`.
+
+
+**Done.** The guessed mapping (SPEC §4.5) lives in `assumptions.ts`; the
+HG3 code fills the format-independent `PresentationSlide.transitionGuess`,
+which the player's "Guessed" mode reads. Default mode is Off.
 
 ### 24. Sound slides (optional)
 

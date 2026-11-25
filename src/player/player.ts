@@ -281,3 +281,57 @@ export function jumpTo(state: PlayerState, index: number): PlayerState {
   // History records where the viewer really was, not the trimmed position.
   return { ...next, history: [...state.history, state.position].slice(-MAX_HISTORY) };
 }
+
+/**
+ * Where the player is, without the presentation objects, so that it can be
+ * restored on another parse of the same file (e.g. after the palette
+ * option changes): the slide index and the slide count at each level of
+ * the stack, outermost first.
+ */
+export interface SavedPosition {
+  readonly indices: readonly number[];
+  readonly counts: readonly number[];
+  readonly ended: boolean;
+}
+
+/** The player's position, or null for an empty show. */
+export function savePosition(state: PlayerState): SavedPosition | null {
+  if (state.empty) return null;
+  return {
+    indices: state.position.map((f) => f.index),
+    counts: state.position.map((f) => f.presentation.slides.length),
+    ended: state.ended,
+  };
+}
+
+/**
+ * Start playing `presentation` at a saved position when it has the same
+ * structure (the same slide count at each level, each level's slide still
+ * a nested show that can be entered, and a picture at the end); otherwise,
+ * or without one, from the start (`startPlayer`). History is not kept and
+ * no sound is reported.
+ */
+export function restorePlayer(presentation: Presentation, saved?: SavedPosition | null): PlayerState {
+  const position = saved ? restoredPosition(presentation, saved) : null;
+  if (!position) return startPlayer(presentation);
+  return { position, history: [], ended: saved?.ended ?? false, empty: false, sounds: NO_SOUNDS };
+}
+
+function restoredPosition(presentation: Presentation, saved: SavedPosition): Frame[] | null {
+  const { indices, counts } = saved;
+  if (indices.length === 0 || indices.length !== counts.length || indices.length > MAX_DEPTH) return null;
+  const stack: Frame[] = [];
+  let current: Presentation | null = presentation;
+  for (let depth = 0; depth < indices.length; depth++) {
+    if (!current || current.slides.length !== counts[depth]) return null;
+    const index = indices[depth];
+    if (!Number.isInteger(index) || index < Math.max(current.firstSlide, 0) || index >= current.slides.length) return null;
+    stack.push({ presentation: current, index });
+    const slide = current.slides[index];
+    if (depth < indices.length - 1) {
+      if (slide.kind !== "nested") return null;
+      current = enterable(slide, stack);
+    } else if (slide.kind !== "picture") return null;
+  }
+  return stack;
+}

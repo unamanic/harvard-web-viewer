@@ -4,7 +4,7 @@ import { clickButton, currentSlide, navigate, pressKey, startPlayer } from "../.
 import type { ParseContext, Presentation, ResolvedFile, Scene, TextElement } from "../types";
 import { DocumentType } from "./container";
 import { hg3Parser } from "./index";
-import { keyName } from "./presentation";
+import { guessSlideTransition, keyName } from "./presentation";
 import { type RecordSpec, block, buildDocument, concat, cstr, leaf, padded, u16, u8 } from "./testing/bytes";
 
 /** A 702 slide entry (SPEC §4.2). */
@@ -128,6 +128,7 @@ describe("show → presentation", () => {
     expect(p.slides[1].waitForKey).toBe(true);
     expect(p.slides[4].waitForKey).toBe(false);
     expect(p.slides[1].transition).toEqual({ speed: 0, transitionA: 0, transitionB: 9 });
+    expect(p.slides[1].transitionGuess).toEqual({ effect: "scroll", direction: "down", durationMs: 1500 });
     // Files are looked up at once (so missing ones are listed), charts not yet parsed.
     expect(set.missing).toEqual(["GONE.CH3 (slide)"]);
     expect(doc.warnings).toContain("slide 2: file GONE.CH3 was not opened; shown as an empty slide");
@@ -200,5 +201,35 @@ describe("keyName", () => {
     expect(keyName({ char: 0, scanCode: 0x49 })).toBe("PageUp");
     expect(keyName({ char: 0, scanCode: 0x01 })).toBeNull();
     expect(keyName({ char: 0x02, scanCode: 0 })).toBeNull();
+  });
+});
+
+describe("guessSlideTransition (SPEC §4.5 guess, assumptions.ts)", () => {
+  it("reads offset 12 in menu order and offset 5 as speed", () => {
+    expect(guessSlideTransition({ speed: 2, transitionA: 1, transitionB: 3 })).toEqual({
+      effect: "wipe",
+      direction: "right",
+      durationMs: 300,
+    });
+    expect(guessSlideTransition({ speed: 0, transitionA: 0, transitionB: 9 })).toEqual({
+      effect: "scroll",
+      direction: "down",
+      durationMs: 1500,
+    });
+    expect(guessSlideTransition({ speed: 7, transitionA: 0, transitionB: 10 })).toEqual({ effect: "fade", durationMs: 750 });
+    expect(guessSlideTransition({ speed: 1, transitionA: 0, transitionB: 18 })).toEqual({
+      effect: "iris",
+      direction: "out",
+      durationMs: 750,
+    });
+  });
+
+  it("maps the unnamed Open/Close/Blinds variants to horizontal, then vertical", () => {
+    expect(guessSlideTransition({ speed: 1, transitionA: 0, transitionB: 11 })).toMatchObject({ effect: "open", direction: "up" });
+    expect(guessSlideTransition({ speed: 1, transitionA: 0, transitionB: 16 })).toMatchObject({ effect: "blinds", direction: "left" });
+  });
+
+  it("is undefined outside the table; offset 11 is ignored", () => {
+    expect(guessSlideTransition({ speed: 0, transitionA: 3, transitionB: 19 })).toBeUndefined();
   });
 });

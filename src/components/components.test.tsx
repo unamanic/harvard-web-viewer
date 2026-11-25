@@ -15,7 +15,7 @@ import { HexInspector } from "./HexInspector";
 import { Inspector } from "./Inspector";
 import { RecordTree } from "./RecordTree";
 import { SlideStrip } from "./SlideStrip";
-import { Viewer } from "./Viewer";
+import { Viewer, isReload } from "./Viewer";
 
 const empty = new Uint8Array();
 const chartBytes = () =>
@@ -179,5 +179,19 @@ describe("Viewer", () => {
     expect(html).toContain('aria-roledescription="slide show"');
     expect(html).toContain('aria-label="Slides"');
     expect(html).toContain(">Present</button>");
+  });
+});
+
+describe("isReload", () => {
+  it("is the same path in the same file set", () => {
+    const set = new FileSet([
+      { path: "A.CH3", bytes: new Uint8Array(4) },
+      { path: "B.CH3", bytes: new Uint8Array(4) },
+    ]);
+    const a = openEntry(set, set.get("A.CH3")!);
+    expect(isReload(a, openEntry(set, set.get("A.CH3")!))).toBe(true);
+    expect(isReload(a, openEntry(set, set.get("B.CH3")!))).toBe(false);
+    const other = new FileSet([{ path: "A.CH3", bytes: new Uint8Array(4) }]);
+    expect(isReload(a, openEntry(other, other.get("A.CH3")!))).toBe(false);
   });
 });

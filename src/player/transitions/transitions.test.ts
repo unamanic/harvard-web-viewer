@@ -11,7 +11,6 @@ import {
   type Box,
   type Frame,
 } from "./frames";
-import { guessHg3Transition } from "./hg3Guess";
 import {
   DEFAULT_TRANSITION_MODE,
   DEMO_TRANSITIONS,
@@ -22,8 +21,8 @@ import {
 import { INITIAL_RUN, finishRun, interruptRun, isAnimating, shownProgress, startRun } from "./run";
 import { REPLACE, SPEED_MS, type Transition, effectiveTransition, isInstant } from "./types";
 
-function slide(transition?: unknown): PresentationSlide {
-  return {
+function slide(transition?: unknown, transitionGuess?: Transition): PresentationSlide {
+  const out: PresentationSlide = {
     label: "s",
     kind: "picture",
     fileName: null,
@@ -34,6 +33,8 @@ function slide(transition?: unknown): PresentationSlide {
     waitForKey: true,
     transition,
   };
+  if (transitionGuess) out.transitionGuess = transitionGuess;
+  return out;
 }
 
 const t = (effect: Transition["effect"], direction?: Transition["direction"]): Transition =>
@@ -50,22 +51,14 @@ describe("transitionForSlide", () => {
     expect(transitionForSlide(slide(hg3), "off")).toEqual(REPLACE);
   });
 
-  it("guessed: reads offset 12 in menu order and offset 5 as speed", () => {
-    expect(transitionForSlide(slide(hg3), "guessed")).toEqual({ effect: "wipe", direction: "right", durationMs: SPEED_MS.fast });
-    expect(transitionForSlide(slide({ speed: 0, transitionA: 0, transitionB: 9 }), "guessed")).toEqual({
-      effect: "scroll",
-      direction: "down",
-      durationMs: SPEED_MS.slow,
-    });
-    expect(transitionForSlide(slide({ speed: 7, transitionA: 0, transitionB: 10 }), "guessed")).toEqual({
-      effect: "fade",
-      durationMs: SPEED_MS.medium,
-    });
-    expect(guessHg3Transition({ speed: 1, transitionB: 18 })).toMatchObject({ effect: "iris", direction: "out" });
+  it("guessed: draws the parser's transitionGuess, not the raw value", () => {
+    const guess: Transition = { effect: "wipe", direction: "right", durationMs: SPEED_MS.fast };
+    expect(transitionForSlide(slide(hg3, guess), "guessed")).toEqual(guess);
+    expect(transitionForSlide(slide(hg3, guess), "off")).toEqual(REPLACE);
   });
 
-  it("guessed: replace for values outside the table or other formats", () => {
-    expect(transitionForSlide(slide({ speed: 0, transitionB: 19 }), "guessed")).toEqual(REPLACE);
+  it("guessed: replace when the parser offers no guess", () => {
+    expect(transitionForSlide(slide(hg3), "guessed")).toEqual(REPLACE);
     expect(transitionForSlide(slide(undefined), "guessed")).toEqual(REPLACE);
     expect(transitionForSlide(slide("wipe"), "guessed")).toEqual(REPLACE);
   });

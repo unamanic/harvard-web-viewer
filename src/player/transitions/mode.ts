@@ -4,9 +4,11 @@
  *
  * How HG3 stores a slide's transition is not known (SPEC §4.5), so the
  * default draws none: faithful to the unknown is safer than inventing.
+ * "Guessed" draws the parser's `PresentationSlide.transitionGuess` (for HG3
+ * built from src/formats/hg3/assumptions.ts); the player reads no format's
+ * raw values.
  */
 import type { PresentationSlide } from "../../formats/types";
-import { guessHg3Transition } from "./hg3Guess";
 import { REPLACE, SPEED_MS, type Transition } from "./types";
 
 export type TransitionMode = "off" | "guessed" | "demo";
@@ -51,7 +53,7 @@ export function transitionForSlide(slide: PresentationSlide, mode: TransitionMod
     case "off":
       return REPLACE;
     case "guessed":
-      return guessHg3Transition(slide.transition) ?? REPLACE;
+      return slide.transitionGuess ?? REPLACE;
     case "demo": {
       const n = DEMO_TRANSITIONS.length;
       return DEMO_TRANSITIONS[(((step - 1) % n) + n) % n];

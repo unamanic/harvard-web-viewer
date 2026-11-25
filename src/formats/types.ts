@@ -348,8 +348,46 @@ export interface PresentationSlide {
   waitForKey: boolean;
   /** For slides that do not wait: seconds before moving on, if known. */
   displaySeconds?: number;
-  /** Raw, format-specific transition information (for the transitions task). */
+  /** Raw, format-specific transition information, as stored (for inspection). */
   transition?: unknown;
+  /**
+   * The parser's unconfirmed reading of `transition` (e.g. HG3, SPEC §4.5
+   * [I]), or absent if it has none. The player uses it only when the viewer
+   * is set to draw guessed transitions.
+   */
+  transitionGuess?: SlideTransition;
+}
+
+/**
+ * Format-independent slide transition effects (SPEC §4.5). `keep` leaves the
+ * previous picture under the new one.
+ */
+export type SlideTransitionEffect =
+  | "replace"
+  | "overlay"
+  | "wipe"
+  | "scroll"
+  | "fade"
+  | "open"
+  | "close"
+  | "blinds"
+  | "iris"
+  | "keep";
+
+/**
+ * - wipe, scroll: the direction the edge / the pictures move.
+ * - open, close, blinds: "up"/"down" (or none) = horizontal centre line or
+ *   stripes; "left"/"right" = vertical ones.
+ * - iris: "out" = growing rectangle (default), "in" = shrinking.
+ */
+export type SlideTransitionDirection = "left" | "right" | "up" | "down" | "in" | "out";
+
+/** How a slide comes in (drawn by src/player/transitions). */
+export interface SlideTransition {
+  effect: SlideTransitionEffect;
+  direction?: SlideTransitionDirection;
+  /** Overall duration; ignored by the instant effects (replace, overlay, keep). */
+  durationMs: number;
 }
 
 export interface Presentation {
@@ -418,11 +456,27 @@ export interface ParseContext {
    */
   resolve(name: string, purpose?: string): ResolvedFile | null;
   /**
+   * Optional: like `resolve`, but a file that is not there is not recorded
+   * as missing. For lookups the parser can do without because it has a
+   * built-in copy, so that the missing-file list names only files that
+   * matter. Use through `findFile`, which falls back to `resolve`.
+   */
+  find?(name: string): ResolvedFile | null;
+  /**
    * Viewer option: the file name of a palette to draw with in place of the
    * document's own (e.g. "MONOCHRW.PL3"); absent to draw as saved. The
    * format decides what it means and reports, once, if it cannot be used.
    */
   paletteOverride?: string;
+}
+
+/**
+ * Look a file up without recording it as missing (`ParseContext.find`); a
+ * context without `find` falls back to `resolve`, which may record it.
+ */
+export function findFile(context: ParseContext | undefined, name: string, purpose?: string): ResolvedFile | null {
+  if (!context) return null;
+  return context.find ? context.find(name) : context.resolve(name, purpose);
 }
 
 /** Thrown when a file is recognised but cannot be decoded yet. */

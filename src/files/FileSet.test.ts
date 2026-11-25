@@ -72,6 +72,19 @@ describe("FileSet.resolve", () => {
     ]);
   });
 
+  it("finds without recording a miss (find, context.find)", () => {
+    const set = new FileSet([
+      { path: "a/HG3.PL3", bytes: b(1) },
+      { path: "b/HG3.PL3", bytes: b(2) },
+    ]);
+    expect(set.find("C:\\HG3\\hg3.pl3", "b/X.CH3")?.path).toBe("b/HG3.PL3");
+    expect(set.find("MONOCHRW.PL3", "b/X.CH3")).toBeNull();
+    const ctx = set.contextFor("b/X.CH3");
+    expect(ctx.find?.("hg3.pl3")?.bytes[0]).toBe(2);
+    expect(ctx.find?.("MONOCHRB.PL3")).toBeNull();
+    expect(set.missing()).toEqual([]);
+  });
+
   it("replaces a file added twice at the same path", () => {
     const set = new FileSet([
       { path: "HG3.PL3", bytes: b(1) },

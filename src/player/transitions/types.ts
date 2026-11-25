@@ -1,35 +1,15 @@
 /**
  * Format-independent slide transitions (SPEC §4.5). A parser keeps whatever
- * its file stores in `PresentationSlide.transition`; `transitionForSlide`
- * turns that into a `Transition`, and the stage draws it.
+ * its file stores in `PresentationSlide.transition` and may offer a reading
+ * of it as `PresentationSlide.transitionGuess`; `transitionForSlide` picks
+ * the `Transition` to draw by the viewer's setting, and the stage draws it.
  */
+import type { SlideTransition, SlideTransitionDirection, SlideTransitionEffect } from "../../formats/types";
 
-export type TransitionEffect =
-  | "replace"
-  | "overlay"
-  | "wipe"
-  | "scroll"
-  | "fade"
-  | "open"
-  | "close"
-  | "blinds"
-  | "iris"
-  | "keep";
-
-/**
- * - wipe, scroll: the direction the edge / the pictures move.
- * - open, close, blinds: "up"/"down" (or none) = horizontal centre line or
- *   stripes; "left"/"right" = vertical ones.
- * - iris: "out" = growing rectangle (default), "in" = shrinking.
- */
-export type TransitionDirection = "left" | "right" | "up" | "down" | "in" | "out";
-
-export interface Transition {
-  effect: TransitionEffect;
-  direction?: TransitionDirection;
-  /** Overall duration; ignored by the instant effects (replace, overlay, keep). */
-  durationMs: number;
-}
+/** The shapes are defined beside `PresentationSlide.transitionGuess`. */
+export type TransitionEffect = SlideTransitionEffect;
+export type TransitionDirection = SlideTransitionDirection;
+export type Transition = SlideTransition;
 
 /** Slow, Medium, Fast (§4.5: "about 1.5 s, 0.75 s and 0.3 s") [I]. */
 export const SPEED_MS = { slow: 1500, medium: 750, fast: 300 } as const;

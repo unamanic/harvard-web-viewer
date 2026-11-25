@@ -94,20 +94,26 @@ export class FileSet {
   /**
    * Find a file by name, case-insensitively and ignoring any directory or
    * drive in `name`. Prefers a file in the same directory as `nearPath`,
-   * then any other match: shortest path first, then alphabetical. An
-   * unresolved name is recorded (see `missing`).
+   * then any other match: shortest path first, then alphabetical. Unlike
+   * `resolve`, a name that is not found is not recorded.
    */
-  resolve(name: string, nearPath?: string, purpose?: string): FileEntry | null {
+  find(name: string, nearPath?: string): FileEntry | null {
     const base = baseName(name);
     const matches = base ? this.byName.get(base.toLowerCase()) : undefined;
-    if (matches && matches.length > 0) {
-      if (nearPath !== undefined) {
-        const dir = dirKey(nearPath);
-        const beside = matches.find((e) => dirKey(e.path) === dir);
-        if (beside) return beside;
-      }
-      return matches[0];
+    if (!matches || matches.length === 0) return null;
+    if (nearPath !== undefined) {
+      const dir = dirKey(nearPath);
+      const beside = matches.find((e) => dirKey(e.path) === dir);
+      if (beside) return beside;
     }
+    return matches[0];
+  }
+
+  /** As `find`, but an unresolved name is recorded (see `missing`). */
+  resolve(name: string, nearPath?: string, purpose?: string): FileEntry | null {
+    const found = this.find(name, nearPath);
+    if (found) return found;
+    const base = baseName(name);
     const requestedBy = nearPath === undefined ? null : normalisePath(nearPath);
     const key = `${base.toLowerCase()}\n${requestedBy ?? ""}\n${purpose ?? ""}`;
     if (!this.missingKeys.has(key)) {
@@ -132,6 +138,7 @@ export class FileSet {
     return {
       path: p,
       resolve: (name, purpose) => this.resolve(name, p, purpose),
+      find: (name) => this.find(name, p),
     };
   }
 }
