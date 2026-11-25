@@ -228,6 +228,11 @@ select { width: 100%; padding: 0.45rem 0.6rem; }
 .dialog-header h2 { margin: 0 0 8px; font-family: var(--serif); font-size: 24px; font-weight: 600; }
 .dialog-note { font-size: 14px; margin: 0 0 16px; }
 .dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+/* "Choose what to open" (an archive with several shows or charts). */
+.picker-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 50vh; overflow: auto; }
+.picker-item { width: 100%; display: grid; gap: 2px; text-align: left; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; }
+.picker-name { font-family: var(--mono); font-weight: 600; overflow-wrap: anywhere; }
+.picker-meta { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
 .video-form { display: grid; gap: 14px; }
 .video-form .field { display: grid; gap: 6px; margin: 0; padding: 0; border: none; min-width: 0; }
 .video-form .field > span:first-child, .video-form legend { font-weight: 600; font-size: 14px; padding: 0; margin-bottom: 4px; }

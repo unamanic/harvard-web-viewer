@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { AppHeader } from "./components/AppHeader";
+import { DocumentPicker } from "./components/DocumentPicker";
 import { EmptyState, SupportedFilesHelp, useFileDrop } from "./components/FileDropzone";
 import { Settings } from "./components/Settings";
 import { type PaletteSetting, loadPaletteSetting, paletteLoadOptions, savePaletteSetting } from "./components/paletteSetting";
 import { Viewer } from "./components/Viewer";
+import type { FileEntry } from "./files/FileSet";
 import { fileSetFromBrowser, pathOf, type PathedFile } from "./files/fromBrowser";
+import type { OpenedFiles } from "./files/openFiles";
 import { loadDisplayMode, saveDisplayMode, type DisplayMode } from "./render/displayMode";
 import { loadMuted, saveMuted } from "./player/sound/controller";
 import { loadTransitionMode, saveTransitionMode, type TransitionMode } from "./player/transitions/mode";
@@ -34,6 +37,8 @@ export function App({ initialFile = null }: AppProps = {}) {
   const [transitionMode, setTransitionMode] = useState<TransitionMode>(loadTransitionMode);
   const [muted, setMuted] = useState(loadMuted);
   const [palette, setPalette] = useState<PaletteSetting>(loadPaletteSetting);
+  // An opened archive with several shows (or charts) waiting for the user to pick one.
+  const [picking, setPicking] = useState<OpenedFiles | null>(null);
 
   const onDisplayModeChange = (mode: DisplayMode) => {
     setDisplayMode(mode);
@@ -52,13 +57,15 @@ export function App({ initialFile = null }: AppProps = {}) {
   // The latest request is kept so that changing a parse option (the palette)
   // can repeat it with the new options.
   const request = useRef(0);
-  const lastWork = useRef<((options: LoadOptions) => Promise<LoadedFile | null>) | null>(null);
+  const lastWork = useRef<((options: LoadOptions) => Promise<LoadedFile | null | undefined>) | null>(null);
+  // `work` may resolve to undefined: nothing to open yet (the user is asked to pick), no error.
   const load = async (
-    work: (options: LoadOptions) => Promise<LoadedFile | null>,
+    work: (options: LoadOptions) => Promise<LoadedFile | null | undefined>,
     options = paletteLoadOptions(palette),
     after?: (loaded: LoadedFile | null) => void,
   ) => {
     const id = ++request.current;
+    const previousWork = lastWork.current;
     lastWork.current = work;
     setLoading(true);
     setLoadError(null);
@@ -66,6 +73,11 @@ export function App({ initialFile = null }: AppProps = {}) {
     try {
       const loaded = await work(options);
       if (id !== request.current) return;
+      if (loaded === undefined) {
+        // Waiting for a pick: the file shown (if any) stays, and so does its reload.
+        lastWork.current = previousWork;
+        return;
+      }
       setFile(loaded);
       if (!loaded) setLoadError("None of the chosen files could be read.");
       after?.(loaded);
@@ -76,9 +88,26 @@ export function App({ initialFile = null }: AppProps = {}) {
     }
   };
 
+  // Opened files, with ZIP archives unpacked: an archive holding several shows
+  // (or several charts and no show) asks which to open; one opens directly.
   const onFiles = (files: PathedFile[]) => {
-    const fileSet = fileSetFromBrowser(files);
-    void load(async (options) => loadFileSet(await fileSet, options));
+    const opened = fileSetFromBrowser(files);
+    setPicking(null);
+    void load(async (options) => {
+      const { fileSet, choices } = await opened;
+      if (choices.length > 1) {
+        setPicking({ fileSet, choices });
+        return undefined;
+      }
+      return choices.length === 1 ? loadEntry(fileSet, choices[0]!, options) : loadFileSet(fileSet, options);
+    });
+  };
+
+  const onPick = (entry: FileEntry) => {
+    if (!picking) return;
+    const { fileSet } = picking;
+    setPicking(null);
+    void load((options) => loadEntry(fileSet, entry, options));
   };
 
   const onSelect = (path: string) => {
@@ -95,15 +124,18 @@ export function App({ initialFile = null }: AppProps = {}) {
     if (!file) return;
     const { fileSet, path, missing } = file;
     const wanted = [...missing, ...fileSet.missing(path)];
+    // Files added from a ZIP archive count by their own names.
+    let added: { path: string; bytes: Uint8Array }[] = [];
     const work = async (options: LoadOptions) => {
-      const read = await fileSetFromBrowser(files);
-      const added = placeAddedFiles(path, read.entries());
-      const merged = fileSet.withFiles(added);
+      const { fileSet: read } = await fileSetFromBrowser(files);
+      added = read.entries();
+      const merged = fileSet.withFiles(placeAddedFiles(path, added));
+      merged.notes.push(...read.notes);
       const entry = merged.get(path);
       return entry ? loadEntry(merged, entry, options) : null;
     };
     void load(work, undefined, (loaded) => {
-      if (loaded) setAddNote(addedSummary(providedNames(wanted, files), files.length));
+      if (loaded) setAddNote(addedSummary(providedNames(wanted, added), added.length));
     });
   };
 
@@ -196,6 +228,7 @@ export function App({ initialFile = null }: AppProps = {}) {
           </main>
         </>
       )}
+      {picking && <DocumentPicker choices={picking.choices} onPick={onPick} onCancel={() => setPicking(null)} />}
       {drop.over && file && (
         <div className="drop-overlay" aria-hidden="true">
           Drop to open (files stay on this computer)

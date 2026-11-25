@@ -24,6 +24,7 @@ viewer's own code has verified so far.
 | PCX bitmaps | §6.3 | Yes (task 8) | Yes: all 69 sample .PCX/.PCC decode with no warnings |
 | Speedo fonts (.SPD) | §2 | Reader (task 7b); draws chart text when loaded (task 7f) | Yes: all 15 sample fonts decode with no warnings |
 | FN3 stroke fonts | §7.2 item 8 | Not yet documented | No |
+| ZIP archives (not an HG format) | — | Unpacked in the browser (src/files/zip.ts): stored and deflated entries, ZIP64, CP437 or UTF-8 names; encrypted entries and other methods are skipped with a note. An archive's files join the set under its path, so references resolve inside it | Unit tests, and the claude-vs-codex show zipped by Info-ZIP and Python (streamed and ZIP64 too) opens with every chart and picture found |
 
 ### Verified findings
 
