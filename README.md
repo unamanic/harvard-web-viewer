@@ -6,6 +6,25 @@ A browser-only viewer for **Harvard Graphics 3 for DOS** files: charts (`.CH3`),
 
 Harvard Graphics was one of the leading charting and presentation programs of the late 1980s and early 1990s, and its files are hard to open today. This viewer reads them in your browser with nothing to install. Files you open are read in the browser tab and are never uploaded anywhere.
 
+## How to use it
+
+1. **Open the viewer** at <https://unamanic.github.io/harvard-web-viewer/>. It runs entirely in your browser; there is nothing to install and no account.
+2. **Open your files.** Click **Open a file** (or **Choose files…** on the start page), drag files onto the page, or paste them with Ctrl+V. To open a whole folder, use **Choose a folder…** on the start page or the ▾ next to **Open a file** (**Open a folder…**), or drag the folder in.
+   - Open the **whole folder** a chart or show came from when you can. Charts name their palette (`.PL3`), fonts (`.SPD`), bitmaps (`.PCX`) and other charts in separate files, and shows name their slides; the viewer finds them in the files you opened, whatever their case. Anything it can't find is listed under **About this file**, and **Add missing files…** lets you add it without starting over.
+   - Supported files: charts `.CH3`, shows `.SH3`, palettes `.PL3`/`.PC3`, fonts `.SPD`, bitmaps `.PCX`/`.PCC`, sounds `.WAV`.
+3. **Look and move around.**
+   - The **Slides** column on the left lists the slides of a show (or the chart you opened); click one to jump to it. When you opened several files, a file switcher at the top of that column picks the chart or show to view.
+   - In a show, use → / ← (or Enter, Space, Page Down / Page Up), the show's own keys (for example F1–F10 in the gallery shows) and its on-screen buttons. Slides with a display time move on by themselves; **Pause auto-advance** (or the Pause key) holds them.
+   - **Present** shows the slide full screen; **Exit (Esc)** leaves.
+4. **Choose how it looks** under **Display** in the right-hand panel:
+   - **Display**: VGA ScreenShow (the default, as the original looked on a VGA screen), EGA, Hercules monochrome, or Modern (the stored colours exactly).
+   - **Palette**: as saved, or the program's own greyscale palettes.
+   - **Transitions**: from the file (default), off, or a demo of every effect; sound on or off.
+5. **Export.** **Export PNG / SVG** saves the slide you are looking at; for a show, **Export → Video…** makes a WebM (or MP4) of the whole show with its transitions, timing and sound.
+6. **Inspect.** **About this file** shows what the file is, its palette and fonts, and anything worth knowing; **Show raw bytes** opens the record tree and a hex view.
+
+**Try it with a sample.** The repository includes a 20-slide show made in the real Harvard Graphics 3.05, with its charts and pictures: [`samples/claude-vs-codex`](samples/claude-vs-codex). Download the repository (**Code → Download ZIP** on GitHub, or `git clone`), open the viewer, and use **Choose a folder…** on `samples/claude-vs-codex`: the show `CLAUDEVX.SH3` opens first.
+
 ## What it can do
 
 - **Charts (`.CH3`).** Draws the copy of the chart stored in the file (the drawn object layer, embedded charts included). When a chart has no stored copy, lays it out from its data: XY (bar, line, area, high/low, point), pie, title, bullet, organisation and table charts.
