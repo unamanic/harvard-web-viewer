@@ -770,41 +770,61 @@ describe("drawObjectLayer: bitmaps", () => {
   const bitmapObject = (name: string) => [
     transform([1, 0, 0, 1, 0, 0]),
     leaf(404, concat(u16(5), u16(0), cstr(name))),
-    object612([sub(0x110c, [0xff, 0x55, 0x55, 0x55]), sub(0x1140, new Uint8Array(8)), line(32), boxShape(1, 0, -100, -50, 100, 50)], [-100, -50, 100, 50]),
+    object612([sub(0x110c, [0xff, 0x55, 0x55, 0x55]), sub(0x1140, [0, 0, 0, 0, 0x40, 0x01, 0x4e, 0x00]), line(32), boxShape(1, 0, -100, -50, 100, 50)], [-100, -50, 100, 50]),
   ];
 
-  it("stretches the PCX over the object's bounding box", () => {
+  it("draws the PCX at screen pixel size, tiled over the object's box from its 0x1140 hot spot", () => {
     const ctx = fakeContext({ "LOGO.PCX": tinyPcx() });
     const { elements, warnings } = draw([...bitmapObject("C:\\HG3\\LOGO.PCX"), ...bitmapObject("logo.pcx")], ctx);
     expect(elements).toHaveLength(2);
     expect(elements[0]).toMatchObject({ kind: "image", x: -100, y: -50, width: 200, height: 100 });
     if (elements[0]?.kind !== "image") return;
     expect(elements[0].href).toMatch(/^data:image\//);
+    expect(elements[0].tile).toEqual({
+      pixelWidth: 51.2, // one 640 × 480 screen pixel of the 4:3 page
+      pixelHeight: 51.2,
+      imageWidth: 2,
+      imageHeight: 1,
+      anchorX: 0, // the box centre
+      anchorY: 0,
+      hotX: 0x0140,
+      hotY: 0x004e,
+      screenPixels: true,
+    });
     // Decoded once per name.
     expect(ctx.asked.filter((a) => a.endsWith(":bitmap"))).toHaveLength(1);
     expect(warnings).toEqual([]);
   });
 
-  it("draws a monochrome bitmap's black pixels in the 0x110C colour over a box in the 0x110B colour", () => {
+  it("draws a monochrome bitmap's black pixels in the 0x110C colour and its white pixels in the 0x110B colour", () => {
     const ctx = fakeContext({ "LOGO.PCX": tinyPcx() });
-    const { elements } = draw(
-      [
-        transform([1, 0, 0, 1, 0, 0]),
-        leaf(404, concat(u16(5), u16(0), cstr("LOGO.PCX"))),
-        object612(
-          [sub(BITMAP_INK_SUBTAG, [0xff, 0, 0xff, 0xff]), sub(0x1140, new Uint8Array(8)), sub(BITMAP_PAPER_SUBTAG, [0xff, 0, 0, 0x80]), boxShape(1, 0, -100, -50, 100, 50)],
-          [-100, -50, 100, 50],
-        ),
-      ],
-      ctx,
-    );
-    expect(elements).toHaveLength(2);
-    expect(elements[0]).toEqual({ kind: "rect", x: -100, y: -50, width: 200, height: 100, fill: "#000080", stroke: null });
-    const img = elements[1]!;
+    const mono = (paper: number[]) =>
+      draw(
+        [
+          transform([1, 0, 0, 1, 0, 0]),
+          leaf(404, concat(u16(5), u16(0), cstr("LOGO.PCX"))),
+          object612(
+            [sub(BITMAP_INK_SUBTAG, [0xff, 0, 0xff, 0xff]), sub(0x1140, new Uint8Array(8)), sub(BITMAP_PAPER_SUBTAG, paper), boxShape(1, 0, -100, -50, 100, 50)],
+            [-100, -50, 100, 50],
+          ),
+        ],
+        ctx,
+      ).elements;
+    const elements = mono([0xff, 0, 0, 0x80]);
+    expect(elements).toHaveLength(1);
+    const img = elements[0]!;
     if (img.kind !== "image") throw new Error("image expected");
+    // Indexed: 0 = black pixels (ink), 1 = white pixels (paper); the PCX is white, black.
+    expect(img.pixels).toEqual({ width: 2, height: 1, data: new Uint8Array([1, 0]), palette: ["#00ffff", "#000080"] });
     // BMP fallback (no canvas in tests): 54-byte header, then BGRA pixels, bottom row first.
     const bytes = Uint8Array.from(atob(img.href.split(",")[1]!), (c) => c.charCodeAt(0));
-    expect([...bytes.slice(54, 62)]).toEqual([0, 0, 0, 0, 0xff, 0xff, 0, 0xff]); // white: transparent; black: cyan
+    expect([...bytes.slice(54, 62)]).toEqual([0x80, 0, 0, 0xff, 0xff, 0xff, 0, 0xff]); // white: navy; black: cyan
+    // Paper role 0 ("none"): those pixels are transparent.
+    const clear = mono([0, 0, 0, 0])[0]!;
+    if (clear.kind !== "image") throw new Error("image expected");
+    expect(clear.pixels?.palette).toEqual(["#00ffff", null]);
+    const b2 = Uint8Array.from(atob(clear.href.split(",")[1]!), (c) => c.charCodeAt(0));
+    expect([...b2.slice(54, 62)]).toEqual([0, 0, 0, 0, 0xff, 0xff, 0, 0xff]);
   });
 
   it("skips a missing bitmap with a warning", () => {

@@ -513,7 +513,7 @@ Angles are in tenths of a degree, measured counter-clockwise from the positive x
 | 0x112B | 2 | Line style: 0 solid, 1 dotted (2 px on in a 6.5 px period at screen scale) \[C, from the reference renders\] |
 | 0x112D | 2 | u16 0 or 1 \[?\] |
 | 0x112E, 0x112F | 2 | u16 (0 or 3; 1) \[?\] |
-| 0x1140 | 8 | Bitmap fill, mostly zero; the bitmap is the 404 kind 5 reference before the 612 \[I\] |
+| 0x1140 | 8 | Bitmap: bytes 0 to 3 are 0; u16 at 4 and u16 at 6 are the bitmap's hot spot in bitmap pixels. The bitmap is the 404 kind 5 reference before the 612 \[C, from the reference renders\] |
 
 **Colours in attributes** \[C\]: a colour is 4 bytes. If byte 0 is 0xFF, bytes 1 to 3 are a direct red, green, blue value (as in palette record 1555); otherwise byte 0 is a colour role.
 
@@ -575,7 +575,7 @@ Series beyond the sixth reuse Series1 to Series6 in turn. \[C from the series re
 
 - Solid fills use a colour role (5.6). \[I\]
 - Pattern fills use the PATT\*.PCC bitmaps shipped with the program, named by a 404 kind 5 reference; gradient and "special effects" fills exist in the editor (named Gradient, Bitmap, Shadow, Emboss, Hilight) but their storage is not yet decoded. \[C for the names, ? for the storage\]
-- Backgrounds and logos are PCX bitmaps (.PCX, or .PCC for a cut-out piece) named by a 404 kind 5 reference and drawn by an object with a 0x1140 attribute, stretched to that object's bounding box. \[I\] PCX is a documented ZSoft format readable by many open-source libraries.
+- Backgrounds and logos are PCX bitmaps (.PCX, or .PCC for a cut-out piece) named by a 404 kind 5 reference and drawn by an object with a 0x1140 attribute: one bitmap pixel per screen pixel, the hot spot (0x1140) on the centre of the object's bounding box (the bitmap starts at screen pixel floor(centre − hot spot)), repeated in both directions and clipped to the box. Each pixel is drawn as the screen's fill dither of its colour; monochrome bitmaps use the 0x110C colour for black pixels and the 0x110B colour for white. \[C, from the reference renders\] \[I\] PCX is a documented ZSoft format readable by many open-source libraries.
 
 ### 6.4 Text
 

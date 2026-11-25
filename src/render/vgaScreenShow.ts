@@ -19,6 +19,14 @@
  *   levels (2 of the 16 thresholds per level), of up to three colours:
  *   `screenShowDither`. Reproduces 32 of the 33 distinct flat-fill tiles
  *   observed in the renders.
+ * - Bitmap pixels (drawn one per screen pixel) take the same 4 × 4 dither
+ *   as a fill of their colour, at their own screen pixel (dither.ts,
+ *   screenImage.ts): FLOOR's (83,83,83) is solid dark grey, ROCKTOP's greys
+ *   207 and 135 are 6/16 white on light grey and 10/16 light grey on dark
+ *   grey, as the rule gives. Open: ROCKTOP's (255,255,211) shows 4/16
+ *   yellow on white where the rule gives 2/16 (its white share rounded
+ *   down, 6 eighths, rather than to the nearest, 7); no fill uses that
+ *   colour, so the rule is not changed for one bitmap colour.
  */
 import { type RGB, formatCssColor, parseCssColor, vgaChannel } from "./color";
 import { BAYER_4X4, BAYER_8X8, type Dither, type DitherStop, type Screen, normalizeDither } from "./dither";

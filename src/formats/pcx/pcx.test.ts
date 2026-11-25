@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NotPcxError, decodePcx, recolorMonochrome, type PcxImage } from './pcx';
+import { NotPcxError, decodePcx, indexPixels, recolorMonochrome, type PcxImage } from './pcx';
 import { canvasAvailable, encodeBmp, encodeBmpDataUrl, pcxToDataUrl } from './toDataUrl';
 
 interface BuildOpts {
@@ -208,5 +208,24 @@ describe('recolorMonochrome', () => {
   it('returns other images unchanged', () => {
     const img = { ...mono(), monochrome: undefined };
     expect(recolorMonochrome(img, [1, 2, 3], null)).toBe(img);
+  });
+});
+
+describe('indexPixels', () => {
+  const rgba = (...px: number[][]) => new Uint8ClampedArray(px.flat());
+
+  it('gives a monochrome image index 0 for black and 1 for white', () => {
+    const out = indexPixels({ width: 2, height: 1, rgba: rgba([255, 255, 255, 255], [0, 0, 0, 255]), monochrome: true });
+    expect(out).toEqual({ data: new Uint8Array([1, 0]), palette: [[0, 0, 0], [255, 255, 255]] });
+  });
+
+  it('indexes other images by distinct colour in order of first appearance, transparent as null', () => {
+    const out = indexPixels({ width: 4, height: 1, rgba: rgba([0, 0, 255, 255], [83, 83, 83, 255], [9, 9, 9, 0], [0, 0, 255, 255]) });
+    expect(out).toEqual({ data: new Uint8Array([0, 1, 2, 0]), palette: [[0, 0, 255], [83, 83, 83], null] });
+  });
+
+  it('gives up beyond 256 colours', () => {
+    const px = Array.from({ length: 257 }, (_, i) => [i & 0xff, i >> 8, 0, 255]);
+    expect(indexPixels({ width: 257, height: 1, rgba: rgba(...px) })).toBeNull();
   });
 });

@@ -80,7 +80,7 @@ Unit tests use synthetic bytes, so they need no samples. The sample regression s
 
 ### Reference-render comparison
 
-`yarn compare` compares the viewer's output with screenshots of the real program, which are kept in `samples-private/renders/` (made with Harvard Graphics 3.05 in DOSBox-X). The tool is being added under `tools/compare/`. Use it when changing how anything is drawn.
+`yarn compare` compares the viewer's output with screenshots of the real program, which are kept in `samples-private/renders/` (made with Harvard Graphics 3.05 in DOSBox-X). It lives in [`tools/compare/`](tools/compare/README.md); `CMP_MODE=ega` or `mono` compares the other display modes. Use it when changing how anything is drawn.
 
 ### Deploying
 

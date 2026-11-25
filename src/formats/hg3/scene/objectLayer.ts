@@ -53,6 +53,7 @@
 import type {
   GlyphsElement,
   GroupElement,
+  ImageElement,
   Matrix,
   Point,
   RectElement,
@@ -61,7 +62,7 @@ import type {
   TextElement,
 } from "../../types";
 import { EM_UNITS, type GlyphSource, layoutGlyphLine } from "../../../fonts/glyphRun";
-import { type PcxImage, decodePcx, recolorMonochrome } from "../../pcx/pcx";
+import { type PcxImage, decodePcx, indexPixels } from "../../pcx/pcx";
 import { pcxToDataUrl } from "../../pcx/toDataUrl";
 import {
   BOX_3D_SIDE_SHADE,
@@ -74,8 +75,10 @@ import {
   EMBEDDED_CHART_DRAWS_BACKGROUND,
   EMBEDDED_CHART_MAX_DEPTH,
   GLYPH_ADVANCE_PIXELS,
+  BITMAP_HOTSPOT_OFFSET,
   BITMAP_INK_SUBTAG,
   BITMAP_MONO_COLORS,
+  BITMAP_NATIVE_TILED,
   BITMAP_PAPER_SUBTAG,
   DRAW_GRADIENTS,
   GRADIENT_AS_FIRST_COLOR,
@@ -106,6 +109,7 @@ import {
 import { type Chart, parseChart } from "../chart";
 import { type LeafRecord, readContainer, readFileReference } from "../container";
 import {
+  AttributeSubTag,
   type ArcShape,
   type Attribute,
   type Box,
@@ -850,12 +854,16 @@ function attributeRgb(ctx: ChartSceneContext, raw: Uint8Array | undefined): Rgb 
 }
 
 /**
- * A bitmap object: its 404 kind 5 bitmap stretched to the 612 bounding box.
- * A monochrome bitmap is drawn in the object's colours
- * (assumptions.ts BITMAP_MONO_COLORS): its white pixels as a box in the
- * 0x110B colour (a scene colour, so display modes treat it like any fill),
- * its black pixels in the 0x110C colour over it; a colour that is "none"
- * leaves those pixels transparent.
+ * A bitmap object (assumptions.ts BITMAP_NATIVE_TILED): its 404 kind 5
+ * bitmap at one bitmap pixel per screen pixel, the 0x1140 hot spot on the
+ * centre of the 612 bounding box, repeated to fill the box and clipped to
+ * it (ImageElement.tile with `screenPixels`, so that each display mode
+ * draws it at its own pixel size). A monochrome bitmap is drawn in the
+ * object's colours (assumptions.ts BITMAP_MONO_COLORS): its black pixels
+ * in the 0x110C colour, its white pixels in the 0x110B colour; a colour
+ * that is "none" leaves those pixels transparent. The image carries its
+ * pixels as palette indexes (ImageElement.pixels) so that display modes can
+ * show each pixel's colour as the screen shows that colour in a fill.
  */
 function drawBitmap(b: Builder, obj: DrawnObject, parent: Readonly<Transform>): SceneElement[] {
   const [name] = fileRefs(obj.extraRecords, REF_KIND_BITMAP);
@@ -869,14 +877,43 @@ function drawBitmap(b: Builder, obj: DrawnObject, parent: Readonly<Transform>): 
   const { x1, y1, x2, y2 } = obj.bbox;
   const corners = [applyTransform(parent, { x: x1, y: y1 }), applyTransform(parent, { x: x2, y: y2 })];
   const rect = areaToRect({ x1: corners[0]!.x, y1: corners[0]!.y, x2: corners[1]!.x, y2: corners[1]!.y });
-  if (!image.monochrome || !BITMAP_MONO_COLORS) return [{ kind: "image", href: pcxToDataUrl(image), ...rect }];
   const last = (subTag: number) => obj.attributes.filter((a) => a.subTag === subTag).pop()?.raw;
-  const ink = attributeRgb(b.ctx, last(BITMAP_INK_SUBTAG));
-  const paper = attributeRgb(b.ctx, last(BITMAP_PAPER_SUBTAG));
-  const out: SceneElement[] = [];
-  if (paper) out.push({ kind: "rect", ...rect, fill: rgbToCss(paper), stroke: null });
-  if (ink) out.push({ kind: "image", href: pcxToDataUrl(recolorMonochrome(image, ink, null)), ...rect });
-  return out;
+  const indexed = indexPixels(image);
+  let palette: (Rgb | null)[] | null = indexed?.palette ?? null;
+  if (image.monochrome && BITMAP_MONO_COLORS) {
+    palette = [attributeRgb(b.ctx, last(BITMAP_INK_SUBTAG)), attributeRgb(b.ctx, last(BITMAP_PAPER_SUBTAG))];
+    if (palette.every((c) => c === null)) return [];
+  }
+  const el: ImageElement = { kind: "image", href: "", ...rect };
+  if (indexed && palette) {
+    const rgba = new Uint8ClampedArray(image.width * image.height * 4);
+    indexed.data.forEach((k, i) => {
+      const c = palette![k];
+      if (!c) return;
+      rgba.set([c[0], c[1], c[2], 255], i * 4);
+    });
+    el.href = pcxToDataUrl({ width: image.width, height: image.height, rgba });
+    el.pixels = { width: image.width, height: image.height, data: indexed.data, palette: palette.map((c) => (c ? rgbToCss(c) : null)) };
+  } else {
+    el.href = pcxToDataUrl(image);
+  }
+  if (BITMAP_NATIVE_TILED) {
+    const hot = last(AttributeSubTag.Bitmap);
+    const u16 = (o: number) => (hot && hot.length >= o + 2 ? hot[o]! | (hot[o + 1]! << 8) : 0);
+    const px = b.ctx.page.screenPixel;
+    el.tile = {
+      pixelWidth: px,
+      pixelHeight: px,
+      imageWidth: image.width,
+      imageHeight: image.height,
+      anchorX: rect.x + rect.width / 2,
+      anchorY: rect.y + rect.height / 2,
+      hotX: u16(BITMAP_HOTSPOT_OFFSET),
+      hotY: u16(BITMAP_HOTSPOT_OFFSET + 2),
+      screenPixels: true,
+    };
+  }
+  return [el];
 }
 
 // ---------------------------------------------------------------------------

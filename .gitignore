@@ -10,3 +10,6 @@ dist
 samples-private/*
 !samples-private/.gitkeep
 samples-private/
+
+# Reference comparison output (private: derived from the reference renders)
+tools/compare/out/

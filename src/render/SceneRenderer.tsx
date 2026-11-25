@@ -6,6 +6,7 @@ import {
   type FillGradient,
   type FillPattern,
   type GlyphsElement,
+  type ImageElement,
   type RectElement,
   type Scene,
   type SceneElement,
@@ -276,6 +277,39 @@ function renderGradientShape(el: ShapeElement, key: number, gradient: FillGradie
   );
 }
 
+/** Bitmap pixels stay square-edged when scaled (they are screen pixels of the original). */
+const PIXELATED = { imageRendering: "pixelated" } as const;
+
+/**
+ * An image: stretched to its box, or (ImageElement.tile) as an SVG
+ * <pattern> of the image at its pixel size, the image's hot spot on the
+ * anchor, filling the box.
+ */
+function renderImage(el: ImageElement, key: number, ctx: RenderContext): ReactNode {
+  const box = normalizeBox(el);
+  const t = el.tile;
+  if (!t || !(t.pixelWidth > 0) || !(t.pixelHeight > 0) || !(t.imageWidth > 0) || !(t.imageHeight > 0)) {
+    return <image key={key} href={el.href} {...box} preserveAspectRatio="none" style={PIXELATED} />;
+  }
+  const id = ctx.newId();
+  const width = t.imageWidth * t.pixelWidth;
+  const height = t.imageHeight * t.pixelHeight;
+  ctx.defs.push(
+    <pattern
+      key={id}
+      id={id}
+      patternUnits="userSpaceOnUse"
+      x={t.anchorX - t.hotX * t.pixelWidth}
+      y={t.anchorY - t.hotY * t.pixelHeight}
+      width={width}
+      height={height}
+    >
+      <image href={el.href} width={width} height={height} preserveAspectRatio="none" style={PIXELATED} />
+    </pattern>,
+  );
+  return <rect key={key} {...box} fill={`url(#${id})`} />;
+}
+
 function renderElement(
   el: SceneElement,
   key: number,
@@ -315,14 +349,7 @@ function renderElement(
     case "glyphs":
       return renderGlyphs(el, key, ctx);
     case "image":
-      return (
-        <image
-          key={key}
-          href={el.href}
-          {...normalizeBox(el)}
-          preserveAspectRatio="none"
-        />
-      );
+      return renderImage(el, key, ctx);
     case "group": {
       const name = el.buttonName;
       const { onButtonClick } = ctx;

@@ -91,6 +91,24 @@ describe("SceneRenderer", () => {
   it("draws stretched images", () => {
     expect(html).toContain(`href="${PIXEL}"`);
     expect(html).toContain('preserveAspectRatio="none"');
+    expect(html).toContain("image-rendering:pixelated");
+  });
+
+  it("draws a tiled image as a pattern of the image at its pixel size, anchored at its hot spot, filling the box", () => {
+    const tiled: Scene = {
+      viewBox: LANDSCAPE_VIEW_BOX,
+      background: "black",
+      elements: [
+        {
+          kind: "image", href: PIXEL, x: -1000, y: -500, width: 2000, height: 1000,
+          tile: { pixelWidth: 50, pixelHeight: 50, imageWidth: 4, imageHeight: 2, anchorX: 0, anchorY: 0, hotX: 2, hotY: 1.5, screenPixels: true },
+        },
+      ],
+    };
+    const out = renderToStaticMarkup(<SceneRenderer scene={tiled} />);
+    expect(out).toMatch(/<pattern id="([^"]+)" patternUnits="userSpaceOnUse" x="-100" y="-75" width="200" height="100"><image href="data:image\/png[^"]*" width="200" height="100" preserveAspectRatio="none"/);
+    const id = /<pattern id="([^"]+)"/.exec(out)![1];
+    expect(out).toContain(`<rect x="-1000" y="-500" width="2000" height="1000" fill="url(#${id})"></rect>`);
   });
 
   it("draws nested groups with transform and button name", () => {

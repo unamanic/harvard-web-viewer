@@ -984,14 +984,29 @@ export const BITMAP_INK_SUBTAG = 0x110c;
 export const BITMAP_PAPER_SUBTAG = 0x110b;
 
 /**
- * Not reproduced: FLOOR's 640 × 153 16-colour bitmap is drawn by HG at its
- * own pixel size (1:1 on the 640 × 480 screen), centred vertically in its
- * 214 px box (rows 296-448), with its last 30 rows repeated above it (rows
- * 266-295) and black below; we stretch it to the box. Its 0x1140 data
- * (0x0140, 0x004E = 320, 78) is about half the bitmap size, as LOGOBKG1's
- * (60, 16) is of its 121 × 33.
+ * Bitmaps are drawn at their own pixel size (one bitmap pixel per screen
+ * pixel, in every display mode), repeated in both directions to fill the
+ * object's 612 box and clipped to it; the tiling is anchored so that the
+ * 0x1140 hot spot (u16 x, u16 y at BITMAP_HOTSPOT_OFFSET, in bitmap pixels
+ * from the top left) lies on the box centre: the bitmap starts at screen
+ * pixel floor(centre − hot spot) [I, from the reference renders].
+ * Evidence (VGA): FLOOR (640 × 153, hot spot 320, 78; box rows 266–479,
+ * centre 373.0): bitmap row 0 on screen row 295 and again on 448 (the
+ * mostly black rows 0–30 below it, rows 123–152 above it), column 0 on
+ * screen column −1; 99.8 % of its box pixels match. ROCKTOP (640 × 32,
+ * 320, 16; box rows 0–35): row 0 on screen row 2 (rows 30–31 above).
+ * LOGOBKG1 (121 × 33, 60, 16; box 117.5 × 31.2 px): clipped on every
+ * side, origin (511, 434). PATTVIEW's 64 8 × 8 swatches (hot spot 0, 0):
+ * floor(centre) is the best phase rule (88 % of swatches exact on VGA,
+ * 97 % on Hercules; the rest are 1 px off, as are some origins on EGA and
+ * Hercules, where our page-to-pixel mapping is itself 1–2 px off).
+ * The hot spot is about half the bitmap size (LOGOBKG1 60, 16 of 121 × 33;
+ * ROCKTOP 320, 16 of 640 × 32) but FLOOR's 78 is not 153 / 2: it is read,
+ * not derived. Bytes 0–3 of the 8-byte 0x1140 are 0 in every sample.
+ * With BITMAP_NATIVE_TILED false, bitmaps are stretched to the box.
  */
-export const BITMAP_STRETCHED_TO_BOX = true;
+export const BITMAP_NATIVE_TILED = true;
+export const BITMAP_HOTSPOT_OFFSET = 4;
 
 /**
  * Box style 5 (SHADOW_BOX_STYLE) is drawn as a box extruded c right and c

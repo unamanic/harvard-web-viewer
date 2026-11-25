@@ -16,7 +16,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "compare": "vitest run --config tools/compare/vitest.config.ts"
   },
   "dependencies": {
     "react": "^19.3.1",

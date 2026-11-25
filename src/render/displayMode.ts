@@ -39,7 +39,11 @@
  *
  * Only colours in the forms #rgb, #rrggbb and rgb(r, g, b) are transformed;
  * any other CSS colour string (named colours, hsl(), ...) is left unchanged.
- * Bitmaps (image elements) are not recoloured.
+ * Bitmaps with indexed pixels are redrawn by the screen modes at the
+ * screen's resolution, each pixel's colour dithered as a fill of that
+ * colour at that screen pixel (dither.ts, screenImage.ts; the reference
+ * renders show exactly that for FLOOR, ROCKTOP, LOGOBKG1 and PATTVIEW in
+ * all three modes). Modern leaves images as they are.
  */
 import type { Scene, SceneElement } from "../formats/types";
 import { type RGB, formatCssColor, parseCssColor } from "./color";

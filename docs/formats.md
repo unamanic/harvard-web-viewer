@@ -299,13 +299,13 @@ Add entries as `- finding (sample file checked, task number)`.
   (mode 1 plain / 2 shaded, colour 1 at the top); 0x1110 gradient angle in
   tenths counter-clockwise from up, across the bounding box; VGA gradients
   dither in 64 levels on an 8×8 matrix; monochrome bitmaps draw black
-  pixels in the 0x110C colour and white in 0x110B, at native pixel size
-  (tiling not implemented); box style 5 is an extruded 3-D box (faces 25%
+  pixels in the 0x110C colour and white in 0x110B, at native pixel size,
+  tiled from the 0x1140 hot spot on the box centre; box style 5 is an extruded 3-D box (faces 25%
   and 50%), style 2 a double outline; paper code 1 with a 10×7.5 in page
   shows the Letter area at 0.971; button-bar fit 440/480 rows; baseline =
   line top − stored ascent; glyph advances round up to screen pixels;
   0x112B = line style (1 dotted); 0x10A0 trailer = marker size and shape.
-  Open: PLANET's sphere, bitmap tiling, PALVIEW's dot period, partly
+  Open: PLANET's sphere, PALVIEW's dot period, partly
   yellow titles in GALD721/852. (reference renders)
 - Transitions decoded (renders/transition-tests, 52 shows saved with one
   setting changed at a time): 702 offsets 5–7 Draw effect/direction/speed,
@@ -325,8 +325,11 @@ Add entries as `- finding (sample file checked, task number)`.
   - EGA (640×350, pixels 1.37× taller): dithers exactly like VGA
     ScreenShow (same 16 slots and rules), each slot shown as the nearest
     of the 64 EGA colours.
-  - Open: bitmaps are not yet patterned in these modes (FLOOR 27%); text
-    sits 2–3 px off on 348/350-row screens; EGA PLANET's colours.
+  - Bitmaps are now drawn at native screen pixels, tiled, with each pixel
+    dithered as a fill (FLOOR VGA 23.9% → 0.09%, EGA 8.3% → 0.6%). Open:
+    1-px page-mapping offsets on the 348/350-row screens (Hercules FLOOR
+    still 19.8%; text 2–3 px off); EGA PLANET's colours; ROCKTOP's
+    (255,255,211) shows 4/16 yellow on white where the fill rule gives 2/16.
     (Hercules and EGA reference renders)
 
 ### Samples

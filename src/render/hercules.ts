@@ -25,8 +25,11 @@
  *   are patterned like fills.
  * - Gradient fills: 64 levels on the 8 × 8 Bayer matrix, again by luma:
  *   `herculesGradientDither`.
- * - Bitmaps are left to the renderer (not recoloured); the real driver
- *   patterns them too (FLOOR, LOGOBKG1, PATTVIEW, ROCKTOP).
+ * - Bitmap pixels (images with indexed pixels, at one bitmap pixel per
+ *   screen pixel) are patterned like fills: each pixel shows its colour's
+ *   fill pattern at that screen pixel (dither.ts, screenImage.ts; FLOOR's
+ *   blue is level 1, its grey 83 level 2, ROCKTOP's greys 135 and 207
+ *   levels 4 and 6).
  * - Glyph outlines (stroke fonts; none in the samples) are treated as text.
  */
 import { type RGB, luma } from "./color";

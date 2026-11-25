@@ -30,6 +30,7 @@ import {
 } from "../formats/types";
 import { type RGB, formatCssColor, parseCssColor } from "./color";
 import { type Box, gradientSpan, shapeBounds } from "./geometry";
+import { screenImage } from "./screenImage";
 
 /** Threshold matrix: every value 0..n−1 once (n = rows × columns), tiled from the screen's top left. */
 export type ThresholdMatrix = readonly (readonly number[])[];
@@ -229,8 +230,13 @@ export interface ApplyScreenOptions {
  *   tile per dither, one tile pixel per screen pixel, aligned to the
  *   screen's pixel grid (patterns get a transform inside transformed
  *   groups and glyph lines).
+ * - Images with indexed pixels (ImageElement.pixels) are redrawn at the
+ *   screen's resolution, each pixel's colour shown as a fill of that
+ *   colour shows at that screen pixel (screenImage.ts); a tiled image with
+ *   `screenPixels` at one image pixel per screen pixel. Images without
+ *   pixels are left unchanged.
  * - Colours that are not #rgb, #rrggbb or rgb() (named colours,
- *   "transparent", existing "pattern:" fills), halos and images are left
+ *   "transparent", existing "pattern:" fills) and halos are left
  *   unchanged.
  */
 export function applyScreen(scene: Scene, screen: Screen, options: ApplyScreenOptions = {}): Scene {
@@ -335,14 +341,23 @@ export function applyScreen(scene: Scene, screen: Screen, options: ApplyScreenOp
     return ((el.strokeWidth ?? DEFAULT_STROKE_WIDTH) * scale) / geo.pixelHeight <= screen.line.maxWidth + 1e-9;
   };
 
-  const mapEl = (el: SceneElement, toScene: Matrix): SceneElement => {
+  /** A bitmap pixel's colour at screen pixel (sx, sy): as a fill of that colour shows there. */
+  const imageColorAt = (css: string, sx: number, sy: number): string => {
+    const d = ditherOf(css);
+    if (d === null) return css;
+    if ("solid" in d) return d.solid;
+    const row = d.tile[sy % d.tile.length];
+    return screen.colors[row[sx % row.length]];
+  };
+
+  const mapEl = (el: SceneElement, toScene: Matrix): SceneElement | null => {
     switch (el.kind) {
       case "group": {
         const m = el.transform ? multiply(toScene, el.transform) : toScene;
-        return { ...el, children: el.children.map((c) => mapEl(c, m)) };
+        return { ...el, children: mapAll(el.children, m) };
       }
       case "image":
-        return el;
+        return screenImage(el, toScene, geo, screen, imageColorAt);
       case "text":
         return { ...el, fill: paint(el.fill, toScene) };
       case "glyphs": {
@@ -367,6 +382,9 @@ export function applyScreen(scene: Scene, screen: Screen, options: ApplyScreenOp
     }
   };
 
+  const mapAll = (els: readonly SceneElement[], toScene: Matrix): SceneElement[] =>
+    els.map((el) => mapEl(el, toScene)).filter((el): el is SceneElement => el !== null);
+
   const { minX, minY, width, height } = scene.viewBox;
   let background = scene.background;
   if (background.startsWith(GRADIENT_FILL_PREFIX)) {
@@ -377,7 +395,7 @@ export function applyScreen(scene: Scene, screen: Screen, options: ApplyScreenOp
     else if (bgRgb) background = paint(background, IDENTITY, screen.backgroundLikeShapes ? "shape" : "gradient");
   }
 
-  const elements = scene.elements.map((el) => mapEl(el, IDENTITY));
+  const elements = mapAll(scene.elements, IDENTITY);
   const out: Scene = { ...scene, background, elements };
   if (Object.keys(patterns).length > 0) out.patterns = { ...scene.patterns, ...patterns };
   if (Object.keys(gradients).length > 0) out.gradients = { ...scene.gradients, ...gradients };

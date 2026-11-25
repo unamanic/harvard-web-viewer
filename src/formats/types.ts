@@ -203,7 +203,11 @@ export interface GlyphsElement extends ShapeStyle {
   halo?: TextHalo;
 }
 
-/** Bitmap stretched to its box (no aspect-ratio preservation). */
+/**
+ * A bitmap in a box. Without `tile` it is stretched to the box (no
+ * aspect-ratio preservation); with `tile` it is drawn at a fixed pixel size,
+ * repeated in both directions and clipped to the box.
+ */
 export interface ImageElement {
   kind: "image";
   /** Usually a data: URL. */
@@ -212,6 +216,50 @@ export interface ImageElement {
   y: number;
   width: number;
   height: number;
+  tile?: ImageTile;
+  /**
+   * Optional: the image as indexed pixels, for render-side transforms that
+   * need its colours (e.g. a display mode dithering each pixel like a
+   * fill). Must show the same picture as `href`.
+   */
+  pixels?: IndexedPixels;
+}
+
+/**
+ * How a tiled image is placed: image pixel (hotX, hotY) (a point in image
+ * pixels from its top-left corner, fractions allowed) lies on the anchor
+ * point (anchorX, anchorY); the image repeats from there in both
+ * directions, so the tiling's phase follows from the anchor.
+ */
+export interface ImageTile {
+  /** Size of one image pixel, in the element's units. */
+  pixelWidth: number;
+  pixelHeight: number;
+  /** Image size in pixels. */
+  imageWidth: number;
+  imageHeight: number;
+  anchorX: number;
+  anchorY: number;
+  hotX: number;
+  hotY: number;
+  /**
+   * The image is drawn at the screen's own pixel size (one image pixel per
+   * screen pixel) when a display mode imitates a screen; it then starts at
+   * the screen pixel floor(anchor − hot), the anchor measured in screen
+   * pixels. `pixelWidth` / `pixelHeight` (one pixel of the reference screen
+   * the scene was laid out for) apply elsewhere.
+   */
+  screenPixels?: boolean;
+}
+
+/** An image as palette indexes. */
+export interface IndexedPixels {
+  width: number;
+  height: number;
+  /** Row-major palette indexes, top row first (width × height entries). */
+  data: Uint8Array;
+  /** CSS colour per index; null = transparent. */
+  palette: (string | null)[];
 }
 
 /** Affine transform [a, b, c, d, e, f] with the meaning of SVG matrix(). */

@@ -59,6 +59,35 @@ export function recolorMonochrome(
   return { ...image, rgba };
 }
 
+/**
+ * The image as palette indexes over its distinct colours (in order of first
+ * appearance; fully transparent pixels share one null entry), or null when
+ * it has more than 256 colours. A monochrome image always gets index 0 for
+ * black and 1 for white.
+ */
+export function indexPixels(
+  image: Pick<PcxImage, 'width' | 'height' | 'rgba' | 'monochrome'>,
+): { data: Uint8Array; palette: ([number, number, number] | null)[] } | null {
+  const n = image.width * image.height;
+  const data = new Uint8Array(n);
+  const palette: ([number, number, number] | null)[] = image.monochrome ? [[0, 0, 0], [255, 255, 255]] : [];
+  const index = new Map<number, number>(image.monochrome ? [[0x000000, 0], [0xffffff, 1]] : []);
+  const { rgba } = image;
+  for (let i = 0; i < n; i++) {
+    const o = i * 4;
+    const key = rgba[o + 3] === 0 ? -1 : (rgba[o] << 16) | (rgba[o + 1] << 8) | rgba[o + 2];
+    let k = index.get(key);
+    if (k === undefined) {
+      if (palette.length === 256) return null;
+      k = palette.length;
+      index.set(key, k);
+      palette.push(key === -1 ? null : [rgba[o], rgba[o + 1], rgba[o + 2]]);
+    }
+    data[i] = k;
+  }
+  return { data, palette };
+}
+
 export class NotPcxError extends Error {
   constructor(message: string) {
     super(message);
