@@ -347,6 +347,10 @@ taller unit range: y up to about ±12660 for landscape Letter, so the fixed
 (32768 × 8.5/11) there, not 24576. Derive the viewBox and the text size base
 from 816 (§6.1 [I]).
 
+**Done.** Long side 32768, short side 32768 × short/long; viewBox and text
+size base from 816; viewer pages take their own aspect ratio, players and
+thumbnails letterbox.
+
 ### 13b. Object drawing fixes
 
 Pie slices draw unfilled (only an outline circle); bullet markers draw as tiny

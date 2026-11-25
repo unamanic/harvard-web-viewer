@@ -23,10 +23,9 @@ import {
   DATA_TEXT_BOX_STEP,
   DATA_TEXT_CHAR_EXTRA,
   DATA_TEXT_CSS_ADVANCE_EM,
-  PAGE_SHORT_SIDE,
   textSizeToUnits,
 } from "../../assumptions";
-import type { Chart, PageArea } from "../../chart";
+import type { PageArea } from "../../chart";
 import { hg3CodeOf } from "../../charset";
 import type { FontKey } from "../../fontKey";
 import { Justification } from "../../text";
@@ -73,20 +72,13 @@ export function pageBox(ctx: ChartSceneContext): Box {
 // ---------------------------------------------------------------------------
 
 /**
- * Page units that a text size of 100 spans vertically in the original's
- * layout [I]: 32768 × the page setup's short / long side (24576 on a
- * 10 × 7.5 in page, 25321 on Letter), i.e. the shorter side of a page whose
- * long side is 32768. See assumptions.ts DATA_TEXT_BOX_FACTOR.
+ * Em of a size for the vertical layout (page units): the same as the glyph
+ * size, a percentage of the page's short side from 816 (24576 on a
+ * 10 × 7.5 in page, 25321 on Letter; assumptions.ts pageShortSide and
+ * DATA_TEXT_BOX_FACTOR).
  */
-export function layoutTextBase(chart: Pick<Chart, "pageSetup">): number {
-  const s = chart.pageSetup;
-  if (!s || !(s.widthIn > 0) || !(s.heightIn > 0)) return PAGE_SHORT_SIDE;
-  return (32768 * Math.min(s.widthIn, s.heightIn)) / Math.max(s.widthIn, s.heightIn);
-}
-
-/** Em of a size for the vertical layout (page units). */
 export function layoutEm(ctx: ChartSceneContext, size: number): number {
-  return (size / 100) * layoutTextBase(ctx.chart);
+  return textSizeToUnits(size, ctx.page.shortSide);
 }
 
 /** Height of a text line's box (page units): what one text row takes before the pitch factor. */
@@ -119,13 +111,11 @@ export function drawnAdvance(ctx: ChartSceneContext, text: string, fontKey: Font
 }
 
 /**
- * Width the original gives a line's box, page units: the drawn advance
- * scaled from our glyph size to the layout em (layoutTextBase), plus
+ * Width the original gives a line's box, page units: the drawn advance plus
  * DATA_TEXT_CHAR_EXTRA per character.
  */
 export function textWidth(ctx: ChartSceneContext, text: string, fontKey: FontKey, size: number): number {
-  const scale = layoutTextBase(ctx.chart) / ctx.page.shortSide;
-  return drawnAdvance(ctx, text, fontKey, size) * scale + text.length * DATA_TEXT_CHAR_EXTRA;
+  return drawnAdvance(ctx, text, fontKey, size) + text.length * DATA_TEXT_CHAR_EXTRA;
 }
 
 // ---------------------------------------------------------------------------

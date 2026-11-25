@@ -26,6 +26,53 @@ describe("pageGeometry", () => {
   });
 });
 
+describe("pageGeometry: page size from 816 (task 12b)", () => {
+  const sized = (orientation: PageSetup["orientation"], widthIn: number, heightIn: number): PageSetup => ({
+    orientation,
+    orientationCode: orientation === "portrait" ? 2 : 1,
+    paperSize: 1,
+    widthIn,
+    heightIn,
+  });
+  const LETTER_SHORT = (32768 * 8.5) / 11;
+
+  it("keeps the 4:3 page for 10 × 7.5 in", () => {
+    const g = pageGeometry({ pageSetup: sized("landscape", 10, 7.5) });
+    expect(g.viewBox).toEqual(LANDSCAPE_VIEW_BOX);
+    expect(g.shortSide).toBe(24576);
+  });
+
+  it("makes a landscape Letter page 32768 × 25320 with square units", () => {
+    const g = pageGeometry({ pageSetup: sized("landscape", 11, 8.5) });
+    expect(g.orientation).toBe("landscape");
+    expect(g.viewBox).toEqual({ minX: -16384, minY: -12660, width: 32768, height: 25320 });
+    expect(g.shortSide).toBeCloseTo(LETTER_SHORT, 9);
+    expect(Math.round(g.shortSide)).toBe(25321);
+  });
+
+  it("swaps the sides for a portrait Letter page", () => {
+    const g = pageGeometry({ pageSetup: sized("portrait", 8.5, 11) });
+    expect(g.orientation).toBe("portrait");
+    expect(g.viewBox).toEqual({ minX: -12660, minY: -16384, width: 25320, height: 32768 });
+    expect(g.shortSide).toBeCloseTo(LETTER_SHORT, 9);
+  });
+
+  it("takes the orientation from the 816 code, the sides from the sizes in either order", () => {
+    expect(pageGeometry({ pageSetup: sized("portrait", 11, 8.5) }).viewBox.height).toBe(32768);
+    expect(pageGeometry({ pageSetup: sized("landscape", 8.5, 11) }).viewBox.width).toBe(32768);
+  });
+
+  it("falls back to 4:3 when 816 is missing or its size is odd", () => {
+    expect(pageGeometry({ pageSetup: null })).toEqual({ orientation: "landscape", viewBox: LANDSCAPE_VIEW_BOX, shortSide: 24576 });
+    for (const [w, h] of [[0, 7.5], [10, -1], [Number.NaN, 8], [Number.POSITIVE_INFINITY, 8], [100, 1]]) {
+      const g = pageGeometry({ pageSetup: sized("landscape", w!, h!) });
+      expect(g.viewBox).toEqual(LANDSCAPE_VIEW_BOX);
+      expect(g.shortSide).toBe(24576);
+    }
+    expect(pageGeometry({ pageSetup: sized("portrait", 0, 0) }).viewBox).toEqual(PORTRAIT_VIEW_BOX);
+  });
+});
+
 describe("toScene / areaToRect", () => {
   it("flips y", () => {
     expect(toScene(100, 2000)).toEqual({ x: 100, y: -2000 });

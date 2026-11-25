@@ -206,9 +206,15 @@ Add entries as `- finding (sample file checked, task number)`.
   blank rows higher; GALD181 cells drawn at size 6.19 though stored as 10;
   HELP1's copy is laid out at 8/9 scale though its runs say size 3 (its
   stored copy overlaps when drawn as stored). (task 14/15/19)
-- Letter pages: text sizes are a percentage of 25321 (32768 × 8.5/11), not
-  24576, and drawing extends to about y ±12660 (frames at ±12406), beyond
-  the fixed ±12288 viewBox. Open bug, task 12b. (task 14/15/19)
+- Letter pages: units are square. The long side is 32768 units and the
+  short side 32768 × short/long inches (25321 on Letter), so drawing reaches
+  y ±12406 to ±12660; text sizes are a percentage of that short side.
+  Fixed in task 12b: the viewBox comes from 816, nothing on the Letter
+  samples is clipped beyond label glyphs touching the edge (18 to 37
+  units), and the 220 charts with 10 × 7.5 in pages are unchanged. The
+  gallery button bars start 171 units left of the page on every page size.
+  Open: the 1214 table percentages on a portrait page are unverified (no
+  portrait table in the samples). (tasks 14/15/19 and 12b)
 
 ### Samples
 

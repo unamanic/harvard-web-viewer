@@ -518,7 +518,7 @@ Until the attributes are fully decoded, a viewer can draw every closed shape fil
 
 - Page coordinates are i16. The longer side of the page runs from −16383 to +16383 and the shorter side from −12287 to +12287, with (0, 0) at the centre of the page. In landscape, x is the long side; in portrait (816 orientation 2), y is. \[C: every stored area and bounding box lies in this range; the landscape and portrait template charts fill it\]
 - y increases upwards. \[C: titles have the largest y values and footnotes the smallest\]
-- The ratio 4:3 matches the default 10 × 7.5 in screen page; 32767 units span 10 in, about 3277 units per inch. For a Letter page (11 × 8.5 in) the same unit range is stretched to that page. \[I\]
+- The ratio 4:3 matches the default 10 × 7.5 in screen page; 32767 units span 10 in, about 3277 units per inch. Units are square: the long side is always 32768 units and the short side is 32768 × short/long inches, so a Letter page (11 × 8.5 in) has a short side of about 25321 units and is drawn out to y ±12406 to ±12660, beyond ±12287. \[C, from the Letter sample charts' frames and text box heights\] (An earlier draft guessed the 4:3 range was stretched; it is not.)
 - To show a page on a screen of width W and height H pixels (landscape, 4:3): screen x = (x + 16384) · W / 32768 and screen y = (12288 − y) · H / 24576. Keep the 4:3 shape and add bars on wider screens. \[I\]
 
 ### 6.2 Colours and palettes
@@ -573,7 +573,7 @@ Series beyond the sixth reuse Series1 to Series6 in turn. \[C from the series re
 ### 6.4 Text
 
 - Each text line names its font by font key (section 2) and its size as an f32.
-- The size unit is not confirmed. Sizes of 9 (titles), 5 (subtitles), 3.5 to 4 (footnotes and labels) fit **percent of the page's shorter side**: a size-9 title on a 7.5 in page is about 0.68 in (49 points) tall. \[I\] Use that until reference renders say otherwise.
+- The size unit is not confirmed. Sizes of 9 (titles), 5 (subtitles), 3.5 to 4 (footnotes and labels) fit **percent of the page's shorter side** in page units (24576 on a 10 × 7.5 in page, about 25321 on Letter; the stored text box heights on Letter pages only fit the latter): a size-9 title on a 7.5 in page is about 0.68 in (49 points) tall. \[I\] Use that until reference renders say otherwise.
 - Lines are laid out as the sum of the glyph advances; kerning is not applied. \[I\]
 - Justification is relative to the area the text belongs to (title area, plot area, or the text box of a text object). \[I\]
 - Characters are 8-bit codes in the Harvard Graphics character set; the font index maps them to glyphs (section 2). Its upper half is close to code page 850 (for example 0xB5 Á, 0xC6 ã, 0xD0 ð, 0xE0 Ó, 0x9B ø, 0x9E ×, 0xB8 ©, 0xA9 ®), with codes of its own: 0xB9 Œ, 0xCA and 0xCB curly double quotes, 0xEE and 0xEF curly single quotes, 0xF0 ‰, 0xF2 ≥, 0xF3 ≤, 0xF4 ¶, 0xF5 §, 0xF9 ►, 0xFD minus sign, and 0xFF a pictograph with no Unicode equivalent. \[C, from the glyphs the Speedo fonts draw for each code\] The full table is in the viewer's src/formats/hg3/charset.ts; 0xFA is a medium round bullet (•) and 0x07 a larger one (●).

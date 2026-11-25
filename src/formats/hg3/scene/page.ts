@@ -6,31 +6,43 @@
  * y flip happens: every scene builder converts page points with `toScene`
  * and page areas with `areaToRect`.
  */
-import { LANDSCAPE_VIEW_BOX, PORTRAIT_VIEW_BOX, type Point, type ViewBox } from "../../types";
-import { PAGE_SHORT_SIDE } from "../assumptions";
+import { type Point, type ViewBox, centredViewBox } from "../../types";
+import { PAGE_LONG_SIDE, pageShortSide } from "../assumptions";
 import type { Chart, PageArea } from "../chart";
 
 export type PageOrientation = "landscape" | "portrait";
 
 export interface PageGeometry {
   orientation: PageOrientation;
-  /** LANDSCAPE_VIEW_BOX or PORTRAIT_VIEW_BOX. */
+  /**
+   * The page, centred on (0, 0): PAGE_LONG_SIDE along the long side and the
+   * short side rounded to an even number of units (LANDSCAPE_VIEW_BOX or
+   * PORTRAIT_VIEW_BOX for a 10 × 7.5 in page, 32768 × 25320 for Letter).
+   */
   viewBox: ViewBox;
-  /** Shorter side in page units (for text sizes, assumptions.ts). */
+  /**
+   * Shorter side in page units, unrounded (assumptions.ts pageShortSide):
+   * the base of every text size (textSizeToUnits).
+   */
   shortSide: number;
 }
 
 /**
- * Orientation from record 816 (SPEC §5.2, §6.1): 2 is portrait, anything else
- * (1, an unknown code, or no 816) is landscape. parseChart already warns about
- * an unknown code.
+ * Page geometry from record 816 (SPEC §5.2, §6.1; assumptions.ts
+ * pageShortSide): orientation 2 is portrait, anything else (1, an unknown
+ * code, or no 816) landscape; the short side follows the 816 width and
+ * height (4:3 when missing or odd). parseChart already warns about an
+ * unknown orientation code.
  */
 export function pageGeometry(chart: Pick<Chart, "pageSetup">): PageGeometry {
-  const portrait = chart.pageSetup?.orientation === "portrait";
+  const setup = chart.pageSetup;
+  const portrait = setup?.orientation === "portrait";
+  const shortSide = pageShortSide(setup?.widthIn, setup?.heightIn);
+  const shortExtent = 2 * Math.round(shortSide / 2);
   return {
     orientation: portrait ? "portrait" : "landscape",
-    viewBox: portrait ? PORTRAIT_VIEW_BOX : LANDSCAPE_VIEW_BOX,
-    shortSide: PAGE_SHORT_SIDE,
+    viewBox: portrait ? centredViewBox(shortExtent, PAGE_LONG_SIDE) : centredViewBox(PAGE_LONG_SIDE, shortExtent),
+    shortSide,
   };
 }
 

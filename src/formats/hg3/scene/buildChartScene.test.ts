@@ -6,6 +6,8 @@ import { DocumentType, readContainer } from "../container";
 import { DEFAULT_PALETTE, ROLE, colorForRole, rgbToCss } from "../palette";
 import { type RecordSpec, block, buildDocument, concat, cstr, f32, i16, leaf, padded, u16, u8 } from "../testing/bytes";
 import { SCENE_DEBUG, buildChartScene, notYetDrawn } from "./buildChartScene";
+import { createChartSceneContext } from "./context";
+import { layoutEm } from "./data/text";
 
 // ---------------------------------------------------------------------------
 // Builders
@@ -152,3 +154,38 @@ describe("notYetDrawn", () => {
     expect(notYetDrawn(chartOf(DocumentType.Pie, [ref(1, "BUTTONS.CH3")]))).toEqual(["pie data"]);
   });
 });
+
+describe("buildChartScene: Letter pages (task 12b)", () => {
+  const letter = (orientation: number, widthIn: number, heightIn: number) =>
+    leaf(816, concat(u8(orientation), u8(1), f32(widthIn), f32(heightIn)));
+
+  it("sizes the viewBox from 816 and keeps a Letter frame (GALD181, HELP1: y ±12406) inside it", () => {
+    const chart = chartOf(DocumentType.Pie, [area(802, -16245, -12406, 16245, 12406), letter(1, 11, 8.5)]);
+    const { scene } = buildChartScene(chart, undefined, { dataLayout: "never" });
+    const vb = scene.viewBox;
+    expect(vb).toEqual({ minX: -16384, minY: -12660, width: 32768, height: 25320 });
+    const frame = scene.elements[0];
+    expect(frame?.kind).toBe("rect");
+    if (frame?.kind !== "rect") return;
+    expect(frame.y).toBe(-12406);
+    expect(frame.x).toBeGreaterThanOrEqual(vb.minX);
+    expect(frame.y).toBeGreaterThanOrEqual(vb.minY);
+    expect(frame.x + frame.width).toBeLessThanOrEqual(vb.minX + vb.width);
+    expect(frame.y + frame.height).toBeLessThanOrEqual(vb.minY + vb.height);
+  });
+
+  it("makes a portrait Letter page 25320 × 32768", () => {
+    const { scene } = buildChartScene(chartOf(DocumentType.Drawing, [letter(2, 8.5, 11)]), undefined);
+    expect(scene.viewBox).toEqual({ minX: -12660, minY: -16384, width: 25320, height: 32768 });
+  });
+
+  it("bases data layout text sizes on the page's short side", () => {
+    const em = (setup: RecordSpec) => {
+      const { context } = createChartSceneContext(chartOf(DocumentType.Pie, [setup]), undefined);
+      return layoutEm(context, 10);
+    };
+    expect(em(pageSetup(1))).toBeCloseTo(2457.6, 6);
+    expect(em(letter(1, 11, 8.5))).toBeCloseTo((0.1 * 32768 * 8.5) / 11, 6);
+  });
+});
+

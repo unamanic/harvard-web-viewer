@@ -125,6 +125,15 @@ describe("SceneRenderer", () => {
       <SceneRenderer scene={{ viewBox: PORTRAIT_VIEW_BOX, background: "white", elements: [] }} />,
     );
     expect(portrait).toContain('viewBox="-12288 -16384 24576 32768"');
+    expect(portrait).toContain('style="aspect-ratio:24576 / 32768"');
+  });
+
+  it("gives the SVG the page's own aspect ratio (a Letter page is 11:8.5, not 4:3)", () => {
+    const letter = renderToStaticMarkup(
+      <SceneRenderer scene={{ viewBox: { minX: -16384, minY: -12660, width: 32768, height: 25320 }, background: "white", elements: [] }} />,
+    );
+    expect(letter).toContain('viewBox="-16384 -12660 32768 25320"');
+    expect(letter).toContain('style="aspect-ratio:32768 / 25320"');
   });
 
   it("marks button groups clickable when a handler is given", () => {

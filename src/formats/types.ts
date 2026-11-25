@@ -32,21 +32,20 @@ export interface ViewBox {
   height: number;
 }
 
-/** Landscape page: x -16384..16384, y -12288..12288 (4:3). */
-export const LANDSCAPE_VIEW_BOX: ViewBox = {
-  minX: -16384,
-  minY: -12288,
-  width: 32768,
-  height: 24576,
-};
+/** A viewBox of the given size centred on (0, 0). */
+export function centredViewBox(width: number, height: number): ViewBox {
+  return { minX: -width / 2, minY: -height / 2, width, height };
+}
 
-/** Portrait page: the transpose of the landscape page (3:4). */
-export const PORTRAIT_VIEW_BOX: ViewBox = {
-  minX: -12288,
-  minY: -16384,
-  width: 24576,
-  height: 32768,
-};
+/**
+ * Default landscape page: x -16384..16384, y -12288..12288 (4:3). Formats
+ * may use other page sizes (an HG3 Letter page is 32768 × 25320; see
+ * hg3/scene/page.ts); the renderer letterboxes whatever viewBox a scene has.
+ */
+export const LANDSCAPE_VIEW_BOX: ViewBox = centredViewBox(32768, 24576);
+
+/** Default portrait page: the transpose of the landscape page (3:4). */
+export const PORTRAIT_VIEW_BOX: ViewBox = centredViewBox(24576, 32768);
 
 /** Stroke width used when a shape gives none: ~1px on a 1000px-wide page. */
 export const DEFAULT_STROKE_WIDTH = 30;

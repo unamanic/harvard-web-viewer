@@ -27,6 +27,8 @@ export interface SceneRendererProps {
 /**
  * Draws a format-independent `Scene` as SVG. The SVG fills its container and
  * letterboxes the scene's viewBox (xMidYMid meet), keeping the page shape.
+ * Its CSS aspect-ratio is the viewBox's, so where only the width is set (the
+ * viewer) the SVG takes the page's own shape (4:3, Letter 11:8.5, portrait).
  */
 export function SceneRenderer({ scene, onButtonClick }: SceneRendererProps) {
   const { minX, minY, width, height } = scene.viewBox;
@@ -41,6 +43,7 @@ export function SceneRenderer({ scene, onButtonClick }: SceneRendererProps) {
       width="100%"
       height="100%"
       className="scene"
+      style={{ aspectRatio: `${width} / ${height}` }}
       role="img"
       aria-label="Rendered slide"
     >

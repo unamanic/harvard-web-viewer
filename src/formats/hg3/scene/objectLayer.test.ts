@@ -663,3 +663,21 @@ describe("buildChartScene: button chart overlay (task 20)", () => {
     expect(hitAreas(scene.elements)).toEqual([]);
   });
 });
+
+describe("drawObjectLayer: text size base (task 12b)", () => {
+  it("sizes text as a percentage of the page's short side from 816", () => {
+    const data = textBlock([run("Letter", 1, 4, 1)], [[0, 6]], [0, 1000, 2000, 0], [0, 1000, 2000, 0]);
+    const objects = obj([sub(0x10b0, data)]);
+    const sizeOn = (widthIn: number, heightIn: number) => {
+      const chart = {
+        ...chartWith(objects),
+        pageSetup: { orientation: "landscape" as const, orientationCode: 1, paperSize: 1, widthIn, heightIn },
+      };
+      const { context } = createChartSceneContext(chart, undefined);
+      return text(drawObjectLayer(context)[0]).size;
+    };
+    expect(sizeOn(10, 7.5)).toBeCloseTo(textSizeToUnits(4, 24576), 6);
+    expect(sizeOn(11, 8.5)).toBeCloseTo(textSizeToUnits(4, (32768 * 8.5) / 11), 6);
+    expect(sizeOn(11, 8.5)).toBeCloseTo(4 * 253.21, 0);
+  });
+});

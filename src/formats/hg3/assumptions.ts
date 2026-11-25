@@ -21,8 +21,9 @@ import { DEFAULT_STROKE_WIDTH } from "../types";
 // ---------------------------------------------------------------------------
 
 /**
- * The page's shorter side in page units (SPEC §6.1 and types.ts LANDSCAPE_VIEW_BOX: landscape 32768 × 24576,
- * portrait the transpose; both have 24576 as the shorter side).
+ * The shorter side in page units of a 4:3 page (SPEC §6.1 and types.ts LANDSCAPE_VIEW_BOX: landscape
+ * 32768 × 24576, portrait the transpose), and of a page without a usable 816.
+ * Other page sizes: pageShortSide (task 12b).
  */
 export const PAGE_SHORT_SIDE = 24576;
 
@@ -347,8 +348,7 @@ export const TRANSITION_DEFAULT_MS = 750;
  * a multiple of 100 (2200 for size 7, 2800 for 9, 3700 for 12, 1200 for 4,
  * and on Letter 2600 for 8, 2000 for 6.19, 900 for 3); a factor in
  * [1.2835, 1.2885) reproduces all of them, the Letter ones only with the
- * 25321 base [I]. (Glyph sizes stay textSizeToUnits, as for object text:
- * the copies' widths on Letter pages agree with the 24576 base.)
+ * 25321 base [I]. Glyph sizes use the same base (task 12b, pageShortSide).
  */
 export const DATA_TEXT_BOX_FACTOR = 1.285;
 export const DATA_TEXT_BOX_STEP = 100;
@@ -442,3 +442,44 @@ export const TABLE_CELL_OUTLINE_STYLE = 1;
  * more than fitting needs; that rule is not known.
  */
 export const DATA_FIT_MIN_SCALE = 0.25;
+
+// ---------------------------------------------------------------------------
+// Task 12b: page size from 816
+// ---------------------------------------------------------------------------
+
+/** Page units along the page's longer side, whatever the paper (SPEC §6.1). */
+export const PAGE_LONG_SIDE = 32768;
+
+/**
+ * Shortest short / long side ratio of a 816 page size that is used; a
+ * narrower one (or a missing, zero or non-finite size) is treated as odd and
+ * the page is drawn 4:3 (PAGE_SHORT_SIDE). The samples have 0.75 and 0.773.
+ */
+export const PAGE_MIN_ASPECT = 0.5;
+
+/**
+ * Page units along the shorter side, from 816's width and height in inches
+ * (SPEC §5.2, §6.1, §6.4) [I]: units are square, so the short side is
+ * PAGE_LONG_SIDE × short / long inches: 24576 for a 10 × 7.5 in page,
+ * 25320.7 for Letter (11 × 8.5 or 8.5 × 11). SPEC §6.1 guessed instead that
+ * the same −12287..12287 range is stretched over a Letter page; the samples
+ * say otherwise:
+ * - the stored copies of the Letter data charts (GALD181, HELP1/2,
+ *   LANDSCAP, PORTRAIT) draw out to y ±12406 (frames) and −12659 (LANDSCAP's
+ *   box), beyond ±12288;
+ * - their text box heights fit sizes as a percentage of 25321, not 24576
+ *   (DATA_TEXT_BOX_FACTOR), as do the table row percentages
+ *   (data/table.ts tablePercentHeight);
+ * - the median text box width per character on Letter copies, minus our
+ *   glyph advance at the 25321 base, is 25 units, as on 4:3 pages (24) at
+ *   24576 (DATA_TEXT_CHAR_EXTRA); a least-squares fit dominated by long lines
+ *   prefers 24576, so widths alone are not conclusive.
+ * The page viewBox (scene/page.ts) is PAGE_LONG_SIDE by this, rounded to an
+ * even number of units; text sizes (textSizeToUnits) use the unrounded value.
+ */
+export function pageShortSide(widthIn: number | undefined, heightIn: number | undefined): number {
+  if (widthIn === undefined || heightIn === undefined) return PAGE_SHORT_SIDE;
+  if (!Number.isFinite(widthIn) || !Number.isFinite(heightIn) || !(widthIn > 0) || !(heightIn > 0)) return PAGE_SHORT_SIDE;
+  const aspect = Math.min(widthIn, heightIn) / Math.max(widthIn, heightIn);
+  return aspect >= PAGE_MIN_ASPECT ? PAGE_LONG_SIDE * aspect : PAGE_SHORT_SIDE;
+}

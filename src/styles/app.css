@@ -134,7 +134,8 @@ button:disabled { opacity: 0.5; cursor: default; }
 .viewer-title p { margin: 0.2rem 0 0; }
 .notice { border-left: 4px solid var(--warn); background: var(--warn-soft); padding: 0.5rem 1rem; margin: 1rem 0; }
 .page { margin: 0 0 1rem; }
-/* Scene SVGs letterbox their page (xMidYMid meet); the dark ground shows as bars. */
+/* Scene SVGs letterbox their page (xMidYMid meet); the dark ground shows as bars.
+   SceneRenderer sets aspect-ratio to the page's own (inline style); 4:3 is the fallback. */
 .scene { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; max-height: 80vh; background: #444; border: 1px solid var(--border); margin: 0; }
 
 /* Collapsible panels (diagnostics, file structure). */
