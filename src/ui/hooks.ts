@@ -85,3 +85,30 @@ export function useSeenOnce(ref: RefObject<Element | null>, rootMargin = "200px"
   }, [ref, seen, rootMargin]);
   return seen;
 }
+
+/**
+ * A <details> used as a menu closes when the user clicks or focuses outside
+ * it, or presses Escape inside it (focus goes back to its summary).
+ */
+export function useDismissableDetails(ref: RefObject<HTMLDetailsElement | null>): void {
+  useEffect(() => {
+    const onOutside = (e: Event) => {
+      const el = ref.current;
+      if (el?.open && e.target instanceof Node && !el.contains(e.target)) el.open = false;
+    };
+    const onKey = (e: KeyboardEvent) => {
+      const el = ref.current;
+      if (e.key !== "Escape" || !el?.open || !(e.target instanceof Node) || !el.contains(e.target)) return;
+      el.open = false;
+      el.querySelector("summary")?.focus();
+    };
+    document.addEventListener("pointerdown", onOutside);
+    document.addEventListener("focusin", onOutside);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onOutside);
+      document.removeEventListener("focusin", onOutside);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [ref]);
+}

@@ -21,15 +21,18 @@ const presentation: Presentation = {
 };
 
 describe("ShowPlayer", () => {
-  it("draws the first slide with a counter, controls and a slide strip", () => {
+  it("draws the first slide in the stage panel with a counter and controls", () => {
     const html = renderToStaticMarkup(<ShowPlayer presentation={presentation} />);
     expect(html).toContain("<svg");
+    expect(html).toContain('<div class="stage-panel"><div class="player-stage">');
     expect(html).toContain("Slide 1 of 2 · first");
+    expect(html).toContain('aria-label="Previous slide"');
+    expect(html).toContain('aria-label="Next slide"');
     // Entering presentation mode is the viewer's job; the player has no Present button.
     expect(html).not.toContain(">Present</button>");
-    expect(html).not.toContain("Leave presentation");
-    expect(html).toContain('aria-label="Slides"');
-    expect(html).toContain('aria-current="step"');
+    expect(html).not.toContain("Exit (Esc)");
+    // The slide list is the viewer's (SlideCards).
+    expect(html).not.toContain('class="slide-cards"');
     // Slide warnings moved to the viewer's diagnostics panel.
     expect(html).not.toContain("<li>w1</li>");
     expect(html).toContain('aria-pressed="false"');
@@ -52,17 +55,31 @@ describe("ShowPlayer", () => {
     expect(at([2], [4])).toContain("Slide 1 of 2 · first");
   });
 
-  it("takes the mute setting from the parent when given", () => {
-    const html = renderToStaticMarkup(<ShowPlayer presentation={presentation} muted onMutedChange={() => {}} />);
+  it("takes the mute setting from the parent when given, offering it only for shows that may play sound", () => {
+    const withSound: Presentation = {
+      ...presentation,
+      slides: [...presentation.slides, { ...pictureSlide("tune", "#000"), kind: "sound", scene: () => null }],
+    };
+    const html = renderToStaticMarkup(<ShowPlayer presentation={withSound} muted onMutedChange={() => {}} />);
     expect(html).toContain('aria-pressed="true"');
     expect(html).toContain("Sound off");
+    const silent = renderToStaticMarkup(<ShowPlayer presentation={presentation} muted onMutedChange={() => {}} />);
+    expect(silent).not.toContain("Sound off");
   });
 
-  it("marks presentation mode and hides the strip while presenting", () => {
-    const html = renderToStaticMarkup(<ShowPlayer presentation={presentation} presenting onPresentingChange={() => {}} />);
+  it("names the file in the counter", () => {
+    const html = renderToStaticMarkup(<ShowPlayer presentation={presentation} fileLabel="DEMO.SH3" />);
+    expect(html).toContain("DEMO.SH3 · Slide 1 of 2 · first");
+  });
+
+  it("marks presentation mode with a compact bar and the file label", () => {
+    const html = renderToStaticMarkup(
+      <ShowPlayer presentation={presentation} presenting onPresentingChange={() => {}} fileLabel="DEMO.SH3" transitionMode="demo" />,
+    );
     expect(html).toContain('class="player presenting"');
-    expect(html).toContain("Leave presentation (Esc)");
-    expect(html).not.toContain('aria-label="Slides"');
+    expect(html).toContain("Exit (Esc)");
+    expect(html).toContain(">1 / 2<");
+    expect(html).toMatch(/<p class="present-label">DEMO.SH3( · Transition: [a-z ]+)?<\/p>/);
   });
 
   it("says so when there is nothing to show", () => {

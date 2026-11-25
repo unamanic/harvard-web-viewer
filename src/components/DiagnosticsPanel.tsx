@@ -1,13 +1,23 @@
 import type { Diagnostics } from "../ui/diagnostics";
 
-/** Warnings and missing files, in a panel that starts closed. */
-export function DiagnosticsPanel({ diagnostics, path }: { diagnostics: Diagnostics; path: string }) {
+/**
+ * Every warning and missing file, in full, behind a "Show all" toggle that
+ * starts closed (the notice box above it lists them in plain words).
+ */
+export function DiagnosticsPanel({
+  diagnostics,
+  path,
+  summary = "Show all",
+}: {
+  diagnostics: Diagnostics;
+  path: string;
+  summary?: string;
+}) {
   const { missing, documentWarnings, slideWarnings, slideLabel, count } = diagnostics;
   return (
-    <details className="panel diagnostics">
+    <details className="diagnostics">
       <summary>
-        Diagnostics{" "}
-        <span className={count > 0 ? "badge badge-warn" : "badge"}>{count === 0 ? "no problems" : count}</span>
+        {summary} <span className="badge">{count === 0 ? "no problems" : count}</span>
       </summary>
       <div className="panel-body">
         {count === 0 && <p className="muted">No warnings and no missing files.</p>}
@@ -15,8 +25,8 @@ export function DiagnosticsPanel({ diagnostics, path }: { diagnostics: Diagnosti
           <section aria-labelledby="diag-missing">
             <h4 id="diag-missing">Missing files</h4>
             <p className="muted">
-              These files are named but were not opened. Open them together with this file (or drop the whole folder) to
-              use them.
+              These files are named but were not opened. Add them with “Add missing files…”, or open them together with
+              this file (or drop the whole folder), to use them.
             </p>
             <ul>
               {missing.map((m, i) => (

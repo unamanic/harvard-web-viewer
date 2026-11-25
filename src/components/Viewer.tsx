@@ -1,15 +1,25 @@
-import { useCallback, useMemo, useState } from "react";
-import type { PresentationSlide } from "../formats/types";
+import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
+import type { PathedFile } from "../files/fromBrowser";
+import type { PresentationSlide, Scene } from "../formats/types";
 import type { LoadedFile } from "../loadFile";
 import { DEFAULT_DISPLAY_MODE, applyDisplayMode, type DisplayMode } from "../render/displayMode";
 import { SceneRenderer } from "../render/SceneRenderer";
 import type { SavedPosition } from "../player/player";
-import { ShowPlayer } from "../player/ShowPlayer";
+import { type ShowControl, ShowPlayer } from "../player/ShowPlayer";
 import { DEFAULT_TRANSITION_MODE, type TransitionMode } from "../player/transitions/mode";
 import { collectDiagnostics } from "../ui/diagnostics";
-import { DiagnosticsPanel } from "./DiagnosticsPanel";
-import { Inspector } from "./Inspector";
+import type { ExportChoice } from "../ui/exportImage";
+import { aboutRows, chartFacts } from "../ui/fileFacts";
+import { AboutPanel } from "./AboutPanel";
+import { AppHeader } from "./AppHeader";
+import { ExportMenu } from "./ExportMenu";
+import { OpenButton } from "./FileDropzone";
+import { FileSwitcher } from "./FileSwitcher";
+import { RawBytesDrawer } from "./Inspector";
 import { ScenePresentation } from "./ScenePresentation";
+import { PageCards, SlideCards, SlidesColumn } from "./SlidesColumn";
+
+export { detectedText } from "../ui/fileFacts";
 
 export interface ViewerProps {
   file: LoadedFile;
@@ -19,24 +29,40 @@ export interface ViewerProps {
   /** Show sounds muted (the app's setting); the player keeps its own when absent. */
   muted?: boolean;
   onMutedChange?: (muted: boolean) => void;
-}
-
-/** One-line description of what was detected. */
-export function detectedText(file: LoadedFile): string {
-  if (file.document) return file.document.formatName;
-  if (file.formatName && !file.error) return file.formatName;
-  if (file.formatName) return `Could not open as ${file.formatName}`;
-  return "Format not recognised";
-}
-
-/** `next` is `previous` opened again (same path in the same file set), e.g. with other load options. */
-export function isReload(previous: LoadedFile, next: LoadedFile): boolean {
-  return previous.path === next.path && previous.fileSet === next.fileSet;
+  /** The palette the viewer draws with in place of the charts' own, if any (for the About rows). */
+  paletteOverride?: string;
+  /** The Display settings section of the right column. */
+  settings?: ReactNode;
+  /** Open other files (the header's "Open a file"). */
+  onOpenFiles?: (files: PathedFile[]) => void;
+  /** Show another file of the set opened. */
+  onSelectFile?: (path: string) => void;
+  /** Add files to the set and show this file again (“Add missing files…”). */
+  onAddFiles?: (files: PathedFile[]) => void;
+  /** Note after adding files. */
+  addNote?: string | null;
+  /** Loading and load errors, shown above the slide. */
+  status?: ReactNode;
 }
 
 /**
- * The file shown: a show player (with slide strip) or the chart's pages,
- * a Present button, then the diagnostics and file structure panels.
+ * `next` is `previous` opened again: the same path in the same file set, or
+ * in a set made from it by adding files (FileSet.withFiles), e.g. with other
+ * load options or after "Add missing files".
+ */
+export function isReload(previous: LoadedFile, next: LoadedFile): boolean {
+  return previous.path === next.path && previous.fileSet.lineage === next.fileSet.lineage;
+}
+
+/** Number of the slide shown counted from the show's first slide, for file names. */
+function showSlideNumber(firstSlide: number, position: SavedPosition | null): number | null {
+  return position && position.indices.length > 0 ? position.indices[0] - Math.max(firstSlide, 0) + 1 : null;
+}
+
+/**
+ * The open file, laid out as the light table: header (Present, Export,
+ * Open), the slides column (file switcher and slide cards), the slide on
+ * its stage and the "About this file" column, plus a tab bar on phones.
  */
 export function Viewer({
   file,
@@ -44,6 +70,13 @@ export function Viewer({
   transitionMode = DEFAULT_TRANSITION_MODE,
   muted,
   onMutedChange,
+  paletteOverride,
+  settings,
+  onOpenFiles,
+  onSelectFile,
+  onAddFiles,
+  addNote,
+  status,
 }: ViewerProps) {
   // Recolouring is a pure transform of the parsed scenes: no re-parse.
   const scenes = useMemo(
@@ -52,6 +85,10 @@ export function Viewer({
   );
   const presentation = file.document?.presentation;
   const [presenting, setPresenting] = useState(false);
+  const [rawOpen, setRawOpen] = useState(false);
+  const [page, setPage] = useState(0);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const control = useRef<ShowControl>(null);
 
   // The slide shown, and a counter bumped whenever building pictures may
   // have found more missing files: the diagnostics are read on each render.
@@ -68,15 +105,18 @@ export function Viewer({
   const [position, setPosition] = useState<SavedPosition | null>(null);
 
   // A new file starts outside presentation mode with no slide; the same
-  // file loaded again from the same set keeps both.
+  // file loaded again keeps both.
   const [shownFile, setShownFile] = useState(file);
   if (shownFile !== file) {
     setShownFile(file);
     if (!isReload(shownFile, file)) {
       setPresenting(false);
       setPosition(null);
+      setPage(0);
+      setRawOpen(false);
     }
     setSlide(null);
+    setExportError(null);
   }
 
   // Sound slides name files beside the show; look them up in the opened set.
@@ -85,66 +125,175 @@ export function Viewer({
     [file],
   );
   const diagnostics = collectDiagnostics(file, presentation ? slide : null);
+  const rows = aboutRows(file, presentation ? slide : null, paletteOverride);
+  const chartTitle = useMemo(
+    () => (presentation ? "" : (file.document && chartFacts(file.bytes)?.description) || file.name),
+    [file, presentation],
+  );
+  const shownPage = Math.min(page, Math.max(scenes.length - 1, 0));
   const canPresent = !!presentation || scenes.length > 0;
-  const title = file.name;
+
+  // The slide to export: the show's current picture, or the chart page shown.
+  const exportScene: Scene | null = useMemo(() => {
+    if (presentation) {
+      const raw = slide?.scene() ?? null;
+      return raw && applyDisplayMode(raw, displayMode);
+    }
+    return scenes[shownPage] ?? null;
+  }, [presentation, slide, displayMode, scenes, shownPage]);
+  const onExport = (choice: ExportChoice) => {
+    if (!exportScene) return;
+    const number = presentation ? showSlideNumber(presentation.firstSlide, position) : shownPage + 1;
+    setExportError(null);
+    // Loaded on first use: keeps the export code out of the first screen.
+    void import("./exportScene")
+      .then(({ exportScene: save }) => save(exportScene, choice, file.name, number))
+      .catch((e: unknown) => setExportError(e instanceof Error ? e.message : String(e)));
+  };
+
+  const entries = file.fileSet.entries();
+  const fileSwitcher =
+    entries.length > 1 && onSelectFile ? (
+      <FileSwitcher entries={entries} current={file.path} onSelect={onSelectFile} />
+    ) : undefined;
+
+  let cards: ReactNode = null;
+  if (presentation) {
+    const current = position?.indices[0] ?? Math.max(presentation.firstSlide, 0);
+    let nestedNote: string | null = null;
+    if (position && position.indices.length > 1) {
+      const nested = presentation.slides[position.indices[0]]?.nested?.();
+      const first = Math.max(nested?.firstSlide ?? 0, 0);
+      nestedNote = `Playing slide ${position.indices[1] - first + 1} of ${position.counts[1] - first}`;
+    }
+    cards = (
+      <SlideCards
+        presentation={presentation}
+        current={current}
+        nestedNote={nestedNote}
+        displayMode={displayMode}
+        onJump={(index) => control.current?.jumpTo(index)}
+        onBuilt={onThumbnailBuilt}
+      />
+    );
+  } else if (scenes.length > 0) {
+    cards = <PageCards scenes={scenes} title={chartTitle} current={shownPage} onSelect={setPage} />;
+  } else {
+    cards = <p className="muted column-empty">Nothing to draw in this file.</p>;
+  }
+
+  const present = (className = "button") =>
+    canPresent ? (
+      <button type="button" className={className} onClick={() => setPresenting(true)}>
+        Present
+      </button>
+    ) : (
+      <button type="button" className={className} disabled title="Nothing to present in this file">
+        Present
+      </button>
+    );
+
+  const caption = "Rendered from the original file, not a screenshot";
 
   return (
-    <article className="viewer" aria-labelledby="viewer-title">
-      <header className="viewer-header">
-        <div className="viewer-title">
-          <h2 id="viewer-title">{file.name}</h2>
-          <p className="muted">
-            {detectedText(file)}
-            {file.path !== file.name ? ` · ${file.path}` : ""}
-          </p>
-        </div>
-        {canPresent && (
-          <button type="button" className="button button-primary" onClick={() => setPresenting(true)}>
-            Present
-          </button>
-        )}
-      </header>
-      {file.error && (
-        <p className="error" role="alert">
-          {file.error}
-        </p>
-      )}
-      {!file.document && !file.error && (
-        <p className="notice">
-          This viewer cannot draw this file. Its bytes are shown under “File structure and bytes”.
-        </p>
-      )}
-      {presentation ? (
-        <ShowPlayer
-          key={file.path}
-          presentation={presentation}
-          displayMode={displayMode}
-          transitionMode={transitionMode}
-          resolveFile={resolveFile}
-          muted={muted}
-          onMutedChange={onMutedChange}
-          presenting={presenting}
-          onPresentingChange={setPresenting}
-          onSlideChange={onSlideChange}
-          initialPosition={position}
-          onPositionChange={setPosition}
-          onThumbnailBuilt={onThumbnailBuilt}
-        />
-      ) : (
-        <>
-          {file.document && scenes.length === 0 && <p className="notice">This file has no pages to draw.</p>}
-          {scenes.map((scene, i) => (
-            <figure key={i} className="page" aria-label={scenes.length > 1 ? `${title}, page ${i + 1}` : title}>
-              <SceneRenderer scene={scene} />
-            </figure>
-          ))}
-          {presenting && scenes.length > 0 && (
-            <ScenePresentation scenes={scenes} title={title} onExit={() => setPresenting(false)} />
+    <>
+      <AppHeader>
+        <span className="header-wide">
+          {present()}
+          <ExportMenu viewBox={exportScene?.viewBox ?? null} onExport={onExport} />
+        </span>
+        {onOpenFiles && <OpenButton onFiles={onOpenFiles} />}
+      </AppHeader>
+      <div className="workspace">
+        <SlidesColumn fileSwitcher={fileSwitcher}>{cards}</SlidesColumn>
+        <main id="main" className="stage" tabIndex={-1} aria-label={`${file.name}: the slide`}>
+          {status}
+          {exportError && (
+            <p className="error" role="alert">
+              Export failed: {exportError}
+            </p>
           )}
-        </>
-      )}
-      <DiagnosticsPanel diagnostics={diagnostics} path={file.path} />
-      <Inspector bytes={file.bytes} />
-    </article>
+          {file.error && (
+            <p className="error" role="alert">
+              {file.error}
+            </p>
+          )}
+          {!file.document && !file.error && (
+            <p className="stage-message">
+              This viewer cannot draw this file. Its bytes are under “Show raw bytes”.
+            </p>
+          )}
+          {presentation ? (
+            <>
+              <ShowPlayer
+                key={file.path}
+                presentation={presentation}
+                displayMode={displayMode}
+                transitionMode={transitionMode}
+                resolveFile={resolveFile}
+                muted={muted}
+                onMutedChange={onMutedChange}
+                presenting={presenting}
+                onPresentingChange={setPresenting}
+                onSlideChange={onSlideChange}
+                initialPosition={position}
+                onPositionChange={setPosition}
+                fileLabel={file.name}
+                control={control}
+              />
+              <p className="stage-caption">{caption}</p>
+            </>
+          ) : (
+            <>
+              {file.document && scenes.length === 0 && <p className="stage-message">This file has no pages to draw.</p>}
+              {scenes[shownPage] && (
+                <>
+                  <figure
+                    className="stage-panel"
+                    aria-label={scenes.length > 1 ? `${chartTitle}, page ${shownPage + 1}` : chartTitle}
+                  >
+                    <div className="stage-slide">
+                      <SceneRenderer scene={scenes[shownPage]} />
+                    </div>
+                  </figure>
+                  <p className="stage-caption">
+                    {file.name}
+                    {scenes.length > 1 ? ` · Page ${shownPage + 1} of ${scenes.length}` : ""} · {caption}
+                  </p>
+                </>
+              )}
+              {presenting && scenes.length > 0 && (
+                <ScenePresentation
+                  scenes={scenes}
+                  title={file.name}
+                  start={shownPage}
+                  onExit={() => setPresenting(false)}
+                />
+              )}
+            </>
+          )}
+        </main>
+        <AboutPanel
+          rows={rows}
+          diagnostics={diagnostics}
+          path={file.path}
+          onAddFiles={onAddFiles}
+          addNote={addNote}
+          settings={settings}
+          onShowRawBytes={() => setRawOpen(true)}
+        />
+      </div>
+      <nav className="tab-bar" aria-label="Sections">
+        <a href="#main" className="tab">
+          Slide
+        </a>
+        <a href="#about" className="tab">
+          Details
+        </a>
+        {present("tab")}
+        <ExportMenu viewBox={exportScene?.viewBox ?? null} onExport={onExport} label="Export" className="tab-menu" />
+      </nav>
+      {rawOpen && <RawBytesDrawer bytes={file.bytes} fileName={file.name} onClose={() => setRawOpen(false)} />}
+    </>
   );
 }

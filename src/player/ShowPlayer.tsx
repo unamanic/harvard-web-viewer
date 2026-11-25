@@ -1,5 +1,14 @@
-import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SlideStrip } from "../components/SlideStrip";
+import {
+  type KeyboardEvent,
+  type ReactNode,
+  type Ref,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { Presentation, PresentationSlide, Scene } from "../formats/types";
 import { DEFAULT_DISPLAY_MODE, type DisplayMode, applyDisplayMode } from "../render/displayMode";
 import { SceneRenderer } from "../render/SceneRenderer";
@@ -23,6 +32,7 @@ import { INITIAL_RUN, type TransitionRun, finishRun, interruptRun, startRun } fr
 import { TransitionStage } from "./transitions/TransitionStage";
 import { REPLACE, effectiveTransition, prefersReducedMotion } from "./transitions/types";
 import { useAutoHide, useFullscreenWhile } from "../ui/hooks";
+import { transitionLabel } from "../ui/transitionLabel";
 
 /** Seconds a slide that does not wait for a key stays when its time is unknown. */
 const DEFAULT_DISPLAY_SECONDS = 5;
@@ -57,10 +67,16 @@ export interface ShowPlayerProps {
   initialPosition?: SavedPosition | null;
   /** Called after the position changes (null for an empty show), e.g. to pass back as `initialPosition`. */
   onPositionChange?: (position: SavedPosition | null) => void;
-  /** Show the slide strip under the controls. Defaults to true. */
-  showStrip?: boolean;
-  /** Called when the slide strip builds a thumbnail (it may find missing files). */
-  onThumbnailBuilt?: () => void;
+  /** File name shown in the counter and in presentation mode (e.g. "SALES93.SH3"). */
+  fileLabel?: string;
+  /** Lets the parent move the player (its slide list jumps with it). */
+  control?: Ref<ShowControl>;
+}
+
+/** What the parent may ask the player to do. */
+export interface ShowControl {
+  /** Jump to the slide at this index of the outermost presentation (player.jumpTo). */
+  jumpTo(index: number): void;
 }
 
 interface State {
@@ -82,7 +98,7 @@ function sceneOf(player: PlayerState): Scene | null {
 /**
  * Plays a presentation: one slide at a time, keyboard (arrows, Enter, Space,
  * Page Up/Down, Backspace, Escape, and the show's own keys), clicks on named
- * buttons, prev/next buttons, a slide strip to jump with, and presentation
+ * buttons, prev/next buttons, jumps asked by the parent (`control`), and presentation
  * mode (full screen, letterboxed on black, click for the next slide,
  * controls hide when the mouse rests, Esc leaves).
  */
@@ -99,8 +115,8 @@ export function ShowPlayer({
   onSlideChange,
   initialPosition,
   onPositionChange,
-  showStrip = true,
-  onThumbnailBuilt,
+  fileLabel,
+  control,
 }: ShowPlayerProps) {
   const [state, setState] = useState<State>(() => initialState(presentation, initialPosition));
   const containerRef = useRef<HTMLDivElement>(null);
@@ -233,6 +249,7 @@ export function ShowPlayer({
     go({ kind: "next" });
   };
   const onJump = useCallback((index: number) => step((p) => jumpTo(p, index)), [step]);
+  useImperativeHandle(control, () => ({ jumpTo: onJump }), [onJump]);
 
   // Memoised so that animation frames only restyle the layers.
   const layers = useMemo(
@@ -246,13 +263,19 @@ export function ShowPlayer({
     [scene, previous, onButtonClick],
   );
 
-  const levels = describePosition(player);
+  const levels = describePosition(player).map((l, depth) => {
+    const first = depth === 0 ? presentation.firstSlide : player.position[depth].presentation.firstSlide;
+    return { number: l.index - first + 1, count: l.count - first };
+  });
   const counter = levels
-    .map((l, depth) => {
-      const first = depth === 0 ? presentation.firstSlide : player.position[depth].presentation.firstSlide;
-      return `${depth === 0 ? "Slide" : "nested slide"} ${l.index - first + 1} of ${l.count - first}`;
-    })
+    .map((l, depth) => `${depth === 0 ? "Slide" : "nested slide"} ${l.number} of ${l.count}`)
     .join(" › ");
+  const shortCounter = levels.map((l) => `${l.number} / ${l.count}`).join(" › ");
+  // Sound slides may be in this show or in a nested one.
+  const mayPlaySound = useMemo(
+    () => presentation.slides.some((s) => s.kind === "sound" || s.kind === "nested"),
+    [presentation],
+  );
 
   let stage: ReactNode;
   if (player.empty) stage = <p className="player-message">This show has no slides to show.</p>;
@@ -283,6 +306,29 @@ export function ShowPlayer({
   if (presenting) classes.push("presenting");
   if (!controlsShown.visible) classes.push("controls-hidden");
 
+  const status = player.empty ? "No slides" : player.ended ? "Ended" : presenting ? shortCounter : counter;
+  const where = transitionLabel(slide ? transition : null);
+  const soundButtons = (
+    <>
+      {sound.status.blocked && (
+        <button type="button" className="player-enable-sound" onClick={sound.enable}>
+          Click to enable sound
+        </button>
+      )}
+      {(mayPlaySound || mutedProp === undefined) && (
+        <button
+          type="button"
+          className="player-sound"
+          onClick={toggleMute}
+          aria-pressed={muted}
+          title={sound.status.playing ? `Playing ${sound.status.playing}` : undefined}
+        >
+          {muted ? "Sound off" : "Sound on"}
+        </button>
+      )}
+    </>
+  );
+
   return (
     <div
       ref={containerRef}
@@ -294,54 +340,57 @@ export function ShowPlayer({
       aria-label={`Slide show: ${presentation.title || presentation.id}`}
       aria-roledescription="slide show"
     >
-      <div className="player-stage" onClick={onStageClick}>
-        {stage}
-        {sound.note && (
-          <p className="player-note" role="status">
-            {sound.note}
-          </p>
-        )}
+      {presenting && (
+        <p className="present-label">
+          {fileLabel ?? presentation.title}
+          {where ? ` · Transition: ${where}` : ""}
+        </p>
+      )}
+      <div className="stage-panel">
+        <div className="player-stage" onClick={onStageClick}>
+          {stage}
+          {sound.note && (
+            <p className="player-note" role="status">
+              {sound.note}
+            </p>
+          )}
+        </div>
       </div>
       <div className="player-controls">
-        <button type="button" onClick={() => go({ kind: "previous" })} disabled={player.empty} aria-label="Previous slide">
-          ◀ Previous
-        </button>
-        <span className="player-counter" aria-live="polite">
-          {player.empty ? "No slides" : player.ended ? "Ended" : counter}
-          {slide && slide.label ? ` · ${slide.label}` : ""}
-        </span>
-        <button type="button" onClick={() => go({ kind: "next" })} disabled={player.empty || player.ended} aria-label="Next slide">
-          Next ▶
-        </button>
-        {sound.status.blocked && (
-          <button type="button" className="player-enable-sound" onClick={sound.enable}>
-            Click to enable sound
-          </button>
-        )}
         <button
           type="button"
-          onClick={toggleMute}
-          aria-pressed={muted}
-          title={sound.status.playing ? `Playing ${sound.status.playing}` : undefined}
+          className="arrow-button"
+          onClick={() => go({ kind: "previous" })}
+          disabled={player.empty}
+          aria-label="Previous slide"
         >
-          {muted ? "Sound off" : "Sound on"}
+          <span aria-hidden="true">←</span>
         </button>
-        {/* Entering is the viewer's single Present button; this one only leaves. */}
+        <span className="player-counter" aria-live="polite">
+          {!presenting && fileLabel ? `${fileLabel} · ` : ""}
+          {status}
+          {!presenting && slide && slide.label ? ` · ${slide.label}` : ""}
+        </span>
+        <button
+          type="button"
+          className="arrow-button"
+          onClick={() => go({ kind: "next" })}
+          disabled={player.empty || player.ended}
+          aria-label="Next slide"
+        >
+          <span aria-hidden="true">→</span>
+        </button>
+        {soundButtons}
+        {/* Entering is the header's Present button; this one only leaves. */}
         {presenting && (
-          <button type="button" onClick={() => setPresenting(false)}>
-            Leave presentation (Esc)
-          </button>
+          <>
+            <span className="control-divider" aria-hidden="true" />
+            <button type="button" onClick={() => setPresenting(false)}>
+              Exit (Esc)
+            </button>
+          </>
         )}
       </div>
-      {showStrip && !presenting && !player.empty && (
-        <SlideStrip
-          presentation={presentation}
-          current={player.position[0].index}
-          displayMode={displayMode}
-          onJump={onJump}
-          onBuilt={onThumbnailBuilt}
-        />
-      )}
     </div>
   );
 }

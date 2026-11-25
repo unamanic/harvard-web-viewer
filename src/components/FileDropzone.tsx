@@ -1,5 +1,6 @@
-import { type ChangeEvent, type DragEvent, useRef, useState } from "react";
+import { type ChangeEvent, type DragEvent, type ReactNode, useRef, useState } from "react";
 import { filesFromDataTransfer, pathOf, type PathedFile } from "../files/fromBrowser";
+import { useDismissableDetails } from "../ui/hooks";
 
 type OnFiles = (files: PathedFile[]) => void;
 
@@ -40,64 +41,190 @@ export function useFileDrop(onFiles: OnFiles) {
   return { over, handlers };
 }
 
-/** "Choose files" and "Choose folder" buttons (file inputs styled as buttons). */
-export function FilePickers({ onFiles, compact = false }: { onFiles: OnFiles; compact?: boolean }) {
-  const onChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []).map((file) => ({ file, path: pathOf(file) }));
-    e.target.value = "";
-    if (files.length > 0) onFiles(files);
-  };
+/** Files chosen in a file input, with their paths; the input is cleared so the same files can be chosen again. */
+function chosenFiles(e: ChangeEvent<HTMLInputElement>): PathedFile[] {
+  const files = Array.from(e.target.files ?? []).map((file) => ({ file, path: pathOf(file) }));
+  e.target.value = "";
+  return files;
+}
+
+export interface FileInputButtonProps {
+  onFiles: OnFiles;
+  children: ReactNode;
+  className?: string;
+  /** Choose a whole folder instead of files. */
+  folder?: boolean;
+  /** Accessible name when it differs from the text. */
+  ariaLabel?: string;
+}
+
+/** A file input styled as a button (the label is the button; the input is visually hidden but focusable). */
+export function FileInputButton({ onFiles, children, className = "button", folder = false, ariaLabel }: FileInputButtonProps) {
   return (
-    <span className="file-pickers">
-      <label className={`button${compact ? "" : " button-primary"}`}>
-        {compact ? "Open files" : "Choose files"}
-        <input type="file" multiple className="visually-hidden" onChange={onChange} />
-      </label>
-      <label className="button">
-        {compact ? "Open folder" : "Choose folder"}
-        <input
-          type="file"
-          className="visually-hidden"
-          ref={(el) => {
-            el?.setAttribute("webkitdirectory", "");
-          }}
-          onChange={onChange}
-        />
-      </label>
-    </span>
+    <label className={className}>
+      {children}
+      <input
+        type="file"
+        multiple={!folder}
+        className="visually-hidden"
+        aria-label={ariaLabel}
+        ref={
+          folder
+            ? (el) => {
+                el?.setAttribute("webkitdirectory", "");
+              }
+            : undefined
+        }
+        onChange={(e) => {
+          const files = chosenFiles(e);
+          if (files.length > 0) onFiles(files);
+        }}
+      />
+    </label>
   );
 }
 
 /**
- * The large drop target of the empty state: explains what the viewer opens,
- * with buttons to choose files or a folder. Dropping works anywhere on the
- * page (the app shell handles it); `over` styles this box meanwhile.
+ * The header's "Open a file" button, with a small menu beside it to open a
+ * whole folder instead. On phones it reads "Open" (CSS).
  */
-export function FileDropzone({ onFiles, over = false }: { onFiles: OnFiles; over?: boolean }) {
+export function OpenButton({ onFiles }: { onFiles: OnFiles }) {
+  const more = useRef<HTMLDetailsElement>(null);
+  useDismissableDetails(more);
   return (
-    <section className={`dropzone${over ? " over" : ""}`} aria-labelledby="dropzone-title">
-      <h2 id="dropzone-title">Open Harvard Graphics 3 files</h2>
-      <p>Drop files or a whole folder anywhere on this page, or choose them:</p>
-      <p className="dropzone-buttons">
-        <FilePickers onFiles={onFiles} />
-      </p>
-      <ul className="dropzone-list">
-        <li>
-          <strong>.SH3</strong> slide shows play with their transitions, keys and buttons.
-        </li>
-        <li>
-          <strong>.CH3</strong> charts are drawn on their own.
-        </li>
-        <li>
-          <strong>.PL3</strong> and <strong>.PC3</strong> palettes can be opened too.
-        </li>
-      </ul>
-      <p>
-        Drop the <strong>whole folder</strong> a show lives in, so the palettes, fonts and bitmaps it names are found.
-      </p>
-      <p className="privacy">
-        Everything happens in your browser: files are read on this computer and never uploaded.
-      </p>
+    <span className="open-button">
+      <FileInputButton onFiles={onFiles} className="button button-primary open-files" ariaLabel="Open a file">
+        <span className="open-long">Open a file</span>
+        <span className="open-short" aria-hidden="true">
+          Open
+        </span>
+      </FileInputButton>
+      <details ref={more} className="menu open-more">
+        <summary className="button button-primary" aria-label="More ways to open">
+          <span aria-hidden="true">▾</span>
+        </summary>
+        <div className="menu-panel">
+          <FileInputButton
+            onFiles={(files) => {
+              if (more.current) more.current.open = false;
+              onFiles(files);
+            }}
+            folder
+            className="menu-item"
+          >
+            Open a folder…
+          </FileInputButton>
+          <p className="menu-note">Or drop files or a folder anywhere on this page.</p>
+        </div>
+      </details>
+    </span>
+  );
+}
+
+/** What the viewer opens, by kind (the empty state and the help panel). */
+export const SUPPORTED_FILES: readonly { kind: string; extensions: string[] }[] = [
+  { kind: "charts", extensions: [".CH3"] },
+  { kind: "shows", extensions: [".SH3"] },
+  { kind: "palettes", extensions: [".PL3", ".PC3"] },
+  { kind: "fonts", extensions: [".SPD", ".FN3"] },
+  { kind: "bitmaps", extensions: [".PCX", ".PCC"] },
+];
+
+/** "Supported files": a small in-app help panel in the header. */
+export function SupportedFilesHelp() {
+  const ref = useRef<HTMLDetailsElement>(null);
+  useDismissableDetails(ref);
+  return (
+    <details ref={ref} className="menu help">
+      <summary className="header-link">Supported files</summary>
+      <div className="menu-panel help-panel">
+        <p>Harvard Graphics 3 for DOS files:</p>
+        <ul>
+          <li>
+            <strong>.SH3</strong> slide shows play with their transitions, keys and buttons.
+          </li>
+          <li>
+            <strong>.CH3</strong> charts are drawn on their own.
+          </li>
+          <li>
+            <strong>.PL3</strong> and <strong>.PC3</strong> palettes, <strong>.SPD</strong> and <strong>.FN3</strong>{" "}
+            fonts and <strong>.PCX</strong> / <strong>.PCC</strong> bitmaps are used by the charts that name them.
+          </li>
+        </ul>
+        <p className="muted">Open the whole folder a show lives in, so the files it names are found.</p>
+      </div>
+    </details>
+  );
+}
+
+/**
+ * The empty state (first visit): what the viewer is for, buttons to choose
+ * files or a folder, the privacy promise and a large drop target. Dropping
+ * works anywhere on the page (the app shell handles it); `over` styles the
+ * drop target meanwhile.
+ */
+export function EmptyState({ onFiles, over = false, status }: { onFiles: OnFiles; over?: boolean; status?: ReactNode }) {
+  return (
+    <section className="empty" aria-labelledby="empty-title">
+      <div className="empty-intro">
+        <h1 id="empty-title" className="empty-title">
+          Open a chart
+          <br />
+          from 1991.
+        </h1>
+        <p className="empty-lead">
+          Harvard Graphics for DOS saved millions of charts and slide shows that almost nothing can open today. Drop one
+          here and see it again.
+        </p>
+        <div className="empty-buttons">
+          <FileInputButton onFiles={onFiles} className="button button-primary button-large">
+            Choose files…
+          </FileInputButton>
+          <FileInputButton onFiles={onFiles} folder className="button button-large">
+            Choose a folder…
+          </FileInputButton>
+        </div>
+        {status}
+        <p className="empty-privacy">
+          Files are read inside this browser tab. Nothing is uploaded.
+          <br />
+          Charts often use a palette, fonts or images stored in other files, so drop the whole folder if you have it.
+        </p>
+      </div>
+      <div className={`dropzone${over ? " over" : ""}`}>
+        <svg
+          width="64"
+          height="64"
+          viewBox="0 0 64 64"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          className="dropzone-icon"
+        >
+          <path d="M32 44V12M20 24l12-12 12 12" />
+          <path d="M10 40v10a4 4 0 004 4h36a4 4 0 004-4V40" />
+        </svg>
+        <p className="dropzone-title">Drop files or a folder here</p>
+        <p className="dropzone-kinds">
+          Looks for{" "}
+          {SUPPORTED_FILES.map(({ kind, extensions }, i) => (
+            <span key={kind} className="dropzone-kind">
+              {i > 0 ? " " : ""}
+              {kind}{" "}
+              {extensions.map((ext, j) => (
+                <span key={ext}>
+                  {j > 0 ? " / " : ""}
+                  <b>{ext}</b>
+                </span>
+              ))}
+            </span>
+          ))}
+        </p>
+        <p className="dropzone-paste">Paste from clipboard · Ctrl+V</p>
+      </div>
     </section>
   );
 }

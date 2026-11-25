@@ -17,7 +17,11 @@ export interface SettingsProps extends SettingsValues {
   onPaletteChange?: (palette: PaletteSetting) => void;
 }
 
-/** Display, palette, transitions and sound, in a small drop-down panel. Remembered in this browser. */
+/**
+ * Display, palette, transitions and sound: the "Display" section of the
+ * right column, closed by default (its summary names the display mode).
+ * Remembered in this browser.
+ */
 export function Settings({
   displayMode,
   transitionMode,
@@ -30,8 +34,13 @@ export function Settings({
 }: SettingsProps) {
   return (
     <details className="settings">
-      <summary className="button">Settings</summary>
-      <div className="settings-panel" role="group" aria-label="Settings">
+      <summary>
+        Display{" "}
+        <span className="muted settings-current">
+          {DISPLAY_MODES.find((m) => m.mode === displayMode)?.label.replace(/\s*\(.*$/, "") ?? displayMode}
+        </span>
+      </summary>
+      <div className="settings-panel" role="group" aria-label="Display settings">
         <label>
           <span>Display</span>
           <select

@@ -6,6 +6,8 @@ import { useAutoHide, useFullscreenWhile } from "../ui/hooks";
 export interface ScenePresentationProps {
   /** Pages to present (a chart has one). */
   scenes: readonly Scene[];
+  /** Page to start at. */
+  start?: number;
   title: string;
   /** Leave presentation mode. */
   onExit: () => void;
@@ -19,9 +21,9 @@ const PREVIOUS_KEYS = new Set(["ArrowLeft", "ArrowUp", "PageUp", "Backspace"]);
  * through the pages when there are several; Esc leaves; the controls hide
  * when the mouse rests.
  */
-export function ScenePresentation({ scenes, title, onExit }: ScenePresentationProps) {
+export function ScenePresentation({ scenes, title, start = 0, onExit }: ScenePresentationProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(start);
   useFullscreenWhile(ref, true, onExit);
   const controls = useAutoHide(true);
   const count = scenes.length;
@@ -56,26 +58,33 @@ export function ScenePresentation({ scenes, title, onExit }: ScenePresentationPr
       onMouseMove={controls.poke}
       onFocus={controls.poke}
     >
+      <p className="present-label">{count > 1 ? `${title} · Page ${at + 1} of ${count}` : title}</p>
       <div className="presentation-stage" onClick={() => step(1)}>
         {scenes[at] && <SceneRenderer scene={scenes[at]} />}
       </div>
       <div className="presentation-controls">
         {count > 1 && (
           <>
-            <button type="button" onClick={() => step(-1)} disabled={at === 0} aria-label="Previous page">
-              ◀ Previous
+            <button type="button" className="arrow-button" onClick={() => step(-1)} disabled={at === 0} aria-label="Previous page">
+              <span aria-hidden="true">←</span>
             </button>
             <span className="player-counter" aria-live="polite">
-              Page {at + 1} of {count}
+              {at + 1} / {count}
             </span>
-            <button type="button" onClick={() => step(1)} disabled={at >= count - 1} aria-label="Next page">
-              Next ▶
+            <button
+              type="button"
+              className="arrow-button"
+              onClick={() => step(1)}
+              disabled={at >= count - 1}
+              aria-label="Next page"
+            >
+              <span aria-hidden="true">→</span>
             </button>
+            <span className="control-divider" aria-hidden="true" />
           </>
         )}
-        {count <= 1 && <span className="player-counter">{title}</span>}
         <button type="button" onClick={onExit}>
-          Leave presentation (Esc)
+          Exit (Esc)
         </button>
       </div>
     </div>

@@ -54,8 +54,27 @@ export class FileSet {
   private readonly missingList: MissingFile[] = [];
   private readonly missingKeys = new Set<string>();
 
-  constructor(entries: Iterable<{ path: string; bytes: Uint8Array }> = []) {
+  /**
+   * Shared by a set and the sets made from it with `withFiles`: the same
+   * files the user opened, plus some added later (the viewer treats opening
+   * the same path again in such a set as a reload, not a new file).
+   */
+  readonly lineage: object;
+
+  constructor(entries: Iterable<{ path: string; bytes: Uint8Array }> = [], lineage: object = {}) {
+    this.lineage = lineage;
     for (const e of entries) this.add(e.path, e.bytes);
+  }
+
+  /**
+   * A new set with this set's files plus `files` (a file at an existing path
+   * replaces it), in the same lineage. Its missing-file record starts empty;
+   * this set is not changed.
+   */
+  withFiles(files: Iterable<{ path: string; bytes: Uint8Array }>): FileSet {
+    const set = new FileSet(this.entries(), this.lineage);
+    for (const f of files) set.add(f.path, f.bytes);
+    return set;
   }
 
   /** Add a file; a second file at the same path replaces the first. */
