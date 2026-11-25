@@ -1,4 +1,4 @@
-import { type ChangeEvent, type DragEvent, type ReactNode, useRef, useState } from "react";
+import { type ChangeEvent, type DragEvent, Fragment, type ReactNode, useRef, useState } from "react";
 import { filesFromDataTransfer, pathOf, type PathedFile } from "../files/fromBrowser";
 import { useDismissableDetails } from "../ui/hooks";
 
@@ -210,17 +210,21 @@ export function EmptyState({ onFiles, over = false, status }: { onFiles: OnFiles
         <p className="dropzone-title">Drop files or a folder here</p>
         <p className="dropzone-kinds">
           Looks for{" "}
+          {/* The space between kinds sits outside the nowrap groups so the
+              line can wrap between kinds (but never inside one). */}
           {SUPPORTED_FILES.map(({ kind, extensions }, i) => (
-            <span key={kind} className="dropzone-kind">
+            <Fragment key={kind}>
               {i > 0 ? " " : ""}
-              {kind}{" "}
-              {extensions.map((ext, j) => (
-                <span key={ext}>
-                  {j > 0 ? " / " : ""}
-                  <b>{ext}</b>
-                </span>
-              ))}
-            </span>
+              <span className="dropzone-kind">
+                {kind}{" "}
+                {extensions.map((ext, j) => (
+                  <span key={ext}>
+                    {j > 0 ? " / " : ""}
+                    <b>{ext}</b>
+                  </span>
+                ))}
+              </span>
+            </Fragment>
           ))}
         </p>
         <p className="dropzone-paste">Paste from clipboard · Ctrl+V</p>

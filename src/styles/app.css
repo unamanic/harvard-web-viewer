@@ -252,7 +252,7 @@ select { width: 100%; padding: 0.45rem 0.6rem; }
 .dragging .dropzone, .dropzone.over { border-color: var(--accent); background: #f6e3f1; }
 .dropzone-icon { color: var(--link); }
 .dropzone-title { font-family: var(--serif); font-size: 28px; font-weight: 600; }
-.dropzone-kinds { color: var(--muted); font-size: 14px; line-height: 1.6; max-width: 26rem; }
+.dropzone-kinds { color: var(--muted); font-size: 14px; line-height: 1.6; max-width: 26rem; text-align: center; overflow-wrap: anywhere; }
 .dropzone-kinds b { font-weight: 600; color: var(--ink); }
 .dropzone-kind { white-space: nowrap; }
 .dropzone-paste { color: var(--muted); font-size: 13px; }
