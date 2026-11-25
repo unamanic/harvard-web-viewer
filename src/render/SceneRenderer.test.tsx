@@ -174,6 +174,36 @@ describe("SceneRenderer", () => {
     expect(out).toContain('<rect x="0" y="0" width="100" height="100" fill="none" stroke="none">');
   });
 
+  it("draws multi-colour, transformed patterns, also on outlines and text", () => {
+    const patterned: Scene = {
+      viewBox: LANDSCAPE_VIEW_BOX,
+      background: "#000000",
+      patterns: {
+        v: {
+          rows: ["012", "000"], ink: "#ff0000", paper: "#000000", colors: ["#000000", "#ffffff", "#ffff00"],
+          pixelWidth: 2, pixelHeight: 3, transform: [1, 0, 0, 1, -5, 7],
+        },
+      },
+      elements: [
+        { kind: "rect", x: 0, y: 0, width: 10, height: 10, fill: null, stroke: "pattern:v" },
+        {
+          kind: "text", x: 0, y: 0, text: "Hi", size: 10, fill: "pattern:v", fontFamily: "sans-serif",
+          fontWeight: 400, italic: false, anchor: "start",
+        },
+      ],
+    };
+    const out = renderToStaticMarkup(<SceneRenderer scene={patterned} />);
+    const id = /<pattern id="([^"]+)"/.exec(out)?.[1];
+    expect(out).toContain(
+      `<pattern id="${id}" patternUnits="userSpaceOnUse" patternTransform="matrix(1 0 0 1 -5 7)" width="6" height="6" shape-rendering="crispEdges">` +
+        '<rect width="6" height="6" fill="#000000"></rect>' +
+        '<rect x="2" y="0" width="2" height="3" fill="#ffffff"></rect>' +
+        '<rect x="4" y="0" width="2" height="3" fill="#ffff00"></rect></pattern>',
+    );
+    expect(out).toContain(`fill="none" stroke="url(#${id})"`);
+    expect(out).toContain(`font-size="10" fill="url(#${id})"`);
+  });
+
   it("gives each rendered scene its own pattern ids", () => {
     const patterned: Scene = {
       viewBox: LANDSCAPE_VIEW_BOX,

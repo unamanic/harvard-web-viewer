@@ -61,7 +61,10 @@ export interface ShapeStyle {
    * this, render-side transforms (e.g. the mono display mode) do.
    */
   fill: string | null;
-  /** CSS colour, or null for no outline. */
+  /**
+   * CSS colour, or null for no outline. Like `fill`, may be "pattern:<id>"
+   * (render-side transforms only, e.g. the dithered VGA display mode).
+   */
   stroke: string | null;
   /** Outline width in scene units. Defaults to DEFAULT_STROKE_WIDTH. */
   strokeWidth?: number;
@@ -159,7 +162,7 @@ export interface TextElement {
   text: string;
   /** Font size (em height) in scene units. */
   size: number;
-  /** CSS colour. */
+  /** CSS colour (or, from render-side transforms, "pattern:<id>"). */
   fill: string;
   /** CSS font-family stack, e.g. "Helvetica, Arial, sans-serif". */
   fontFamily: string;
@@ -239,24 +242,50 @@ export interface Scene {
   background: string;
   /** Drawn in order: later elements on top. */
   elements: SceneElement[];
-  /** Fill patterns referenced by "pattern:<id>" fills, keyed by id. Usually absent. */
+  /** Fill patterns referenced by "pattern:<id>" fills (and strokes), keyed by id. Usually absent. */
   patterns?: Record<string, FillPattern>;
+  /**
+   * The document's own 16 screen colours (CSS), if it defines them: what
+   * each of the 16 colours of the original program's 16-colour screen
+   * driver actually looked like with this document (for HG3, the palette's
+   * record 1555, as the VGA DAC showed it). Index i is the colour the
+   * driver calls i. Used by display modes that imitate that screen
+   * (src/render/vgaScreenShow.ts); absent means the standard set.
+   */
+  screenColors?: string[];
 }
 
 /**
- * A repeating two-colour bitmap tile (e.g. a 1-bit dither), tiled from the
- * origin of the coordinate system of the element that uses it.
+ * A repeating bitmap tile (e.g. a 1-bit dither), tiled from the origin of
+ * the coordinate system of the element that uses it (moved by `transform`
+ * when given).
  */
 export interface FillPattern {
-  /** Tile rows, top first, all the same length: "1" = ink pixel, anything else = paper. */
+  /**
+   * Tile rows, top first, all the same length: "1" = ink pixel, anything
+   * else = paper. With `colors`, each character is instead a hexadecimal
+   * digit indexing `colors`.
+   */
   rows: string[];
   /** CSS colour of ink pixels. */
   ink: string;
   /** CSS colour of paper pixels. */
   paper: string;
-  /** Size of one tile pixel, in the units of the element that uses the pattern. */
+  /**
+   * Optional: a tile of more than two colours (up to 16). When present,
+   * each row character is a hexadecimal digit selecting a colour from this
+   * list, and `ink` / `paper` are ignored.
+   */
+  colors?: string[];
+  /** Size of one tile pixel, in pattern units (the element's own units when there is no `transform`). */
   pixelWidth: number;
   pixelHeight: number;
+  /**
+   * Optional: maps pattern units to the units of the element that uses the
+   * pattern (SVG patternTransform), e.g. to keep a dither aligned to the
+   * screen's pixel grid inside transformed groups.
+   */
+  transform?: Matrix;
 }
 
 /** A parsed file: one or more scenes (slides) plus informational metadata. */

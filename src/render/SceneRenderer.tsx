@@ -58,8 +58,8 @@ export function SceneRenderer({ scene, onButtonClick }: SceneRendererProps) {
 
 interface RenderContext {
   onButtonClick: ((name: string) => void) | undefined;
-  /** SVG fill value for a ShapeStyle fill (resolves "pattern:<id>"). */
-  patternUrl: (fill: string) => string;
+  /** SVG paint value for a fill or stroke (resolves "pattern:<id>"). */
+  patternUrl: (paint: string) => string;
 }
 
 /** A "pattern:<id>" fill as url(#...) ("none" if the scene lacks it); colours unchanged. */
@@ -69,18 +69,30 @@ function resolveFill(fill: string, scene: Scene, idPrefix: string): string {
   return scene.patterns && Object.hasOwn(scene.patterns, id) ? `url(#${idPrefix}${id})` : "none";
 }
 
-/** A FillPattern as an SVG <pattern>: paper rect plus one rect per run of ink pixels. */
+/**
+ * A FillPattern as an SVG <pattern>: a paper rect plus one rect per run of
+ * ink pixels (two colours), or per run of each other colour (`colors`).
+ */
 function renderPattern(domId: string, p: FillPattern): ReactNode {
   const cols = Math.max(1, ...p.rows.map((r) => r.length));
+  // Colour of each tile character; the paper colour is painted underneath.
+  const multi = p.colors && p.colors.length > 0 ? p.colors : null;
+  const paper = multi ? multi[0] : p.paper;
+  const colorOf = (ch: string): string | null => {
+    if (!multi) return ch === "1" ? p.ink : null;
+    const c = multi[parseInt(ch, 16)];
+    return c === undefined || c === paper ? null : c;
+  };
   const runs: ReactNode[] = [];
   p.rows.forEach((row, y) => {
     for (let x = 0; x < row.length; ) {
-      if (row[x] !== "1") {
+      const color = colorOf(row[x]);
+      if (color === null) {
         x++;
         continue;
       }
       const start = x;
-      while (x < row.length && row[x] === "1") x++;
+      while (x < row.length && row[x] === row[start]) x++;
       runs.push(
         <rect
           key={`${y}-${start}`}
@@ -88,7 +100,7 @@ function renderPattern(domId: string, p: FillPattern): ReactNode {
           y={y * p.pixelHeight}
           width={(x - start) * p.pixelWidth}
           height={p.pixelHeight}
-          fill={p.ink}
+          fill={color}
         />,
       );
     }
@@ -98,11 +110,12 @@ function renderPattern(domId: string, p: FillPattern): ReactNode {
       key={domId}
       id={domId}
       patternUnits="userSpaceOnUse"
+      patternTransform={p.transform ? `matrix(${p.transform.join(" ")})` : undefined}
       width={cols * p.pixelWidth}
       height={p.rows.length * p.pixelHeight}
       shapeRendering="crispEdges"
     >
-      <rect width={cols * p.pixelWidth} height={p.rows.length * p.pixelHeight} fill={p.paper} />
+      <rect width={cols * p.pixelWidth} height={p.rows.length * p.pixelHeight} fill={paper} />
       {runs}
     </pattern>
   );
@@ -115,7 +128,7 @@ function renderElements(elements: SceneElement[], ctx: RenderContext): ReactNode
 function shapeProps(s: ShapeStyle, ctx: RenderContext) {
   return {
     fill: s.fill === null ? "none" : ctx.patternUrl(s.fill),
-    stroke: s.stroke ?? "none",
+    stroke: s.stroke === null ? "none" : ctx.patternUrl(s.stroke),
     strokeWidth: s.stroke ? (s.strokeWidth ?? DEFAULT_STROKE_WIDTH) : undefined,
   };
 }
@@ -205,7 +218,7 @@ function renderElement(
           x={el.x}
           y={el.y}
           fontSize={el.size}
-          fill={el.fill}
+          fill={ctx.patternUrl(el.fill)}
           fontFamily={el.fontFamily}
           fontWeight={el.fontWeight}
           fontStyle={el.italic ? "italic" : "normal"}

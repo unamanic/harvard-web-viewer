@@ -50,9 +50,14 @@ Add entries as `- finding (sample file checked, task number)`.
 - Role names for entries 0 to 41 follow the §6.2 table in 26 of 31 .PL3
   files; NUMBER.PL3, SAMPLE.PL3 and the two MONOCHR files name them
   differently. Names have junk bytes after the NUL. (all palettes, task 6)
-- 1555 is 16 entries of 0xFF R G B; 25 files (including HG3, 16COLOR and
-  both MONOCHR) hold the same 16 colours, so it is not a display mapping.
-  Task 6b uses a nearest-colour rule for EGA instead. (all palettes, task 6)
+- 1555 is 16 entries of 0xFF R G B: the 16 colours the VGA ScreenShow
+  driver loads into the DAC for charts with this palette (confirmed by the
+  reference renders; the earlier reading "not a display mapping" was
+  wrong). 25 palettes share HG3's set; 1HDW, 6HDW, 8HDW and 12HDW change
+  some slots (e.g. 1HDW slot 12 = dark blue). Palette colours are matched
+  against the standard set, then shown with the chart's DAC, so an entry
+  such as 12HDW's "Blue-gray D" stored as (255,0,255) means "slot 12".
+  (all palettes, task 6; reference renders)
 - 1554 is u16 mode (1 plain, 2 in shaded palettes), two 0xFF R G B colours,
   u16 (90 almost everywhere), u16 (always 12). Meaning inferred only.
   (all palettes, task 6)
@@ -269,11 +274,16 @@ Add entries as `- finding (sample file checked, task number)`.
 - Reference renders from the real program (samples-private/renders/,
   private; HG 3.05 in DOSBox-X, VGA ScreenShow driver, 640×480; every
   chart and every show row; see its NOTES.md):
-  - The VGA ScreenShow driver uses one fixed 16-colour DAC for every
-    chart (black, white, red, orange, yellow, yellow-green, green,
-    spring green, cyan, azure, blue, violet, magenta, rose, grey 85,
-    grey 170). Every other palette colour is drawn as a 1-pixel
-    checkerboard of two DAC colours (the "D"/"L" swatches).
+  - The VGA ScreenShow driver loads 16 colours into the DAC (the
+    palette's 1555 record; for most palettes black, white, red, orange,
+    yellow, yellow-green, green, spring green, cyan, azure, blue, violet,
+    magenta, rose, grey 85, grey 170). Every other colour is dithered on
+    a screen-aligned 4×4 Bayer matrix in 8 levels, up to three colours per
+    tile: white share round(8·min/63), black share round(8·(63−max)/63),
+    the rest one of 24 hues (odd steps split between neighbours), grey
+    when white and black meet. Text and lines are dithered too; the page
+    background is cleared to one solid colour. The rule reproduces 99.71%
+    of fill pixels in the references (src/render/vgaScreenShow.ts).
   - GALD111: the gallery key bar does not cover the chart title (the
     button chart's box is not drawn over the slide).
   - GALC37: the deep 3-D bars (c = 1797) are correct.

@@ -8,7 +8,13 @@
  * without re-parsing, and formats know nothing about display modes.
  *
  * Rules (RENDERER_TASKS.md task 6b):
- * - VGA: each channel rounded to the VGA DAC's 6 bits.
+ * - VGA: the Harvard Graphics 3 "VGA ScreenShow" driver, as the reference
+ *   renders show it (vgaScreenShow.ts, through the dithering engine
+ *   dither.ts): 16 fixed colours; the background cleared to the nearest one;
+ *   every other colour, text and lines included, an ordered dither of up to
+ *   three of them, aligned to the 640 × 480 pixel grid. The mode id stays
+ *   "vga" (stored settings keep working); its earlier rule, each channel
+ *   rounded to the DAC's 6 bits, was a guess and looked the same as Modern.
  * - EGA: nearest of the 64 EGA colours (2 bits per channel). Record 1555 is
  *   not a display mapping (formats.md "Verified findings"), so this is a
  *   nearest-colour rule. A scene may show at most 16 EGA colours at once:
@@ -42,6 +48,11 @@ import {
   type Scene,
   type SceneElement,
 } from "../formats/types";
+import { type RGB, colorDistance, formatCssColor, luma, nearestColor, parseCssColor } from "./color";
+import { BAYER_4X4, applyScreen, ditherAverage, ditherRows, normalizeDither } from "./dither";
+import { SCREENSHOW_DAC, screenShowDither, vgaScreenShow } from "./vgaScreenShow";
+
+export { type RGB, colorDistance, formatCssColor, luma, nearestColor, parseCssColor, vgaChannel } from "./color";
 
 export type DisplayMode = "vga" | "ega" | "mono" | "modern";
 
@@ -49,7 +60,7 @@ export const DEFAULT_DISPLAY_MODE: DisplayMode = "vga";
 
 /** Modes in selector order, with their labels. */
 export const DISPLAY_MODES: readonly { mode: DisplayMode; label: string }[] = [
-  { mode: "vga", label: "VGA (262,144 colours)" },
+  { mode: "vga", label: "VGA ScreenShow (16 colours, dithered)" },
   { mode: "ega", label: "EGA (16 of 64 colours)" },
   { mode: "mono", label: "Monochrome screen (EGA Mono / Hercules) — imitation" },
   { mode: "modern", label: "Modern (24-bit, as stored)" },
@@ -57,47 +68,6 @@ export const DISPLAY_MODES: readonly { mode: DisplayMode; label: string }[] = [
 
 export function isDisplayMode(value: unknown): value is DisplayMode {
   return DISPLAY_MODES.some((m) => m.mode === value);
-}
-
-export type RGB = readonly [number, number, number];
-
-// ---------------------------------------------------------------------------
-// CSS colour parsing / formatting
-// ---------------------------------------------------------------------------
-
-const HEX3 = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i;
-const HEX6 = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i;
-const RGB_FN = /^rgb\(\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*\)$/i;
-
-/** Parses #rgb, #rrggbb or rgb(r, g, b); returns null for anything else. */
-export function parseCssColor(css: string): RGB | null {
-  const s = css.trim();
-  let m = HEX6.exec(s);
-  if (m) return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
-  m = HEX3.exec(s);
-  if (m) return [parseInt(m[1] + m[1], 16), parseInt(m[2] + m[2], 16), parseInt(m[3] + m[3], 16)];
-  m = RGB_FN.exec(s);
-  if (m) return [clamp255(+m[1]), clamp255(+m[2]), clamp255(+m[3])];
-  return null;
-}
-
-function clamp255(v: number): number {
-  return Math.max(0, Math.min(255, Math.round(v)));
-}
-
-/** Formats as lower-case #rrggbb. */
-export function formatCssColor(rgb: RGB): string {
-  return "#" + rgb.map((v) => clamp255(v).toString(16).padStart(2, "0")).join("");
-}
-
-// ---------------------------------------------------------------------------
-// Per-colour rules
-// ---------------------------------------------------------------------------
-
-/** One channel through the VGA DAC: 8 bits to 6 bits and back. */
-export function vgaChannel(v: number): number {
-  const v6 = Math.round((clamp255(v) * 63) / 255);
-  return Math.round((v6 * 255) / 63);
 }
 
 /** Channel levels of the EGA's 64 colours (2 bits per channel). */
@@ -108,47 +78,23 @@ export const EGA_COLORS: readonly RGB[] = EGA_LEVELS.flatMap((r) =>
   EGA_LEVELS.flatMap((g) => EGA_LEVELS.map((b) => [r, g, b] as const)),
 );
 
-/**
- * Squared "redmean" distance: a cheap weighted RGB metric that follows
- * perceived difference far better than plain Euclidean RGB.
- */
-export function colorDistance(a: RGB, b: RGB): number {
-  const rMean = (a[0] + b[0]) / 2;
-  const dr = a[0] - b[0];
-  const dg = a[1] - b[1];
-  const db = a[2] - b[2];
-  return (2 + rMean / 256) * dr * dr + 4 * dg * dg + (2 + (255 - rMean) / 256) * db * db;
-}
-
-/** The candidate closest to `rgb` (first one wins ties). */
-export function nearestColor(rgb: RGB, candidates: readonly RGB[]): RGB {
-  let best = candidates[0];
-  let bestD = Infinity;
-  for (const c of candidates) {
-    const d = colorDistance(rgb, c);
-    if (d < bestD) {
-      bestD = d;
-      best = c;
-    }
-  }
-  return best;
-}
-
-/** Rec. 601 luma, 0..255. */
-export function luma(rgb: RGB): number {
-  return 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2];
-}
+/** The VGA ScreenShow colours as RGB (standard DAC). */
+const SCREENSHOW_DAC_RGB: readonly RGB[] = SCREENSHOW_DAC.map((c) => parseCssColor(c) ?? [0, 0, 0]);
 
 /**
- * Screen colour of one stored RGB in `mode`. For EGA this is the nearest of
- * the 64 colours only; the 16-at-once limit needs the whole scene and is
- * applied by `applyDisplayMode`. For mono this is the plain black / white
- * threshold (the background rule of `applyMono`; fills are dithered there).
+ * Screen colour of one stored RGB in `mode`. For VGA this is the colour its
+ * dither averages to (what the eye blends; `applyDisplayMode` draws the
+ * dither itself). For EGA this is the nearest of the 64 colours only; the
+ * 16-at-once limit needs the whole scene and is applied by
+ * `applyDisplayMode`. For mono this is the plain black / white threshold
+ * (the background rule of `applyMono`; fills are dithered there).
  */
 export function toScreenColor(rgb: RGB, mode: DisplayMode): RGB {
   switch (mode) {
-    case "vga":
-      return [vgaChannel(rgb[0]), vgaChannel(rgb[1]), vgaChannel(rgb[2])];
+    case "vga": {
+      const avg = ditherAverage(normalizeDither(screenShowDither(rgb)), SCREENSHOW_DAC_RGB);
+      return [Math.round(avg[0]), Math.round(avg[1]), Math.round(avg[2])];
+    }
     case "ega":
       return nearestColor(rgb, EGA_COLORS);
     case "mono":
@@ -258,12 +204,7 @@ export const MONO_SCREEN = { width: 640, height: 350 } as const;
 export const MONO_PIXEL_ASPECT = 4 / MONO_SCREEN.width / (3 / MONO_SCREEN.height);
 
 /** Ordered-dither thresholds (0..15): a pixel is white when its value < 16 × coverage. */
-export const MONO_BAYER_4X4: readonly (readonly number[])[] = [
-  [0, 8, 2, 10],
-  [12, 4, 14, 6],
-  [3, 11, 1, 9],
-  [15, 7, 13, 5],
-];
+export const MONO_BAYER_4X4 = BAYER_4X4;
 
 /** Fill levels run from 0 (black) to MONO_FILL_LEVELS (white): 9 levels, 2/16 apart. */
 export const MONO_FILL_LEVELS = 8;
@@ -376,10 +317,17 @@ function increasingAssignment(ideal: readonly number[], choices: readonly number
   return out;
 }
 
-/** Tile rows of dither `level` ("1" = white pixel). */
+/** Tile rows of dither `level` ("1" = white pixel): white on the lowest 2 × level thresholds. */
 export function monoPatternRows(level: number): string[] {
-  const limit = (16 * level) / MONO_FILL_LEVELS;
-  return MONO_BAYER_4X4.map((row) => row.map((t) => (t < limit ? "1" : "0")).join(""));
+  const white = Math.round((16 * level) / MONO_FILL_LEVELS);
+  return ditherRows(
+    [
+      { color: 1, cells: white },
+      { color: 0, cells: 16 - white },
+    ],
+    1,
+    MONO_BAYER_4X4,
+  );
 }
 
 /** Id (in `Scene.patterns`) of the pattern for dither `level`. */
@@ -485,7 +433,8 @@ export function applyMono(scene: Scene): Scene {
 export function applyDisplayMode(scene: Scene, mode: DisplayMode): Scene {
   if (mode === "modern") return scene;
   if (mode === "mono") return applyMono(scene);
-  const toScreen = mode === "ega" ? egaMapper(scene) : (rgb: RGB) => toScreenColor(rgb, mode);
+  if (mode === "vga") return applyScreen(scene, vgaScreenShow(scene.screenColors));
+  const toScreen = egaMapper(scene);
   const cache = new Map<string, string>();
   return mapColors(scene, (css) => {
     let out = cache.get(css);

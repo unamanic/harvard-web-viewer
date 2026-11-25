@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LANDSCAPE_VIEW_BOX, type Scene, type SceneElement } from "../formats/types";
 import {
+  DEFAULT_DISPLAY_MODE,
+  DISPLAY_MODES,
   MONO_FILL_LEVELS,
   EGA_COLORS,
   applyDisplayMode,
@@ -11,6 +13,7 @@ import {
   isDisplayMode,
   loadDisplayMode,
   parseCssColor,
+  saveDisplayMode,
   toScreenColor,
   vgaChannel,
   type RGB,
@@ -62,17 +65,18 @@ describe("parseCssColor", () => {
 });
 
 describe("toScreenColor", () => {
-  it("VGA rounds each channel to 6 bits", () => {
-    // 128 -> round(128*63/255) = 32 -> round(32*255/63) = 130
+  it("VGA gives the colour its ScreenShow dither averages to", () => {
+    // The DAC still rounds to 6 bits: 128 -> 32 -> 130.
     expect(vgaChannel(128)).toBe(130);
-    // 100 -> 25 -> 101
-    expect(vgaChannel(100)).toBe(101);
-    expect(vgaChannel(0)).toBe(0);
-    expect(vgaChannel(255)).toBe(255);
-    // 2 -> round(0.49) = 0 -> 0; 3 -> round(0.74) = 1 -> 4
-    expect(vgaChannel(2)).toBe(0);
     expect(vgaChannel(3)).toBe(4);
-    expect(toScreenColor([128, 100, 255], "vga")).toEqual([130, 101, 255]);
+    // Solid driver colours come back as the DAC shows them.
+    expect(toScreenColor([255, 128, 0], "vga")).toEqual([255, 130, 0]);
+    // Cyn D (0,128,128) is cyan + black half and half.
+    expect(toScreenColor([0, 128, 128], "vga")).toEqual([0, 128, 128]);
+    // Yel L (255,255,128): yellow + white.
+    expect(toScreenColor([255, 255, 128], "vga")).toEqual([255, 255, 128]);
+    // Gry DD (22,22,22): a quarter dark grey.
+    expect(toScreenColor([22, 22, 22], "vga")).toEqual([21, 21, 21]);
   });
 
   it("EGA picks the nearest of the 64 colours", () => {
@@ -109,7 +113,7 @@ describe("applyDisplayMode", () => {
     expect(applyDisplayMode(s, "modern")).toBe(s);
   });
 
-  it("maps background, fills and strokes, recursing into groups (VGA)", () => {
+  it("VGA dithers fills, outlines and text and clears the background solid, recursing into groups", () => {
     const s = scene(
       [
         rect("#808080", "#ff0000"),
@@ -119,7 +123,7 @@ describe("applyDisplayMode", () => {
           children: [
             rect(null, "#ffff00"),
             {
-              kind: "text", x: 0, y: 0, text: "Hi", size: 10, fill: "rgb(100,0,0)",
+              kind: "text", x: 0, y: 0, text: "Hi", size: 10, fill: "rgb(0,128,128)",
               fontFamily: "sans-serif", fontWeight: 400, italic: false, anchor: "start",
             },
             { kind: "image", href: "data:,", x: 0, y: 0, width: 1, height: 1 },
@@ -127,22 +131,28 @@ describe("applyDisplayMode", () => {
           ],
         },
       ],
-      "#00f",
+      "#161616",
     );
     const out = applyDisplayMode(s, "vga");
-    expect(colors(out)).toEqual(["#0000ff", "#828282", "#ff0000", "#ffff00", "#650000", "#828282"]);
+    expect(colors(out)).toEqual(["#000000", "pattern:vga-0", "#ff0000", "#ffff00", "pattern:vga-1", "pattern:vga-0"]);
+    expect(out.patterns?.["vga-0"]).toMatchObject({ rows: ["0101", "1010", "0101", "1010"], ink: "#555555", paper: "#aaaaaa" });
+    expect(out.patterns?.["vga-1"]).toMatchObject({ ink: "#00ffff", paper: "#000000" });
     const g = out.elements[1];
     if (g.kind !== "group") throw new Error("group expected");
     expect(g.buttonName).toBe("b");
     expect(g.children[2]).toBe((s.elements[1] as { children: SceneElement[] }).children[2]);
-    expect(out.patterns).toBeUndefined();
     // Input is untouched.
-    expect(s.background).toBe("#00f");
+    expect(s.background).toBe("#161616");
     expect(s.elements[0]).toMatchObject({ fill: "#808080" });
   });
 
+  it("VGA uses the scene's own screen colours", () => {
+    const out = applyDisplayMode({ ...scene([rect("#ff00ff")]), screenColors: Array(16).fill("#123456") }, "vga");
+    expect(colors(out)).toEqual(["#123456", "#123456"]);
+  });
+
   it("leaves colours it cannot parse unchanged", () => {
-    const out = applyDisplayMode(scene([rect("red", "hsl(0,0%,0%)")], "navy"), "vga");
+    const out = applyDisplayMode(scene([rect("red", "hsl(0,0%,0%)")], "navy"), "ega");
     expect(colors(out)).toEqual(["navy", "red", "hsl(0,0%,0%)"]);
   });
 
@@ -317,6 +327,33 @@ describe("loadDisplayMode", () => {
     expect(loadDisplayMode()).toBe("ega");
     stored("hercules");
     expect(loadDisplayMode()).toBe("vga");
+    stored(null);
+    expect(loadDisplayMode()).toBe("vga");
+  });
+
+  it("keeps a stored \"vga\" (now the dithered ScreenShow driver) as it is", () => {
+    stored("vga");
+    expect(loadDisplayMode()).toBe("vga");
+    expect(DEFAULT_DISPLAY_MODE).toBe("vga");
+    expect(DISPLAY_MODES.find((m) => m.mode === "vga")?.label).toBe("VGA ScreenShow (16 colours, dithered)");
+  });
+
+  it("falls back to the default when storage throws", () => {
+    vi.stubGlobal("localStorage", { getItem: () => { throw new Error("blocked"); }, setItem: () => {} });
+    expect(loadDisplayMode()).toBe("vga");
+  });
+});
+
+describe("saveDisplayMode", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("stores the mode id under hwv.displayMode", () => {
+    const setItem = vi.fn();
+    vi.stubGlobal("localStorage", { getItem: () => null, setItem });
+    saveDisplayMode("vga");
+    expect(setItem).toHaveBeenCalledWith("hwv.displayMode", "vga");
   });
 });
 
