@@ -23,7 +23,8 @@ For every `.CH3` under the samples folder that has a reference `NAME.png`:
 3. Rasterises the scene with `raster.ts`, an aliased rasteriser that samples
    pixel centres like the original's drawing, honours `Scene.patterns`
    (dithers compare pixel for pixel), gradients with bands, glyph paths,
-   halos, groups and images (stretched or tiled), at the reference's own
+   halos, groups and images (tiled, or stretched nearest-neighbour as HG
+   fits a bitmap to its box: src/render/screenImage.ts), at the reference's own
    resolution (640×480 VGA, 640×350 EGA, 720×348 Hercules) with the page
    mapped onto non-square pixels (pixel aspect (4/3)/(W/H)).
 4. Blurs both images with a BLUR×BLUR box (default 2, to even out dithers)
@@ -60,6 +61,25 @@ CMP_MODE=mono CH=FLOOR HEAT=0 yarn compare    # no heatmaps
 | `HEAT` | on | `HEAT=0` skips the heatmap PNGs. |
 | `PA` | (4/3)/(W/H) | Pixel aspect override. |
 | `CMP_SCALE` | none | Experiment: shrink the whole scene about the page centre by this factor. |
+
+### The shareable sample show (samples/claude-vs-codex)
+
+Its references are the F2-Preview screenshots `screenshots/CLAUDEVX_slideNN.png`
+(VGA ScreenShow, 640×480), named by slide, not by chart. Make a folder of
+`NAME.png` links in slide order (README table) and point `REFDIR` at it:
+
+```sh
+R=/tmp/cvcref; mkdir -p $R
+names=(CVC01 CVC02 CVCP01 CVC03 CVCP02 CVC04 CVCP03 CVC05 CVCP04 CVC06
+       CVCP05 CVC07 CVCP06 CVC08 CVCP07 CVCP08 CVC09 CVCP09 CVCP10 CVC10)
+for i in ${!names[@]}; do
+  ln -sf "$PWD/samples/claude-vs-codex/screenshots/CLAUDEVX_slide$(printf %02d $((i+1))).png" "$R/${names[$i]}.png"
+done
+CMP_SAMPLES=samples/claude-vs-codex REFDIR=$R yarn compare
+```
+
+The picture slides' bitmap placement is also checked pixel for pixel in the
+normal test run (src/samples/claudeVsCodex.test.ts).
 
 ## Output
 

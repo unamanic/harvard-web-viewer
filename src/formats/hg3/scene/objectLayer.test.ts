@@ -20,9 +20,11 @@ import {
   DATA_ROW_OVERLAP,
   DATA_TEXT_BOX_FACTOR,
   DATA_TEXT_BOX_STEP,
+  LINE_WIDTH_MIN_PIXELS,
   LINE_WIDTH_SUBTAG,
   OBJECT_TEXT_ASCENT,
   OBJECT_TEXT_BASELINE_AT_ASCENT,
+  BITMAP_FIT_TO_BOX,
   BITMAP_INK_SUBTAG,
   BITMAP_PAPER_SUBTAG,
   BOX_SHADOW_BOTTOM_SHADE,
@@ -235,6 +237,17 @@ describe("drawObjectLayer: shapes", () => {
       ...obj([line(32, 2), width(1), boxShape(1, 0, 0, 0, 10, 10)]),
     ]);
     expect(elements.map((e) => "strokeWidth" in e && e.strokeWidth)).toEqual([369, DEFAULT_STROKE_WIDTH, lineWidthFor(2)]);
+  });
+
+  it("draws a 0x1120 width over half a screen pixel at least LINE_WIDTH_MIN_PIXELS pixels wide", () => {
+    const width = (w: number) => sub(LINE_WIDTH_SUBTAG, u16(w));
+    const { elements } = draw([
+      ...obj([line(24, 0), width(51), counted(0x1050, [[0, 0, 100, 50, 200, 0]])]),
+      ...obj([line(24, 0), width(74), counted(0x1050, [[0, 0, 100, 50, 200, 0]])]),
+      ...obj([line(24, 0), width(25), counted(0x1050, [[0, 0, 100, 50, 200, 0]])]),
+    ]);
+    // A 4:3 page: one screen pixel is 51.2 units.
+    expect(elements.map((e) => "strokeWidth" in e && e.strokeWidth)).toEqual([LINE_WIDTH_MIN_PIXELS * 51.2, LINE_WIDTH_MIN_PIXELS * 51.2, DEFAULT_STROKE_WIDTH]);
   });
 
   describe("0x10A0 data curves (CURVE_A_STRAIGHT_OFFSET, CURVE_A_AFTER_POLYLINE_DRAWN)", () => {
@@ -767,10 +780,10 @@ describe("drawObjectLayer: embedded charts", () => {
 });
 
 describe("drawObjectLayer: bitmaps", () => {
-  const bitmapObject = (name: string) => [
+  const bitmapObject = (name: string, fit = 0) => [
     transform([1, 0, 0, 1, 0, 0]),
     leaf(404, concat(u16(5), u16(0), cstr(name))),
-    object612([sub(0x110c, [0xff, 0x55, 0x55, 0x55]), sub(0x1140, [0, 0, 0, 0, 0x40, 0x01, 0x4e, 0x00]), line(32), boxShape(1, 0, -100, -50, 100, 50)], [-100, -50, 100, 50]),
+    object612([sub(0x110c, [0xff, 0x55, 0x55, 0x55]), sub(0x1140, [0, 0, 0, fit, 0x40, 0x01, 0x4e, 0x00]), line(32), boxShape(1, 0, -100, -50, 100, 50)], [-100, -50, 100, 50]),
   ];
 
   it("draws the PCX at screen pixel size, tiled over the object's box from its 0x1140 hot spot", () => {
@@ -825,6 +838,23 @@ describe("drawObjectLayer: bitmaps", () => {
     expect(clear.pixels?.palette).toEqual(["#00ffff", null]);
     const b2 = Uint8Array.from(atob(clear.href.split(",")[1]!), (c) => c.charCodeAt(0));
     expect([...b2.slice(54, 62)]).toEqual([0, 0, 0, 0, 0xff, 0xff, 0, 0xff]);
+  });
+
+  it("draws the PCX once, stretched to the box, when 0x1140 byte 3 is 2 (fit to box)", () => {
+    const ctx = fakeContext({ "LOGO.PCX": tinyPcx() });
+    const { elements, warnings } = draw(bitmapObject("LOGO.PCX", BITMAP_FIT_TO_BOX), ctx);
+    expect(elements).toHaveLength(1);
+    expect(elements[0]).toMatchObject({ kind: "image", x: -100, y: -50, width: 200, height: 100 });
+    expect(elements[0]?.kind === "image" && elements[0].tile).toBeUndefined();
+    expect(elements[0]?.kind === "image" && elements[0].pixels?.width).toBe(2);
+    expect(warnings).toEqual([]);
+  });
+
+  it("warns about an unknown 0x1140 fit mode and draws the bitmap tiled", () => {
+    const ctx = fakeContext({ "LOGO.PCX": tinyPcx() });
+    const { elements, warnings } = draw(bitmapObject("LOGO.PCX", 1), ctx);
+    expect(elements[0]?.kind === "image" && elements[0].tile?.screenPixels).toBe(true);
+    expect(warnings.some((w) => w.includes("LOGO.PCX") && w.includes("fit mode 1"))).toBe(true);
   });
 
   it("skips a missing bitmap with a warning", () => {

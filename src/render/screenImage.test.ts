@@ -90,6 +90,15 @@ describe("applyScreen: images with indexed pixels (screenImage)", () => {
     expect(grid(applyScreen(sceneOf([img]), tiny).elements[0])).toEqual(["WW.."]);
   });
 
+  it("stretches nearest-neighbour: box pixel i shows image pixel round(i × n / D), halves down", () => {
+    // 3 image pixels over 7 screen pixels (box 0.2 … 6.6: pixel centres 0.5 … 6.5): round(i × 3 / 7) = 0 0 1 1 2 2 2 (3 clamped).
+    const img: ImageElement = { kind: "image", href: "data:,", x: 0.2, y: 0, width: 6.4, height: 1, pixels: pixels(3, 1, [0, 1, 0], ["#ffffff", "#000000"]) };
+    expect(grid(applyScreen(sceneOf([img]), tiny).elements[0])).toEqual(["WWBBWWW"]);
+    // 2 over 4 rows: a tie (i = 1: 0.5) rounds down, so rows 0, 1 show row 0 and rows 2, 3 row 1.
+    const tall: ImageElement = { kind: "image", href: "data:,", x: 0, y: 0, width: 1, height: 4, pixels: pixels(1, 2, [0, 1], ["#ffffff", "#000000"]) };
+    expect(grid(applyScreen(sceneOf([tall]), tiny).elements[0])).toEqual(["W", "W", "B", "B"]);
+  });
+
   it("drops an image whose box covers no screen pixel centre, and leaves rotated ones unchanged", () => {
     const px = pixels(1, 1, [0], WBG);
     const tinyImg: ImageElement = { kind: "image", href: "data:,", x: 1.6, y: 1.6, width: 0.3, height: 0.3, pixels: px };

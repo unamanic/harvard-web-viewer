@@ -12,6 +12,16 @@
  * floor(anchor − hot) (ImageTile); another tiled image at its pixel size in
  * element units; an untiled one stretched to its box. Every screen pixel
  * whose centre is inside the box is drawn (as for any filled shape).
+ * Stretched, the box's D screen pixels in a row (or column) show the image's
+ * n pixels nearest-neighbour, box pixel i (from the box's first screen
+ * pixel) showing image pixel round(i × n / D), halves rounded down, i.e.
+ * floor((i × n + floor((D − 1) / 2)) / D): the first and last box pixels
+ * show the first and last image pixels [I, from the screenshots of
+ * samples/claude-vs-codex, assumptions.ts BITMAP_FIT_TO_BOX: 530 × 290
+ * bitmaps in 564 × 424-pixel boxes; this matches every column and row where
+ * the screenshots repeat one (373 columns and 252 rows identified, 0
+ * mismatches; sampling at pixel centres, floor((i + ½) × n / D), gets 181
+ * columns and 124 rows wrong)].
  *
  * Images without `pixels`, and images in rotated, sheared or mirrored
  * groups, are left unchanged.
@@ -49,10 +59,15 @@ export function screenImage(
   const fromY = (sy: number) => (sy * geo.pixelHeight + geo.originY - f) / d;
   const xs = [toX(el.x), toX(el.x + el.width)];
   const ys = [toY(el.y), toY(el.y + el.height)];
-  const x0 = Math.max(0, Math.ceil(Math.min(...xs) - 0.5));
-  const x1 = Math.min(screen.width, Math.ceil(Math.max(...xs) - 0.5));
-  const y0 = Math.max(0, Math.ceil(Math.min(...ys) - 0.5));
-  const y1 = Math.min(screen.height, Math.ceil(Math.max(...ys) - 0.5));
+  // The box's screen pixels (centres inside it), before clipping to the screen.
+  const bx0 = Math.ceil(Math.min(...xs) - 0.5);
+  const bx1 = Math.ceil(Math.max(...xs) - 0.5);
+  const by0 = Math.ceil(Math.min(...ys) - 0.5);
+  const by1 = Math.ceil(Math.max(...ys) - 0.5);
+  const x0 = Math.max(0, bx0);
+  const x1 = Math.min(screen.width, bx1);
+  const y0 = Math.max(0, by0);
+  const y1 = Math.min(screen.height, by1);
   if (x1 <= x0 || y1 <= y0) return null;
 
   const { width: w, height: h } = px;
@@ -70,9 +85,11 @@ export function screenImage(
     column = (sx) => mod(Math.floor((fromX(sx + 0.5) - ex0) / t.pixelWidth), w);
     row = (sy) => mod(Math.floor((fromY(sy + 0.5) - ey0) / t.pixelHeight), h);
   } else {
+    // Stretched: D box pixels show n image pixels, box pixel i the image pixel round(i × n / D), halves down.
     const clamp = (v: number, n: number) => Math.max(0, Math.min(n - 1, v));
-    column = (sx) => clamp(Math.floor(((fromX(sx + 0.5) - el.x) / el.width) * w), w);
-    row = (sy) => clamp(Math.floor(((fromY(sy + 0.5) - el.y) / el.height) * h), h);
+    const stretch = (i: number, n: number, d: number) => clamp(Math.floor((i * n + Math.floor((d - 1) / 2)) / d), n);
+    column = (sx) => stretch(sx - bx0, w, bx1 - bx0);
+    row = (sy) => stretch(sy - by0, h, by1 - by0);
   }
 
   const W = x1 - x0;

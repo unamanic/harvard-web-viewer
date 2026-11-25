@@ -205,8 +205,9 @@ export interface GlyphsElement extends ShapeStyle {
 
 /**
  * A bitmap in a box. Without `tile` it is stretched to the box (no
- * aspect-ratio preservation); with `tile` it is drawn at a fixed pixel size,
- * repeated in both directions and clipped to the box.
+ * aspect-ratio preservation; on an imitated screen nearest-neighbour at
+ * screen pixels, src/render/screenImage.ts); with `tile` it is drawn at a
+ * fixed pixel size, repeated in both directions and clipped to the box.
  */
 export interface ImageElement {
   kind: "image";

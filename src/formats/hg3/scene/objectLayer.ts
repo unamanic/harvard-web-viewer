@@ -75,6 +75,8 @@ import {
   EMBEDDED_CHART_DRAWS_BACKGROUND,
   EMBEDDED_CHART_MAX_DEPTH,
   GLYPH_ADVANCE_PIXELS,
+  BITMAP_FIT_OFFSET,
+  BITMAP_FIT_TO_BOX,
   BITMAP_HOTSPOT_OFFSET,
   BITMAP_INK_SUBTAG,
   BITMAP_MONO_COLORS,
@@ -96,6 +98,7 @@ import {
   DOUBLE_BOX_STYLE,
   LINE_STYLE_DASHES,
   LINE_STYLE_SUBTAG,
+  LINE_WIDTH_MIN_PIXELS,
   LINE_WIDTH_SUBTAG,
   SHADE_SUBTAG,
   SHADOW_BOX_STYLE,
@@ -262,6 +265,16 @@ function lineWidthAttr(state: readonly Attribute[]): number {
 }
 
 /**
+ * A 0x1120 width as drawn: one of more than half a screen pixel but under
+ * LINE_WIDTH_MIN_PIXELS pixels is drawn LINE_WIDTH_MIN_PIXELS wide
+ * (assumptions.ts LINE_WIDTH_MIN_PIXELS); others unchanged.
+ */
+export function screenLineWidth(ctx: ChartSceneContext, width: number): number {
+  const px = ctx.page.screenPixel;
+  return width > px / 2 ? Math.max(width, LINE_WIDTH_MIN_PIXELS * px) : width;
+}
+
+/**
  * Dash and gap lengths (scene units) of the state's line style, or null for
  * a solid line (assumptions.ts LINE_STYLE_SUBTAG, LINE_STYLE_DASHES).
  */
@@ -327,7 +340,7 @@ export function paintFor(ctx: ChartSceneContext, shape: Shape, state: readonly A
     }
   }
   const stroke = line ? cssOf(ctx, line.lineColor, line.rgb) : null;
-  const strokeWidth = Math.max(lineWidthFor(line && !line.rgb ? line.lineStyle : undefined), lineWidthAttr(state));
+  const strokeWidth = Math.max(lineWidthFor(line && !line.rgb ? line.lineStyle : undefined), screenLineWidth(ctx, lineWidthAttr(state)));
   const closed = isClosedShape(shape) || isPieSlice(shape);
   if (!closed || OUTLINE_ONLY_SUBTAG_DIGITS.has(shape.subTag & 0xf)) return { fill: null, stroke, strokeWidth };
   let fillCss: string | null;
@@ -858,7 +871,9 @@ function attributeRgb(ctx: ChartSceneContext, raw: Uint8Array | undefined): Rgb 
  * bitmap at one bitmap pixel per screen pixel, the 0x1140 hot spot on the
  * centre of the 612 bounding box, repeated to fill the box and clipped to
  * it (ImageElement.tile with `screenPixels`, so that each display mode
- * draws it at its own pixel size). A monochrome bitmap is drawn in the
+ * draws it at its own pixel size); or, when 0x1140 byte 3 is 2
+ * (assumptions.ts BITMAP_FIT_TO_BOX), once, stretched to the box (an
+ * ImageElement without `tile`). A monochrome bitmap is drawn in the
  * object's colours (assumptions.ts BITMAP_MONO_COLORS): its black pixels
  * in the 0x110C colour, its white pixels in the 0x110B colour; a colour
  * that is "none" leaves those pixels transparent. The image carries its
@@ -897,8 +912,12 @@ function drawBitmap(b: Builder, obj: DrawnObject, parent: Readonly<Transform>): 
   } else {
     el.href = pcxToDataUrl(image);
   }
-  if (BITMAP_NATIVE_TILED) {
-    const hot = last(AttributeSubTag.Bitmap);
+  const hot = last(AttributeSubTag.Bitmap);
+  const fit = hot && hot.length > BITMAP_FIT_OFFSET ? hot[BITMAP_FIT_OFFSET]! : 0;
+  if (fit !== 0 && fit !== BITMAP_FIT_TO_BOX) {
+    b.ctx.warn(`bitmap ${name}: unknown 0x1140 fit mode ${fit} (byte ${BITMAP_FIT_OFFSET}); drawn at its own size, tiled`);
+  }
+  if (BITMAP_NATIVE_TILED && fit !== BITMAP_FIT_TO_BOX) {
     const u16 = (o: number) => (hot && hot.length >= o + 2 ? hot[o]! | (hot[o + 1]! << 8) : 0);
     const px = b.ctx.page.screenPixel;
     el.tile = {

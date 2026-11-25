@@ -331,6 +331,21 @@ Add entries as `- finding (sample file checked, task number)`.
     still 19.8%; text 2–3 px off); EGA PLANET's colours; ROCKTOP's
     (255,255,211) shows 4/16 yellow on white where the fill rule gives 2/16.
     (Hercules and EGA reference renders)
+- Fitted bitmaps (samples/claude-vs-codex, real HG 3.05 screenshots,
+  shareable): 0x1140 byte 3 = 2 draws the bitmap once, stretched to its
+  box, not tiled (byte 3 = 0 in all four disk bitmap samples: native,
+  tiled). Nearest-neighbour at screen pixels, box pixel i → bitmap pixel
+  round(i·n/D), halves down; matches all 10 picture slides pixel for pixel
+  in the picture area (CVCP01–10: 11.8–18.2% → 0.8–2.3%, the rest is
+  text). The show stores bare chart names; the charts link their PCX by
+  full DOS path, resolved by base name.
+- Line widths: a 0x1120 width over half a screen pixel is drawn at least
+  2 px (CVC06). 1406 byte 12 ≈ 0x1120 width / 25.
+- Open: text in a dithered colour uses a dither aligned to each glyph,
+  not the screen (explains the partly yellow titles in GALD721/852 and
+  CVC01/07); small-size glyph advances are 1–4% wider than HG's
+  (CVC02/05/09); CVC07's table text looks bold with the same font key as
+  thin text.
 
 ### Samples
 

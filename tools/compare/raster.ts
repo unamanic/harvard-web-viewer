@@ -3,7 +3,7 @@
 // centres (like the original's aliased drawing), fills with the nonzero rule,
 // strokes as unions of segment quads plus round joins/caps (min 1 px wide),
 // honours Scene.patterns ("pattern:<id>"), glyph halos, groups/transforms and
-// 32-bit BMP data-URL images (stretched, or tiled per ImageElement.tile). Text elements without glyph paths (fallback
+// 32-bit BMP data-URL images (stretched nearest-neighbour as HG fits a bitmap to its box, or tiled per ImageElement.tile). Text elements without glyph paths (fallback
 // fonts) are drawn as a filled box of 0.5 em height over an estimated width
 // (counted in stats.textBoxes) since we have no font rasteriser.
 import {
@@ -427,15 +427,29 @@ export function rasterizeScene(scene: Scene, W = 640, H = 480, opts: { stretch?:
         cv.setSource(4, "image");
         const t = el.tile;
         const mod = (a: number, n: number) => ((a % n) + n) % n;
+        // Stretched and axis-aligned: the box's D device pixels (centres inside it) show the image's n pixels,
+        // box pixel i the image pixel round(i * n / D), halves down (src/render/screenImage.ts, as HG draws
+        // a bitmap fitted to its box); 1:1 for an image already at device pixels.
+        const axis = !t && Math.abs(m[1]) < 1e-9 && Math.abs(m[2]) < 1e-9;
+        const xs = poly.map((q) => q[0]), ys = poly.map((q) => q[1]);
+        const bx0 = Math.ceil(Math.min(...xs) - 0.5), bx1 = Math.ceil(Math.max(...xs) - 0.5);
+        const by0 = Math.ceil(Math.min(...ys) - 0.5), by1 = Math.ceil(Math.max(...ys) - 0.5);
+        const clamp = (v: number, n: number) => Math.max(0, Math.min(n - 1, v));
+        const stretch = (i: number, n: number, d: number) => clamp(Math.floor((i * n + Math.floor((d - 1) / 2)) / Math.max(1, d)), n);
+        const flipX = m[0] < 0, flipY = m[3] < 0;
         cv.fill([poly], (x, y) => {
           const [lx, ly] = apply(inv, x + 0.5, y + 0.5);
           // Tiled (ImageElement.tile, as drawn without a screen imitation): image pixel size in element units, hot spot on the anchor.
           const ix = t
             ? mod(Math.floor((lx - (t.anchorX - t.hotX * t.pixelWidth)) / t.pixelWidth), img.w)
-            : Math.min(img.w - 1, Math.max(0, Math.floor(((lx - box.x) / box.width) * img.w)));
+            : axis
+              ? stretch(flipX ? bx1 - 1 - x : x - bx0, img.w, bx1 - bx0)
+              : Math.min(img.w - 1, Math.max(0, Math.floor(((lx - box.x) / box.width) * img.w)));
           const iy = t
             ? mod(Math.floor((ly - (t.anchorY - t.hotY * t.pixelHeight)) / t.pixelHeight), img.h)
-            : Math.min(img.h - 1, Math.max(0, Math.floor(((ly - box.y) / box.height) * img.h)));
+            : axis
+              ? stretch(flipY ? by1 - 1 - y : y - by0, img.h, by1 - by0)
+              : Math.min(img.h - 1, Math.max(0, Math.floor(((ly - box.y) / box.height) * img.h)));
           const o = (iy * img.w + ix) * 4;
           if (img.rgba[o + 3] < 128) return null;
           px[0] = img.rgba[o]; px[1] = img.rgba[o + 1]; px[2] = img.rgba[o + 2];

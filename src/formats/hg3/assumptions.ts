@@ -110,6 +110,21 @@ export const LINE_WIDTH_FACTORS: ReadonlyMap<number, number> = new Map([
 export const LINE_WIDTH_SUBTAG = 0x1120;
 
 /**
+ * A 0x1120 width of more than half a screen pixel is drawn at least this
+ * many screen pixels wide [I, from the screenshots of samples/claude-vs-codex]:
+ * CVC06's three line series store 51 units (0.97 px at 52.75 units per
+ * pixel; 1406 byte 12 = 2, the 0x1120 width ≈ 25 × byte 12 as in GALD411's
+ * 15 → 369) and are 2 px thick on screen (white series: 2 px in 291 of 300
+ * columns; cyan: 2 px in 235, 3 in 15), where a 51-unit band covers 1 px.
+ * The 25-unit table-cell boxes (0.49 px) stay thin; no disk sample has a
+ * width between 26 and 73 units. Wider lines are unchanged: adding one
+ * pixel to every width over half a pixel helped the 369-unit lines (GALD411,
+ * GALD414, GALD944: −0.02 to −0.05 points) but hurt GALA1 (294) and
+ * REDLEFT (74, 246), so the rule for them is not known.
+ */
+export const LINE_WIDTH_MIN_PIXELS = 2;
+
+/**
  * 0x10A0/0x10A1 data line curves (SPEC §5.6: u16 n, n points, 6 bytes)
  * [I, from the HG 3.05 reference renders]:
  *
@@ -1002,11 +1017,37 @@ export const BITMAP_PAPER_SUBTAG = 0x110b;
  * Hercules, where our page-to-pixel mapping is itself 1–2 px off).
  * The hot spot is about half the bitmap size (LOGOBKG1 60, 16 of 121 × 33;
  * ROCKTOP 320, 16 of 640 × 32) but FLOOR's 78 is not 153 / 2: it is read,
- * not derived. Bytes 0–3 of the 8-byte 0x1140 are 0 in every sample.
+ * not derived. Bytes 0–2 of the 8-byte 0x1140 are 0 in every sample; byte
+ * 3 is the fit mode (BITMAP_FIT_OFFSET): 0 in the disk samples (this
+ * rule), 2 in samples/claude-vs-codex (BITMAP_FIT_TO_BOX).
  * With BITMAP_NATIVE_TILED false, bitmaps are stretched to the box.
  */
 export const BITMAP_NATIVE_TILED = true;
 export const BITMAP_HOTSPOT_OFFSET = 4;
+
+/**
+ * 0x1140 byte 3 (BITMAP_FIT_OFFSET) = 2 (BITMAP_FIT_TO_BOX): the bitmap is
+ * drawn ONCE, stretched to the object's 612 box (both axes independently),
+ * not tiled at its own pixel size [I, from the screenshots of
+ * samples/claude-vs-codex, real HG 3.05, VGA ScreenShow]. Each screen pixel
+ * whose centre is inside the box shows the bitmap pixel under that centre
+ * (nearest neighbour: column floor((sx + 0.5 − left) / boxWidth × width),
+ * all in screen pixels; rows the same), in the colour that pixel's colour
+ * shows as in a fill there (screenImage.ts). The hot spot (here 265, 145 =
+ * half of 530 × 290) is not used. Evidence: CVCP01–10, each a 530 × 290
+ * 16-colour PCX in a ±14894 × ±11170 box (identity transform) on a Letter
+ * page (screen pixel 52.75 units, so the box is 564.7 × 423.5 px from
+ * (37.65, 28.25)); the picture's non-black extent on all 10 screenshots
+ * scales by 1.064 × 1.46 = 564.7 / 530 × 423.5 / 290 and lands where the
+ * box mapping puts it (CVCP01's PCX columns 123–405 on screen 169–469,
+ * rows 52–236 on 104–373). HG made that box at import ("fits the bitmap to
+ * the page width and keeps EGA pixel aspect": 22340 / 290 ÷ 29788 / 530 =
+ * 1.371 = 480 / 350); whether a resized box keeps that aspect (fit) or
+ * not (stretch) is not shown by any sample: stretch is assumed. Other
+ * byte-3 values are unknown (warned, drawn tiled).
+ */
+export const BITMAP_FIT_OFFSET = 3;
+export const BITMAP_FIT_TO_BOX = 2;
 
 /**
  * Box style 5 (SHADOW_BOX_STYLE) is drawn as a box extruded c right and c
