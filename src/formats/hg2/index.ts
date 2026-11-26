@@ -5,13 +5,17 @@
  * Detection is by signature ("PCOK" for 1.0, "Falc" for 2.x); the .CHT
  * extension is weak evidence only. Each chart becomes one scene, laid out
  * by the viewer from the chart's data and options (the files hold no
- * drawing). 2.x slide shows (.SHW) and the other 2.x files are not read.
+ * drawing). 1.0 and 2.x slide shows (.SHW, signatures "show" and "SHOW")
+ * become presentations that find their charts beside them (show.ts,
+ * presentation.ts).
  */
 import type { Confidence, Document, FormatParser, ParseContext } from "../types";
 import { UnsupportedFormatError } from "../types";
 import { kindLabel } from "./model";
 import { NotClassicChartError, isClassicChart, readClassicChart } from "./read";
+import { classicShowToPresentation } from "./presentation";
 import { chartToScene } from "./scene";
+import { isClassicShow, readClassicShow } from "./show";
 
 const EXTENSION_ONLY_CONFIDENCE = 0.2;
 
@@ -20,12 +24,26 @@ export const hg2Parser: FormatParser = {
   name: "Harvard Graphics 1.x/2.x",
 
   detect(bytes: Uint8Array, filename: string): Confidence {
-    if (isClassicChart(bytes)) return 1;
+    if (isClassicChart(bytes) || isClassicShow(bytes)) return 1;
     return filename.toLowerCase().endsWith(".cht") ? EXTENSION_ONLY_CONFIDENCE : 0;
   },
 
   parse(bytes: Uint8Array, filename: string, context?: ParseContext): Document {
     const warnings: string[] = [];
+    if (isClassicShow(bytes)) {
+      const show = readClassicShow(bytes, warnings);
+      // Opened on its own: no other files can be found, so every slide is missing.
+      const ctx: ParseContext = context ?? { path: filename, resolve: () => null };
+      const presentation = classicShowToPresentation(show, ctx, warnings);
+      const count = show.slides.length;
+      const description = show.description ? `: ${show.description}` : "";
+      return {
+        formatName: `Harvard Graphics ${show.version} slide show (${count} slide${count === 1 ? "" : "s"})${description}`,
+        scenes: [],
+        warnings: [...new Set(warnings)],
+        presentation,
+      };
+    }
     let chart;
     try {
       chart = readClassicChart(bytes, warnings);

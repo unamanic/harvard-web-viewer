@@ -10,3 +10,4 @@ Charts saved by the real programs, one setting changed at a time, used to write
 - `v212/`: 2.12 resaves (`W*` = the same with 2.12).
 
 Clean room: built only from saved files and the programs' screens; no program code was read.
+- `shows/`: slide shows saved by 2.30 in DOSBox-X, one change per file: `S1` base (HWV01-03), `S2MOVE` a slide moved, `S3DELADD` one deleted and one added, `S4TIME` times, `S5DEF` the Default row, `S6FX` effects and directions, `S7HYPER` HyperShow keys, `S8MOVEHYP` a move after keys were set. The charts they name are not included; `src/formats/hg2/show.test.ts` stands other test charts in for them.

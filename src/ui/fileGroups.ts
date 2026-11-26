@@ -23,15 +23,16 @@ function signatureOf(bytes: Uint8Array | undefined): string {
 
 /**
  * What kind of file this is for the list: the HG3 signature decides when
- * present (HGB1 show, HGB3 chart), as are the 1.x/2.x chart signatures
- * (PCOK, Falc); else the extension (.SH3, .CH3, .CHT).
+ * present (HGB1 show, HGB3 chart), as are the 1.x/2.x signatures
+ * (show/SHOW shows, PCOK/Falc charts); else the extension (.SH3, .SHW,
+ * .CH3, .CHT).
  */
 export function fileGroupKind(name: string, bytes?: Uint8Array): FileGroupKind {
   const signature = signatureOf(bytes);
-  if (signature === "HGB1") return "show";
+  if (signature === "HGB1" || signature === "SHOW" || signature === "show") return "show";
   if (signature === "HGB3" || signature === "PCOK" || signature === "Falc") return "chart";
   const ext = name.slice(name.lastIndexOf(".") + 1).toLowerCase();
-  if (ext === "sh3") return "show";
+  if (ext === "sh3" || ext === "shw") return "show";
   if (ext === "ch3" || ext === "cht") return "chart";
   return "other";
 }
