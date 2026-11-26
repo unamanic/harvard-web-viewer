@@ -19,19 +19,11 @@ import { buildChartScene, notYetDrawn } from "../buildChartScene";
 import { createChartSceneContext } from "../context";
 import { shadeCss } from "../objectLayer";
 import { lineBoxHeight } from "./text";
-import {
-  autoScale,
-  drawXYChart,
-  logScale,
-  niceStep,
-  seriesGroups,
-  splinePoints,
-  tickLabel,
-  tickValues,
-  xyOptions,
-  XY_TABLE_GAP,
-  xyTextWidth,
-} from "./xy";
+import { drawXYChart } from "./xy";
+import { XY_TABLE_GAP, xyTextWidth } from "./xyLayout";
+import { xyOptions } from "./xyOptions";
+import { autoScale, logScale, niceStep, tickLabel, tickValues } from "./xyScale";
+import { seriesGroups, splinePoints } from "./xySeries";
 
 const role = (r: number): string => rgbToCss(colorForRole(DEFAULT_PALETTE, r)!);
 const area = (tag: number, x1: number, y1: number, x2: number, y2: number) => leaf(tag, concat(i16(x1), i16(y1), i16(x2), i16(y2), u16(0)));

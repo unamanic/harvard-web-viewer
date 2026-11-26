@@ -10,6 +10,7 @@ import { DEFAULT_PALETTE, ROLE, colorForRole, rgbToCss } from "../../palette";
 import { type RecordSpec, concat, f32, f64, f64NotSet, i16, leaf, padded, u16, u8 } from "../../testing/bytes";
 import { createChartSceneContext } from "../context";
 import { drawnAdvance } from "./text";
+import { drawXYChart, withCumulative } from "./xy";
 import {
   XY_DOT_LENGTH,
   XY_DOT_PITCH,
@@ -19,11 +20,9 @@ import {
   XY_TABLE_ONLY_BOTTOM,
   XY_TABLE_PAD_EM,
   XY_TICK_OUT_SHIFT,
-  drawXYChart,
-  withCumulative,
-  xyOptions,
   xyTextWidth,
-} from "./xy";
+} from "./xyLayout";
+import { xyOptions } from "./xyOptions";
 import { formatXyNumber } from "./xyFormat";
 
 const role = (r: number): string => rgbToCss(colorForRole(DEFAULT_PALETTE, r)!);
