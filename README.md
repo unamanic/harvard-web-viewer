@@ -90,7 +90,65 @@ The file formats are documented in [docs/SPEC.md](docs/SPEC.md). The spec was wr
 | `tools/` | Comparison with the reference renders (`compare/`) and the layout-from-data check (`copycheck/`) |
 | `docs/` | Format specs, verified findings, the implementation plan and the code quality review |
 
-Dependencies run one way: `model` is used by everything; `formats` and `fonts` build scenes; `render`, `player` and `video` draw them; `files` and `ui` drive loading; `components` and `App.tsx` sit on top.
+### Architecture
+
+A file goes through the viewer in one direction: its bytes are read by a format's parser into a `Document` of `Scene`s (the shared model), and the scenes are drawn by the renderer, played by the show player or encoded by the video export. Parsers know nothing about React or drawing; the drawing side knows nothing about file formats.
+
+```mermaid
+flowchart TB
+  App["App.tsx"]
+
+  subgraph viewer["Viewer (React)"]
+    components["components/<br/>React views"]
+    ui["ui/<br/>settings, loading rules,<br/>hooks, export helpers"]
+  end
+
+  subgraph drawing["Drawing"]
+    render["render/<br/>SVG renderer,<br/>display modes"]
+    player["player/<br/>show state, transitions,<br/>sound"]
+    video["video/<br/>video export"]
+  end
+
+  subgraph reading["Reading files"]
+    files["files/<br/>file set, ZIP archives,<br/>loading"]
+    registry["formats/<br/>parser registry, byte reader,<br/>character sets"]
+    hg3["formats/hg3/<br/>Harvard Graphics 3"]
+    hg2["formats/hg2/<br/>Harvard Graphics 1.0 and 2.x"]
+    fonts["fonts/<br/>glyphs, clone fonts"]
+    decoders["formats/speedo/, formats/pcx/<br/>Speedo fonts, PCX bitmaps"]
+  end
+
+  model[("model/<br/>Scene, Presentation, Document")]
+
+  App --> components
+  App --> ui
+  components --> ui
+  components --> render
+  components --> player
+  components --> video
+  ui --> files
+  ui --> render
+  ui --> player
+  ui --> video
+  ui -. "About this file,<br/>record tree" .-> hg3
+  video --> player
+  video --> render
+  render --> decoders
+  files --> registry
+  registry --> hg3
+  registry --> hg2
+  hg3 --> fonts
+  hg2 --> fonts
+  hg3 --> decoders
+  hg2 --> decoders
+  fonts --> decoders
+
+  reading -- "produce" --> model
+  drawing -- "draw" --> model
+  viewer --> model
+```
+
+Dependencies run one way: `model` is used by everything; `formats` and `fonts` build scenes; `render`, `player` and `video` draw them; `files` and `ui` drive loading; `components` and `App.tsx` sit on top. Adding a format means adding a parser under `src/formats/` and listing it in `src/formats/registry.ts`; nothing on the drawing side changes.
 
 ## Development
 
