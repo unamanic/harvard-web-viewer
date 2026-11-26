@@ -54,7 +54,6 @@ import {
   PIE_COLUMN_HEIGHT,
   PIE_COLUMN_LABEL_GAP_EM,
   PIE_COLUMN_WIDTH,
-  PIE_EXPLODED_SCALE,
   PIE_EXPLODED_SCALE_3D,
   PIE_EXPLODE_DISTANCE,
   PIE_LABEL_LEADER,
@@ -62,7 +61,6 @@ import {
   PIE_LABEL_SIDE_GAP_EM,
   PIE_LABEL_STYLE_INDEX,
   PIE_LINE_STYLE,
-  PIE_RADIUS,
   PIE_START_DEGREES,
   lineWidthFor,
   textSizeToUnits,
@@ -77,6 +75,7 @@ import { areaToRect, toScene } from "../page";
 import { DEFAULT_PERCENTS, DEFAULT_VALUES, type LabelOptions, outsideLineCount, percentOf, sliceLabelTexts } from "./pieLabels";
 import { drawPieLegend } from "./pieLegend";
 import { type Box, type StyledText, boxOf, drawStack, lineBoxHeight, pageBox, stackRows, textWidth } from "./text";
+import { type FillLook, FillStyle, fillLook } from "./fillStyle";
 import { styled } from "./textCharts";
 
 /** Font key used when no style entry gives one (the resolver's default face). */
@@ -93,28 +92,24 @@ export const PIE_STYLE_COLUMN = PieShowAs.Column;
 // Constants from the HG 3.05 test charts (samples/option-tests/pie)
 // ---------------------------------------------------------------------------
 
-/** 816 page of every HG 3.05 test chart: paper size 1, Letter, 11 × 8.5 in (SPEC §5.2). The samples are all 10 × 7.5 in. */
-export const PIE_LETTER_PAPER = 1;
-export const PIE_LETTER_INCHES = [11, 8.5] as const;
-
 /**
- * Flat pie radius on a Letter page (every 3.05 test chart),
- * as a fraction of min(h, column) by the number of lines of the label block
- * outside the pie [I]: 2 lines 0.34 (PBASE 7191 of 21153, PLEGL2 6353 of
- * 18688, PPCT, PPCTPI), 1 line 0.40 (PNOLAB, PVALNO, PVALADJ, PVALIN: 8460
- * of 21153). No label at all is not tested; it uses the 1-line value [?].
+ * Flat pie radius as Harvard Graphics 3.05 lays a pie out, on every page
+ * size (SPEC §5.5, "Pie size"), as a fraction of min(h, column) by the
+ * number of lines of the label block outside the pie [I]: 2 lines 0.34
+ * (PBASE 7191 of 21153, PLEGL2 6353 of 18688, PPCT, PPCTPI; PMBASE on
+ * 10 × 7.5 in), 1 line 0.40 (PNOLAB, PVALNO, PVALADJ, PVALIN: 8460 of 21153;
+ * PMVADJ). No label at all is not tested; it uses the 1-line value [?].
  */
-export const PIE_LETTER_RADIUS_2_LINES = 0.34;
-export const PIE_LETTER_RADIUS_1_LINE = 0.4;
+export const PIE_305_RADIUS_2_LINES = 0.34;
+export const PIE_305_RADIUS_1_LINE = 0.4;
 /**
- * 3-D on a Letter page: rx = 0.44 h with 2-line labels (P3DSE2: 9306 of
- * 21153; the samples' width limit 0.28 × column would give 9032) [I]; other
- * line counts scale it like the flat radius, and the width limit is the
- * samples' scaled by 0.44 / 0.42 [?].
+ * 3-D: rx = 0.44 h with 2-line labels (P3DSE2: 9306 of 21153; PM3D on
+ * 10 × 7.5 in) [I]; other line counts scale it like the flat radius, and
+ * the width limit is the samples' 0.28 × column scaled by 0.44 / 0.42 [?].
  */
-export const PIE_LETTER_3D_RADIUS = 0.44;
-/** A cut slice shrinks a flat pie on a Letter page to 0.7 (PCUT2: 5034 = 0.7 × 7191) [C, one test]. */
-export const PIE_LETTER_EXPLODED_SCALE = 0.7;
+export const PIE_305_3D_RADIUS = 0.44;
+/** A cut slice shrinks a flat pie to 0.7 (PCUT2: 5034 = 0.7 × 7191; PMCUT) [C]. */
+export const PIE_305_EXPLODED_SCALE = 0.7;
 
 /** Items placed Inside are centred at 2/3 of the radius along the slice middle (PVALIN 5639 of 8460, PPCTPI 4794 of 7191) [C]. */
 export const PIE_INSIDE_RADIUS = 2 / 3;
@@ -258,41 +253,21 @@ export interface PieSizing {
 }
 
 /**
- * Size fractions for a pie. The HG 3.05 test charts (all on a Letter page,
- * 816 paper size 1, 11 × 8.5 in) and the 10 samples (all 10 × 7.5 in, nine
- * of them paper size 14; 1312 percents shown, values hidden) disagree: 2-line labels give 0.34 h there and 0.32 h here,
- * 3-D 0.44 h and 0.42 h, and a cut slice shrinks a flat pie to 0.7 there and
- * 0.85 here. What tells them apart is not known [?]; the page size is used,
- * as the one stored difference that covers every chart of each set, and
- * only the Letter page (where the test charts give evidence) takes the
- * test-chart values [I].
+ * Size fractions for a pie: the 3.05 shares on every page size (SPEC §5.5,
+ * "Pie size" and "Older samples"). The 10 × 7.5 in gallery samples store
+ * smaller pies (0.32, 0.42, 0.85: assumptions.ts PIE_RADIUS and the rest)
+ * because an older build laid them out; 3.05 gives them these shares too
+ * when it lays them out again, and they draw from their stored copy anyway.
  */
-export function pieSizing(letterPage: boolean, labelLines: number): PieSizing {
-  if (!letterPage) {
-    return {
-      flat: PIE_RADIUS,
-      threeDOfHeight: PIE_3D_RADIUS_OF_HEIGHT,
-      threeDOfWidth: PIE_3D_RADIUS_OF_WIDTH,
-      exploded: PIE_EXPLODED_SCALE,
-      exploded3D: PIE_EXPLODED_SCALE_3D,
-    };
-  }
-  const flat = labelLines >= 2 ? PIE_LETTER_RADIUS_2_LINES : PIE_LETTER_RADIUS_1_LINE;
+export function pieSizing(labelLines: number): PieSizing {
+  const flat = labelLines >= 2 ? PIE_305_RADIUS_2_LINES : PIE_305_RADIUS_1_LINE;
   return {
     flat,
-    threeDOfHeight: PIE_LETTER_3D_RADIUS * (flat / PIE_LETTER_RADIUS_2_LINES),
-    threeDOfWidth: PIE_3D_RADIUS_OF_WIDTH * (PIE_LETTER_3D_RADIUS / PIE_3D_RADIUS_OF_HEIGHT),
-    exploded: PIE_LETTER_EXPLODED_SCALE,
+    threeDOfHeight: PIE_305_3D_RADIUS * (flat / PIE_305_RADIUS_2_LINES),
+    threeDOfWidth: PIE_3D_RADIUS_OF_WIDTH * (PIE_305_3D_RADIUS / PIE_3D_RADIUS_OF_HEIGHT),
+    exploded: PIE_305_EXPLODED_SCALE,
     exploded3D: PIE_EXPLODED_SCALE_3D,
   };
-}
-
-function isLetterPage(ctx: ChartSceneContext): boolean {
-  const p = ctx.chart.pageSetup;
-  if (!p || p.paperSize !== PIE_LETTER_PAPER) return false;
-  const [w, h] = PIE_LETTER_INCHES;
-  const near = (a: number, b: number) => Math.abs(a - b) < 0.01;
-  return (near(p.widthIn, w) && near(p.heightIn, h)) || (near(p.widthIn, h) && near(p.heightIn, w));
 }
 
 // ---------------------------------------------------------------------------
@@ -334,11 +309,10 @@ function layoutPies(ctx: ChartSceneContext, data: PieData, pies: Pie[]): PieLayo
   const slotWidth = (plot.right - plot.left) / n;
   const threeD = data.threeD === true;
   const maxTotal = Math.max(0, ...pies.map(pieTotal));
-  const letter = isLetterPage(ctx);
 
   const slots = pies.map((pie, i): PieSlot => {
     const left = plot.left + i * slotWidth;
-    const sizing = pieSizing(letter, outsideLineCount(labelOptions(pie)));
+    const sizing = pieSizing(outsideLineCount(labelOptions(pie)));
     let rx = threeD ? Math.min(sizing.threeDOfHeight * height, sizing.threeDOfWidth * slotWidth) : sizing.flat * Math.min(height, slotWidth);
     const size = pie.options?.size;
     if (size !== undefined && Number.isFinite(size) && size > 0) rx *= Math.sqrt(size / 100);
@@ -374,6 +348,8 @@ function layoutPies(ctx: ChartSceneContext, data: PieData, pies: Pie[]): PieLayo
 
 interface PieStyle {
   outline: string | null;
+  /** 1304 byte 4 (fillStyle.ts). */
+  fillStyle: number;
   strokeWidth: number;
   label: Omit<StyledText, "text">;
 }
@@ -404,9 +380,13 @@ function path(points: Point[], fill: string | null, stroke: string | null, strok
   return { kind: "path", points: points.map((p) => toScene(p.x, p.y)), closed, fill, stroke, strokeWidth };
 }
 
-function sliceFill(ctx: ChartSceneContext, s: PieSlice, shade = 1): string | null {
-  const fill = ctx.color(s.colorRole);
-  return fill && shade < 1 ? shadeCss(fill, shade) : fill;
+const lookArgs = (l: FillLook): [string | null, string | null] => [l.fill, l.outline];
+const bandLook = (l: FillLook): { fill: string | null; stroke: string | null } => ({ fill: l.fill, stroke: l.outline });
+
+/** Fill and outline of a slice face by the 1304 fill style and the slice's pattern (fillStyle.ts), shaded for 3-D faces. */
+function sliceLook(ctx: ChartSceneContext, s: PieSlice, style: PieStyle, shade = 1): FillLook {
+  const look = fillLook(style.fillStyle, s.pattern, ctx.color(s.colorRole), style.outline);
+  return look.fill && shade < 1 ? { ...look, fill: shadeCss(look.fill, shade) } : look;
 }
 
 /** Top (or flat) face of a slice as a closed path. */
@@ -414,7 +394,7 @@ function sliceTop(ctx: ChartSceneContext, p: PlacedSlice, g: PieGeometry, style:
   const tenths = (deg: number) => ({ tenths: Math.round(deg * 10), degrees: deg });
   const points = pieSlicePoints({ cx: p.cx, cy: p.cy, rx: g.rx, ry: g.ry, start: tenths(p.start), end: tenths(p.end) });
   if (points.length === 0) return null;
-  return path(points, sliceFill(ctx, p.slice), style.outline, style.strokeWidth);
+  return path(points, ...lookArgs(sliceLook(ctx, p.slice, style)), style.strokeWidth);
 }
 
 /**
@@ -453,7 +433,7 @@ function sides3D(ctx: ChartSceneContext, placed: PlacedSlice[], g: PieGeometry, 
     const wall = (a: number) => {
       const rim = { x: p.cx + g.rx * cos(a), y: p.cy + g.ry * sin(a) };
       const points = [{ x: p.cx, y: p.cy }, rim, { x: rim.x, y: rim.y - g.depth }, { x: p.cx, y: p.cy - g.depth }];
-      out.push(path(points, sliceFill(ctx, p.slice, wallShade(a)), style.outline, style.strokeWidth));
+      out.push(path(points, ...lookArgs(sliceLook(ctx, p.slice, style, wallShade(a))), style.strokeWidth));
     };
     // A start wall faces the viewer on the right half, an end wall on the left half.
     if (cos(p.start) > 1e-9) wall(p.start);
@@ -469,8 +449,7 @@ function sides3D(ctx: ChartSceneContext, placed: PlacedSlice[], g: PieGeometry, 
         startAngle: lo,
         endAngle: hi,
         depth: g.depth,
-        fill: sliceFill(ctx, p.slice, PIE_3D_BAND_SHADE),
-        stroke: style.outline,
+        ...bandLook(sliceLook(ctx, p.slice, style, PIE_3D_BAND_SHADE)),
         strokeWidth: style.strokeWidth,
       });
     }
@@ -601,13 +580,13 @@ function drawColumn(ctx: ChartSceneContext, data: PieData, slot: PieSlot, layout
   let y = y0;
   for (const s of slices) {
     const top = y + (s.value / total) * columnHeight;
-    out.push({ kind: "rect", ...areaToRect({ x1: x0, y1: y, x2: x1, y2: top }), fill: sliceFill(ctx, s), stroke: style.outline, strokeWidth: style.strokeWidth });
+    out.push({ kind: "rect", ...areaToRect({ x1: x0, y1: y, x2: x1, y2: top }), ...bandLook(sliceLook(ctx, s, style)), strokeWidth: style.strokeWidth });
     if (threeD) {
       const [, topShade, sideShade] = PIE_COLUMN_3D_SHADES;
       const lid = [{ x: x0, y: top }, { x: x1, y: top }, { x: x1 + dd, y: top + dd }, { x: x0 + dd, y: top + dd }];
       const wall = [{ x: x1, y: top }, { x: x1, y }, { x: x1 + dd, y: y + dd }, { x: x1 + dd, y: top + dd }];
-      out.push(path(lid, sliceFill(ctx, s, topShade), style.outline, style.strokeWidth));
-      out.push(path(wall, sliceFill(ctx, s, sideShade), style.outline, style.strokeWidth));
+      out.push(path(lid, ...lookArgs(sliceLook(ctx, s, style, topShade)), style.strokeWidth));
+      out.push(path(wall, ...lookArgs(sliceLook(ctx, s, style, sideShade)), style.strokeWidth));
     }
     const texts = sliceLabelTexts(s.label, s.value, s.value / total, options);
     const lines = [...texts.outside, ...(texts.inside ? [texts.inside] : [])];
@@ -660,7 +639,7 @@ export function drawPieChart(ctx: ChartSceneContext): SceneElement[] {
   const out: SceneElement[] = [];
   for (const slot of layout.slots) {
     const { pie, geometry: g } = slot;
-    const style: PieStyle = { outline, strokeWidth: lineWidthFor(PIE_LINE_STYLE), label: labelStyle(ctx, pie) };
+    const style: PieStyle = { outline, fillStyle: data.style?.fill ?? FillStyle.Color, strokeWidth: lineWidthFor(PIE_LINE_STYLE), label: labelStyle(ctx, pie) };
     if (isColumnPie(pie)) {
       out.push(...drawColumn(ctx, data, slot, layout, style));
     } else {

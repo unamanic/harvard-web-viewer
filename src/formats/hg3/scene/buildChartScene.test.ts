@@ -205,8 +205,9 @@ describe("buildChartScene: Letter pages (task 12b)", () => {
       const { context } = createChartSceneContext(chartOf(DocumentType.Pie, [setup]), undefined);
       return layoutEm(context, 10);
     };
-    expect(em(pageSetup(1))).toBeCloseTo(2457.6, 6);
-    expect(em(letter(1, 11, 8.5))).toBeCloseTo((0.1 * 32768 * 8.5) / 11, 6);
+    // 3.05 rounds the em down to a whole unit (SPEC §5.5, "Text metrics").
+    expect(em(pageSetup(1))).toBe(2457);
+    expect(em(letter(1, 11, 8.5))).toBe(Math.floor((0.1 * 32768 * 8.5) / 11));
   });
 });
 

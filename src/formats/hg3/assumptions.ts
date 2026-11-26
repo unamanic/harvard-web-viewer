@@ -427,6 +427,36 @@ export const DATA_TEXT_BOX_FACTOR = 1.285;
 export const DATA_TEXT_BOX_STEP = 100;
 
 /**
+ * Text metrics Harvard Graphics 3.05 uses when it lays a chart out (SPEC
+ * §5.5, "Layout rules measured in 3.05"; test charts in
+ * samples/option-tests/page-size): the em is size % of the page's short
+ * side rounded down [C]; the ascent is the em rounded up to a multiple of
+ * 100 and the line box (1.25 × em + 50) rounded up to a multiple of 100
+ * [I, fitted to every Swiss 721 test line from em 614 to 3038]. They hold
+ * on Letter and 10 × 7.5 in pages alike. The sample copies (DATA_TEXT_BOX_FACTOR,
+ * textAscent) were laid out by an older build and round differently, so
+ * these are used only for charts drawn from their data.
+ */
+export const LAYOUT_305_BOX_EMS = 1.25;
+export const LAYOUT_305_BOX_PAD = 50;
+export const LAYOUT_305_STEP = 100;
+
+/** 3.05 layout em (page units) of a text size: size % of the short side, rounded down [C]. */
+export function layoutEm305(size: number, pageShortSide: number): number {
+  return Math.floor(textSizeToUnits(size, pageShortSide) + 1e-6);
+}
+
+/** 3.05 line box height for an em: (1.25 × em + 50) rounded up to a multiple of 100 [I]. */
+export function lineBox305(em: number): number {
+  return Math.ceil((LAYOUT_305_BOX_EMS * em + LAYOUT_305_BOX_PAD) / LAYOUT_305_STEP - 1e-9) * LAYOUT_305_STEP;
+}
+
+/** 3.05 ascent (baseline below the box top) for an em: the em rounded up to a multiple of 100 [I]. */
+export function ascent305(em: number): number {
+  return Math.ceil(em / LAYOUT_305_STEP - 1e-9) * LAYOUT_305_STEP;
+}
+
+/**
  * Stacked rows overlap: each row's box starts DATA_ROW_OVERLAP of its OWN
  * height above the previous row's box bottom, i.e. top(next) = top(prev) −
  * height(prev) + 0.15 × height(next) [I]. Equal rows then step by 0.85 ×
@@ -563,7 +593,10 @@ export function pageShortSide(widthIn: number | undefined, heightIn: number | un
 //
 // Fallback layout (scene/data/pie.ts, scene/data/org.ts) for charts without
 // a drawn copy; fitted to the copies of the 10 sample pie charts
-// (GALD211-291, PIETUT) and the 7 org charts (GALD711-761, ORGTUT). Page
+// (GALD211-291, PIETUT) and the 7 org charts (GALD711-761, ORGTUT). The pie
+// sizes PIE_RADIUS, PIE_3D_RADIUS_OF_HEIGHT and PIE_EXPLODED_SCALE describe
+// those older-build copies only; the fallback now sizes pies by the 3.05
+// shares (scene/data/pie.ts pieSizing, SPEC §5.5). Page
 // units throughout; "h" is the plot height left over by the pie titles and
 // "column" the plot width divided by the number of pies.
 
@@ -713,9 +746,6 @@ export const XY_LEGEND_SWATCH = 0.7;
 export const XY_LEGEND_GAP = 0.2;
 export const XY_LEGEND_PITCH = 1.3;
 export const XY_LEGEND_SWATCH_DROP = 30 / 1100;
-/** Data table (1410 byte 0 = 2): left edge XY_TABLE_LEFT × row height right of the plot's; names padded by XY_TABLE_NAME_PAD × the widest name each side (GALD317, GALD367) [I]. */
-export const XY_TABLE_LEFT = 0.18;
-export const XY_TABLE_NAME_PAD = 0.1;
 /** 3-D areas: top faces (and the end faces) at 0x112A 63 % (GALD541) [I]. */
 export const XY_3D_TOP_SHADE = 0.63;
 /** 3-D pyramid face brightness (front, right, left), 0x112A 100, 63, 38 [I]. */

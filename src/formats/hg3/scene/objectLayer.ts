@@ -139,7 +139,7 @@ import { ROLE, rgbToCss } from "../palette";
 import { Justification } from "../text";
 import { gradientAttributeFill } from "./chartColors";
 import { type ChartSceneContext, createEmbeddedContext } from "./context";
-import { lineBoxHeight, stackTops } from "./data/text";
+import { legacyLineBoxHeight, stackTops } from "./data/text";
 import { areaToRect, toScene } from "./page";
 
 /** 404 kind of a bitmap reference (SPEC §5.6) and of an embedded chart. */
@@ -718,7 +718,7 @@ function lineLayouts(ctx: ChartSceneContext, lines: readonly TextLinePiece[]): {
   if (lines.length > 0 && stored.length === lines.length && stored.every((s) => s !== null)) {
     return stored.map((s) => ({ top: s!.top, size: s!.em, ascent: s!.ascent }));
   }
-  const tops = stackTops(lines.map((l) => lineBoxHeight(ctx, l.run.size)), 0);
+  const tops = stackTops(lines.map((l) => legacyLineBoxHeight(ctx, l.run.size)), 0);
   return lines.map((l, i) => {
     const size = textSizeToUnits(l.run.size, ctx.page.shortSide);
     return { top: tops[i]!, size, ascent: textAscent(size) };

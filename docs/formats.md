@@ -366,10 +366,25 @@ Add entries as `- finding (sample file checked, task number)`.
   10 × 7.5 in samples all come from the samples being laid out by an older
   build, not from page size; the bottom-up legend order follows Stack and
   100 % bar styles, not 1418 byte 1; fill style Pattern with pattern 0 and
-  the data table with swatches are given there too. The viewer does not
-  apply these yet: its fallback still uses the sample metrics and pie
-  shares on 10 × 7.5 in pages, the Letter shares only on Letter pages, and
-  the old legend-order rule. (option tests)
+  the data table with swatches are given there too. (option tests)
+- The fallback follows those 3.05 rules on every page size (task 3.05
+  layout): text em = size % of the short side rounded down, ascent the em
+  rounded up to 100, line box (1.25 × em + 50) rounded up to 100, which
+  puts title, label and table rows where 3.05 puts them (the sample-fitted
+  1.285 rule stays only for object-layer text without line entries); pie
+  shares 0.34 / 0.40 / 3-D 0.44 / cut 0.7 whatever the page; a column
+  legend (and the data table) lists the series bottom-up only for Stack and
+  100 % bars; a goal range draws its band only with both bounds set (it was
+  not drawn before); fill style Pattern draws pattern 0 as a solid white
+  shape with a white outline and Both as a solid shape in the slice or
+  series colour, while other pattern numbers leave the shape unfilled with
+  its outline, because the patterns themselves are not drawn yet [?]; the
+  data table with swatches starts at the plot's left edge, unfilled, with
+  the same gap above it as a table without swatches (its name padding is
+  fitted to XMLEGNO and comes out about 125 units wide on Letter). Pie
+  labels already put the value before the percent. Not covered yet: axis
+  frame styles X, Y and None (3 to 5), 2D styles Link and Horizontal, the
+  patterns, and record 1414. (3.05 layout)
 - Stored-copy drawing corrections (task 13d, fixed): each text line entry
   stores the copy's own line box and em, so lines are drawn there (79
   multi-line blocks: error 240 → 0 units); HELP1's 8/9 scale is its

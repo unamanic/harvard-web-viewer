@@ -10,8 +10,8 @@
  *   f32 at 2 bar width %, f32 at 6 overlap %, byte 10 area style (overlap,
  *   stacked, 100 %), byte 12 = 2 3-D, byte 13 = 4 horizontal, f32 at 15
  *   3-D bar depth % of a depth lane, f32 at 19 3-D depth % of the frame
- *   height; 1410 byte 0 = 2 a data table, byte 2 = 1 value labels; 1418
- *   byte 1 = 2 a vertical legend listed bottom-up.
+ *   height; 1410 byte 0 = 2 a data table, byte 2 = 1 value labels. A
+ *   column legend lists Stack and 100 % bars bottom-up (SPEC §5.5).
  * - 3.05 options (SPEC §5.4, checked against the drawn copies of the test
  *   charts in samples/option-tests/xy; rules marked at their constants):
  *   1402 scale type, factor, min/max, grid style, tick marks, increments,
@@ -53,8 +53,6 @@ import {
   XY_LINE_STYLE,
   XY_CURVE_STEPS,
   XY_CURVE_TENSION,
-  XY_TABLE_LEFT,
-  XY_TABLE_NAME_PAD,
   XY_TEXT_WIDTH_STEP,
   XY_HTITLE_GAP_EM,
   XY_TITLE_GAP,
@@ -69,7 +67,8 @@ import { Justification } from "../../text";
 import type { ChartSceneContext } from "../context";
 import { shadeCss } from "../objectLayer";
 import { toScene } from "../page";
-import { type Box, type StyledText, baselineBelow, boxOf, drawnAdvance, lineBoxHeight, pageBox, textElement } from "./text";
+import { fillLook } from "./fillStyle";
+import { type Box, type StyledText, baselineBelow, boxOf, drawnAdvance, layoutEm, lineBoxHeight, pageBox, textElement } from "./text";
 import { styled } from "./textCharts";
 import { type XyNumberFormat, formatXyNumber } from "./xyFormat";
 
@@ -97,6 +96,13 @@ export const XY_DOT_PITCH = 332.8 / 24576;
 export const XY_DOT_LENGTH = 0.309;
 /** Data table without swatches: name column padding each side, ems of the name size (266 = 0.3 × 886; XREV7, XDTONLY) [I]. */
 export const XY_TABLE_PAD_EM = 0.3;
+/**
+ * Data table with swatches: padding before and after the widest name (its drawn advance), ems of the
+ * name size; fitted to XMLEGNO (532 and 316 at em 860). XLEGNO (Letter) comes out 66 units right
+ * for the names and 125 for the frame, so the rule is not exact [I].
+ */
+export const XY_TABLE_SWATCH_PAD_EM = 0.62;
+export const XY_TABLE_SWATCH_PAD_AFTER_EM = 0.37;
 /** Data table without swatches: gap between the X labels and the table, share of H (XREV7: 475 of 21153) [C]. */
 export const XY_TABLE_GAP = 0.0225;
 /** Table only: the table fills the plot area down to this share of H above its bottom (XDTONLY: 1058 of 21153) [C]. */
@@ -146,11 +152,6 @@ export interface XyOptions {
   tableGrid: number;
   /** Values printed at the bars and points (1410 byte 2 = 1) [C]. */
   valueLabels: boolean;
-  /**
-   * 1418 byte 1 = 2 (Placement Outside, the default). Kept for the sample-fitted rule that a vertical
-   * legend and the data table list layered series bottom-up [?] (see listedBottomUp).
-   */
-  legendBottomUp: boolean;
   /** High/low style (1408 byte 11): 1 box, 2 band, 3 I bar [I]. */
   highLowStyle: number;
   /** 2D style 2 (1408 byte 13): bars cast a drop shadow (XS2DST) [I]. */
@@ -196,7 +197,6 @@ export function xyOptions(data: OptionRecords): XyOptions {
     tableOnly: t[0] === 3,
     tableGrid: t[1] ?? 1,
     valueLabels: t[2] === 1,
-    legendBottomUp: g[1] === 2,
     highLowStyle: o[11] ?? 1,
     shadow: o[13] === STYLE_2D_SHADOW,
     outlineRole: o[24] || ROLE.Outlines,
@@ -552,7 +552,7 @@ export function drawXYChart(ctx: ChartSceneContext): SceneElement[] {
   const y2Axis = axisOf(data, 2);
   const tableSeriesAll = series.filter((s) => s.dataTable);
   // The data table lists the series bottom-up when the legend would (see listedBottomUp) [I].
-  const tableSeries = listedBottomUp(opts, series) ? [...tableSeriesAll].reverse() : tableSeriesAll;
+  const tableSeries = listedBottomUp(opts) ? [...tableSeriesAll].reverse() : tableSeriesAll;
   // Without a legend the data table carries the series swatches (XLEGNO vs XREV7; every sample table) [C].
   const legendShown = opts.legendShow && !!ctx.chart.areas.legend;
   const swatches = !opts.legendShow;
@@ -637,7 +637,8 @@ export function drawXYChart(ctx: ChartSceneContext): SceneElement[] {
   // the Y2 labels, both centred (GALD871) [I].
   const t1 = titleOf(1);
   const t2 = titleOf(2);
-  const tableBottomGap = table && !table.swatches ? XY_TABLE_GAP : XY_FRAME_BOTTOM_MARGIN;
+  // 3.05 leaves the same gap above every table, swatches or not (XREV7, XMLEGNO, XLEGNO) [C].
+  const tableBottomGap = table ? XY_TABLE_GAP : XY_FRAME_BOTTOM_MARGIN;
   const outer: Box = opts.horizontal
     ? {
         left: plot.left + XY_FRAME_MARGIN * W + leftW,
@@ -783,6 +784,34 @@ function drawTicks(l: Layout, sc: AxisScale, a: XyAxis | undefined, x: number, i
   return out;
 }
 
+/**
+ * Goal ranges (1402 f64 at 45 and 53, colour role byte 61): with both the
+ * minimum and the maximum set, a box across the frame between the two
+ * values on its axis, filled and outlined in the goal colour role, drawn
+ * after the frame fill and before the grid lines and bars; with one bound
+ * only, nothing (SPEC §5.5, "Goal range": XGOALB, XGOALMN, XGOALMX) [C].
+ * Values outside the axis are clipped to the frame [I]. In 3-D the box is
+ * drawn on the back wall (z = depth) [?, not tested].
+ */
+function drawGoalRanges(l: Layout, z: number): SceneElement[] {
+  const out: SceneElement[] = [];
+  const goal = (a: XyAxis | undefined, sc: AxisScale | null) => {
+    if (!a || !sc) return;
+    const lo = a.goalMin;
+    const hi = a.goalMax;
+    if (lo === null || hi === null || !Number.isFinite(lo) || !Number.isFinite(hi)) return;
+    const clip = (f: number) => Math.min(1, Math.max(0, f));
+    const f0 = clip(valueAt(sc, Math.min(lo, hi)));
+    const f1 = clip(valueAt(sc, Math.max(lo, hi)));
+    if (!(f1 > f0)) return;
+    const colour = l.ctx.color(a.goalColorRole);
+    out.push(...rect(boxAt(l, 0, 1, f0, f1, z), colour, colour, l.thin));
+  };
+  goal(l.y1Axis, l.y1);
+  if (l.y2) goal(l.y2Axis, l.y2);
+  return out;
+}
+
 function drawFrame(l: Layout): SceneElement[] {
   const { ctx, outer, frame, depth: d, thin, y1, y2, opts } = l;
   const out: SceneElement[] = [];
@@ -800,6 +829,7 @@ function drawFrame(l: Layout): SceneElement[] {
     const { left: L, right: R, top: T, bottom: B } = frame;
     const half = opts.frameStyle === FRAME_HALF;
     out.push(...rect(frame, bkg, null, thin));
+    out.push(...drawGoalRanges(l, 0));
     // The category axis at the value 0 (or the axis minimum).
     const z = valueAt(y1, Math.min(Math.max(0, y1.min), y1.max));
     // Grid lines; a dotted line is not drawn under a frame edge (the copies leave out the top one unless
@@ -831,6 +861,7 @@ function drawFrame(l: Layout): SceneElement[] {
   out.push(...polygon([bL, bR, fR, fL], wall, wall, thin));
   out.push(...polygon([bL, fL, fT, bT], wall, wall, thin));
   out.push(...rect({ left: bL.x, bottom: bL.y, right: bTR.x, top: bTR.y }, wall, wall, thin));
+  out.push(...drawGoalRanges(l, d));
   out.push(...line([bT, bTR], stroke, thin));
   out.push(...line([fT, fL, bL, bT, fT], stroke, thin));
   out.push(...line([bTR, bR], stroke, thin));
@@ -950,17 +981,18 @@ function drawSeries(l: Layout, series: XySeries[]): SceneElement[] {
       // Highest first; behind the first one only the right end faces of the others show (GALD551) [I].
       [...g.series].reverse().forEach((s, i) => {
         const sc = scaleOf(s);
-        const fill = ctx.color(s.colorRole);
+        const look = fillLook(s.fillStyle, s.fillPattern, ctx.color(s.colorRole), outline);
+        const fill = look.fill;
         const hi = tops.get(s)!;
         const pts = [at(l, rowAt(l, 0), base), ...rows.map((r, j) => at(l, rowAt(l, r), valueAt(sc, hi[j]!))), at(l, rowAt(l, rows.length - 1), base)];
         if (depth > 0) {
           for (let j = i === 0 ? 1 : pts.length - 1; j < pts.length; j++) {
             const a = shift(pts[j - 1]!, z0);
             const b = shift(pts[j]!, z0);
-            out.push(...polygon([a, b, shift(b, dz), shift(a, dz), a], shade(fill, XY_3D_TOP_SHADE), outline, thin));
+            out.push(...polygon([a, b, shift(b, dz), shift(a, dz), a], shade(fill, XY_3D_TOP_SHADE), look.outline, thin));
           }
         }
-        out.push(...polygon(pts.map((q) => shift(q, z0)), fill, outline, thin));
+        out.push(...polygon(pts.map((q) => shift(q, z0)), fill, look.outline, thin));
       });
       out.push(...mark(1, z), ...mark(1, z));
       return;
@@ -1127,9 +1159,12 @@ function drawBars(l: Layout, bars: XySeries[], outline: string | null, z: number
   const overlapping = opts.barMode === "overlap" && !(depth > 0);
 
   const shape = (s: XySeries, t0: number, t1: number, f0: number, f1: number): SceneElement[] => {
-    const fill = ctx.color(s.colorRole);
+    // Fill style Pattern or Both (1406 bytes 7, 8): fillStyle.ts [C for pattern 0].
+    const look = fillLook(s.fillStyle, s.fillPattern, ctx.color(s.colorRole), outline);
+    const fill = look.fill;
+    const edge = look.outline;
     // On a numeric X axis a bar is a line at its X value (GALD371) [I].
-    if (l.xScale) return line([at(l, (t0 + t1) / 2, f0), at(l, (t0 + t1) / 2, f1)], fill, thin);
+    if (l.xScale) return line([at(l, (t0 + t1) / 2, f0), at(l, (t0 + t1) / 2, f1)], fill ?? edge, thin);
     const b = boxAt(l, t0, t1, f0, f1, depth > 0 ? zBar : 0);
     if (depth === 0) {
       // 2D style 2: a shadow box behind the bar, moved right by XY_SHADOW_OFFSET of its width and its far
@@ -1141,12 +1176,12 @@ function drawBars(l: Layout, bars: XySeries[], outline: string | null, z: number
         const sc = ctx.color(ROLE.Shadow);
         shadow.push(...rect(sb, sc, sc, thin));
       }
-      if (opts.barShape === "pyramid") return [...shadow, ...polygon([at(l, t0, f0), at(l, t1, f0), at(l, (t0 + t1) / 2, f1)], fill, outline, thin)];
-      return [...shadow, ...rect(b, fill, outline, thin)];
+      if (opts.barShape === "pyramid") return [...shadow, ...polygon([at(l, t0, f0), at(l, t1, f0), at(l, (t0 + t1) / 2, f1)], fill, edge, thin)];
+      return [...shadow, ...rect(b, fill, edge, thin)];
     }
     const first = !l.drewFirstBar;
     l.drewFirstBar = true;
-    return bar3d(b, barZ, opts.barShape, opts.horizontal, fill, outline, thin, first);
+    return bar3d(b, barZ, opts.barShape, opts.horizontal, fill, edge, thin, first);
   };
   // Values at the bar ends (1410 byte 2 = 1): centred XY_LABEL_GAP × FH above a bar, or 2 × that right of a
   // horizontal bar (GALD319, GALD813) [I].
@@ -1271,9 +1306,14 @@ function bar3d(
 // Data table
 // ---------------------------------------------------------------------------
 
-/** Legend and data table list the series bottom-up: 1418 byte 1 = 2 and the series are layered (stacked bars, areas) [I, see XyOptions.legendBottomUp]. */
-function listedBottomUp(opts: XyOptions, series: XySeries[]): boolean {
-  return opts.legendBottomUp && (opts.barMode === "stacked" || opts.barMode === "percent" || series.some(isArea));
+/**
+ * A column legend lists the series bottom-up when the bar style is Stack or
+ * 100 % and top-down otherwise, whatever the placement (SPEC §5.5, "Legend
+ * order": XSTK, XSTKIN, XPCT1, XOVL, XOVLIN, XSTEP) [C]; a row legend always
+ * runs left to right (XSTKL8). The data table follows the column legend [I].
+ */
+function listedBottomUp(opts: Pick<XyOptions, "barMode">): boolean {
+  return opts.barMode === "stacked" || opts.barMode === "percent";
 }
 
 interface TableLayout {
@@ -1293,11 +1333,11 @@ interface TableLayout {
 }
 
 /**
- * Data table geometry. With swatches (no legend; every sample table) [I]:
- * rows one label box high from XY_FRAME_BOTTOM_MARGIN × H above the plot
- * bottom; the name column (padding XY_TABLE_NAME_PAD × the widest name each
- * side, swatch, gap) starts XY_TABLE_LEFT × h right of the plot's left edge
- * and ends where the frame starts (GALD317, GALD367). Without swatches
+ * Data table geometry, as 3.05 lays it out. With swatches (no legend;
+ * XMLEGNO, XLEGNO) [C]: rows one label box high from XY_FRAME_BOTTOM_MARGIN × H
+ * above the plot bottom; the box starts at the plot's left edge, the names
+ * XY_TABLE_SWATCH_PAD_EM ems in, then XY_TABLE_SWATCH_PAD_AFTER_EM ems, the swatch and the
+ * swatch gap up to the frame [I for the padding]. Without swatches
  * (XREV7, XDTGRID) [C]: the box starts at the plot's left edge, the names
  * XY_TABLE_PAD_EM ems in, the frame the same padding after the widest name
  * (its drawn advance). Table only (XDTONLY) [C]: the table fills the plot
@@ -1309,11 +1349,14 @@ function tableLayout(ctx: ChartSceneContext, series: XySeries[], plot: Box, H: n
   const rows = series.length ? Math.max(...series.map((s) => s.index)) + 1 : 1;
   const bottom = plot.bottom + (only ? XY_TABLE_ONLY_BOTTOM : XY_FRAME_BOTTOM_MARGIN) * H;
   if (swatches && !only) {
-    const nameW = Math.max(0, ...names.map((n) => n.width));
-    const left = plot.left + XY_TABLE_LEFT * rowH;
-    const frameLeft = left + (1 + 2 * XY_TABLE_NAME_PAD) * nameW + (XY_LEGEND_SWATCH + XY_LEGEND_GAP) * rowH;
+    // 3.05 (SPEC §5.5, "Data table with swatches"): the box from the plot's left edge, the names
+    // XY_TABLE_SWATCH_PAD_EM ems in, then the swatch column (XMLEGNO, XLEGNO) [C for the box, I for the pad].
+    const nameW = Math.max(0, ...names.map((n) => drawnAdvance(ctx, n.text, n.style.fontKey, n.style.size)));
+    const em = Math.max(0, ...names.map((n) => layoutEm(ctx, n.style.size)));
+    const pad = XY_TABLE_SWATCH_PAD_EM * em;
+    const frameLeft = plot.left + pad + nameW + XY_TABLE_SWATCH_PAD_AFTER_EM * em + (XY_LEGEND_SWATCH + XY_LEGEND_GAP) * rowH;
     const height = rows * rowH;
-    return { left, top: bottom + height, bottom, rowH, pitch: height / Math.max(1, series.length), names, frameLeft, nameLeft: left + XY_TABLE_NAME_PAD * nameW, swatches };
+    return { left: plot.left, top: bottom + height, bottom, rowH, pitch: height / Math.max(1, series.length), names, frameLeft, nameLeft: plot.left + pad, swatches };
   }
   const nameW = Math.max(0, ...names.map((n) => drawnAdvance(ctx, n.text, n.style.fontKey, n.style.size)));
   const em = Math.max(0, ...names.map((n) => textSizeToUnits(n.style.size, ctx.page.shortSide)));
@@ -1338,8 +1381,8 @@ function tableBody(ctx: ChartSceneContext, opts: XyOptions, data: XyData, t: Tab
   const out: SceneElement[] = [];
   const thin = lineWidthFor(XY_LINE_STYLE);
   const stroke = ctx.color(opts.frameRole);
-  // The samples' tables (with swatches) are filled with FrameBkg [I]; the 3.05 tables without are not (XREV7) [C].
-  out.push(...rect({ left: t.left, right, top: t.top, bottom: t.bottom }, t.swatches ? ctx.color(ROLE.FrameBkg) : null, stroke, thin));
+  // 3.05 leaves the table box unfilled, swatches or not (XREV7, XMLEGNO) [C].
+  out.push(...rect({ left: t.left, right, top: t.top, bottom: t.bottom }, null, stroke, thin));
   const style = tableStyle(ctx, 14, ROLE.XLabel);
   const colW = (right - t.frameLeft) / Math.max(1, rows);
   const rowTop = (i: number) => t.top - i * t.pitch - (t.pitch - t.rowH) / 2;
@@ -1368,11 +1411,8 @@ function tableBody(ctx: ChartSceneContext, opts: XyOptions, data: XyData, t: Tab
   series.forEach((s, i) => {
     const top = rowTop(i);
     const n = t.names[i]!;
-    if (!t.swatches) {
-      out.push(...drawLabel(ctx, n, t.nameLeft, top));
-      return;
-    }
-    out.push(...drawCentred(ctx, n, t.nameLeft, top));
+    out.push(...drawLabel(ctx, n, t.nameLeft, top));
+    if (!t.swatches) return;
     const sw = XY_LEGEND_SWATCH * t.rowH;
     const sl = t.frameLeft - XY_LEGEND_GAP * t.rowH - sw;
     const st = top - (t.rowH - sw) / 2;
@@ -1410,10 +1450,12 @@ function swatchFor(ctx: ChartSceneContext, opts: XyOptions, s: XySeries, sb: Box
     ];
   }
   if (s.type === "bar" || s.type === "area" || isHighLow(s) || (opts.threeD && s.type === "line")) {
+    // Bar and area swatches take the series' fill style like its shapes (fillStyle.ts) [I].
+    const look = s.type === "bar" || s.type === "area" ? fillLook(s.fillStyle, s.fillPattern, fill, outline) : { fill, outline };
     if (s.type === "bar" && opts.barShape === "pyramid") {
-      return polygon([{ x: sb.left, y: sb.bottom }, { x: sb.right, y: sb.bottom }, { x: (sb.left + sb.right) / 2, y: sb.top }], fill, outline, thin);
+      return polygon([{ x: sb.left, y: sb.bottom }, { x: sb.right, y: sb.bottom }, { x: (sb.left + sb.right) / 2, y: sb.top }], look.fill, look.outline, thin);
     }
-    return rect(sb, fill, outline, thin);
+    return rect(sb, look.fill, look.outline, thin);
   }
   const parts: SceneElement[] = [];
   if (s.type === "line") parts.push(...line([{ x: sb.left, y: cy }, { x: sb.right, y: cy }], fill, thin), ...line([{ x: cx, y: cy }], fill, thin));
@@ -1468,7 +1510,7 @@ function drawLegend(ctx: ChartSceneContext, opts: XyOptions, series: XySeries[])
   }
   const left = box.left + (framed ? XY_LEGEND_MARGIN * h : 0);
   let top = (box.top + box.bottom) / 2 + height / 2;
-  const ordered = listedBottomUp(opts, series.filter((s) => s.show)) ? [...labels].reverse() : labels;
+  const ordered = listedBottomUp(opts) ? [...labels].reverse() : labels;
   for (const { s, l } of ordered) {
     if (s.show) {
       out.push(...swatch(s, left, top));
