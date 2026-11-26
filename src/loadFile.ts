@@ -30,7 +30,7 @@ export interface LoadedFile {
   document: Document | null;
   /** Set when the file was recognised but could not be decoded. */
   error: string | null;
-  /** The document's non-fatal warnings (empty if not decoded). */
+  /** Notes about the set (fileSet.notes), then the document's non-fatal warnings. */
   warnings: string[];
   /** Files this document named that are not in the set. */
   missing: MissingFile[];
@@ -47,7 +47,7 @@ export function openEntry(fileSet: FileSet, entry: FileEntry, options: LoadOptio
   const base = { path: entry.path, name: entry.name, bytes: entry.bytes, fileSet };
   const detection = detectFormat(entry.bytes, entry.name);
   if (!detection) {
-    return { ...base, formatName: null, document: null, error: null, warnings: [], missing: [] };
+    return { ...base, formatName: null, document: null, error: null, warnings: [...fileSet.notes], missing: [] };
   }
   const formatName = detection.parser.name;
   try {
@@ -57,7 +57,7 @@ export function openEntry(fileSet: FileSet, entry: FileEntry, options: LoadOptio
       formatName,
       document,
       error: null,
-      warnings: document.warnings,
+      warnings: [...fileSet.notes, ...document.warnings],
       missing: fileSet.missing(entry.path),
     };
   } catch (e) {
@@ -67,7 +67,7 @@ export function openEntry(fileSet: FileSet, entry: FileEntry, options: LoadOptio
       formatName,
       document: null,
       error,
-      warnings: [],
+      warnings: [...fileSet.notes],
       missing: fileSet.missing(entry.path),
     };
   }

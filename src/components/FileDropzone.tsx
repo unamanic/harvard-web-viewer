@@ -128,6 +128,7 @@ export const SUPPORTED_FILES: readonly { kind: string; extensions: string[] }[] 
   { kind: "palettes", extensions: [".PL3", ".PC3"] },
   { kind: "fonts", extensions: [".SPD", ".FN3"] },
   { kind: "bitmaps", extensions: [".PCX", ".PCC"] },
+  { kind: "archives", extensions: [".ZIP"] },
 ];
 
 /** "Supported files": a small in-app help panel in the header. */
@@ -151,7 +152,9 @@ export function SupportedFilesHelp() {
             fonts and <strong>.PCX</strong> / <strong>.PCC</strong> bitmaps are used by the charts that name them.
           </li>
         </ul>
-        <p className="muted">Open the whole folder a show lives in, so the files it names are found.</p>
+        <p className="muted">
+          Open the whole folder a show lives in, or a <strong>.ZIP</strong> of it, so the files it names are found.
+        </p>
       </div>
     </details>
   );
@@ -188,7 +191,8 @@ export function EmptyState({ onFiles, over = false, status }: { onFiles: OnFiles
         <p className="empty-privacy">
           Files are read inside this browser tab. Nothing is uploaded.
           <br />
-          Charts often use a palette, fonts or images stored in other files, so drop the whole folder if you have it.
+          Charts often use a palette, fonts or images stored in other files, so drop the whole folder (or a .zip of it) if
+          you have it.
         </p>
       </div>
       <div className={`dropzone${over ? " over" : ""}`}>

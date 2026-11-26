@@ -1,4 +1,4 @@
-import { FileSet } from "./FileSet";
+import { type OpenedFiles, openFiles } from "./openFiles";
 
 /** A browser File plus the relative path it had inside a dropped folder. */
 export interface PathedFile {
@@ -11,12 +11,15 @@ export function pathOf(file: File): string {
   return file.webkitRelativePath || file.name;
 }
 
-/** Read every file into memory and build a FileSet. Nothing leaves the machine. */
-export async function fileSetFromBrowser(files: readonly PathedFile[]): Promise<FileSet> {
+/**
+ * Read every file into memory and build a FileSet, unpacking ZIP archives
+ * (openFiles.ts). Nothing leaves the machine.
+ */
+export async function fileSetFromBrowser(files: readonly PathedFile[]): Promise<OpenedFiles> {
   const read = await Promise.all(
     files.map(async ({ file, path }) => ({ path, bytes: new Uint8Array(await file.arrayBuffer()) })),
   );
-  return new FileSet(read);
+  return openFiles(read);
 }
 
 function readAllEntries(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {

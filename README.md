@@ -9,9 +9,9 @@ Harvard Graphics was one of the leading charting and presentation programs of th
 ## How to use it
 
 1. **Open the viewer** at <https://unamanic.github.io/harvard-web-viewer/>. It runs entirely in your browser; there is nothing to install and no account.
-2. **Open your files.** Click **Open a file** (or **Choose files…** on the start page), drag files onto the page, or paste them with Ctrl+V. To open a whole folder, use **Choose a folder…** on the start page or the ▾ next to **Open a file** (**Open a folder…**), or drag the folder in.
+2. **Open your files.** Click **Open a file** (or **Choose files…** on the start page), drag files onto the page, or paste them with Ctrl+V. To open a whole folder, use **Choose a folder…** on the start page or the ▾ next to **Open a file** (**Open a folder…**), or drag the folder in. A `.zip` works too: open or drop one archive that holds a show or chart and the files it names, and the viewer unpacks it in the browser. If the archive holds several shows (or several charts and no show), it asks which one to open; the others stay in the file switcher.
    - Open the **whole folder** a chart or show came from when you can. Charts name their palette (`.PL3`), fonts (`.SPD`), bitmaps (`.PCX`) and other charts in separate files, and shows name their slides; the viewer finds them in the files you opened, whatever their case. Anything it can't find is listed under **About this file**, and **Add missing files…** lets you add it without starting over.
-   - Supported files: charts `.CH3` (and 1.x/2.x `.CHT`), shows `.SH3`, palettes `.PL3`/`.PC3`, fonts `.SPD`, bitmaps `.PCX`/`.PCC`, sounds `.WAV`.
+   - Supported files: charts `.CH3` (and 1.x/2.x `.CHT`), shows `.SH3`, palettes `.PL3`/`.PC3`, fonts `.SPD`, bitmaps `.PCX`/`.PCC`, sounds `.WAV`, and `.zip` archives of any of these.
 3. **Look and move around.**
    - The **Slides** column on the left lists the slides of a show (or the chart you opened); click one to jump to it. When you opened several files, a file switcher at the top of that column picks the chart or show to view.
    - In a show, use → / ← (or Enter, Space, Page Down / Page Up), the show's own keys (for example F1–F10 in the gallery shows) and its on-screen buttons. Slides with a display time move on by themselves; **Pause auto-advance** (or the Pause key) holds them.
@@ -42,7 +42,7 @@ Harvard Graphics was one of the leading charting and presentation programs of th
   - **Modern**: 24-bit colour, exactly as stored
 - **Greyscale palettes.** Redraw any chart with the program's MONOCHRB or MONOCHRW palette, as an original user could.
 - **Export** the current slide as PNG or SVG, or a whole show as a video (WebM, or MP4 where the browser can encode it). The video plays the show as if nobody pressed a key, with the show's transitions, timing and WAV sound, in the display mode you've chosen; slides that wait for a key are held for a time you set. It is made in your browser tab; browsers with WebCodecs encode faster than real time, others record in real time.
-- **Whole folders.** Drop a folder (or choose one) and the viewer finds the palettes, fonts, bitmaps (`.PCX`/`.PCC`), sounds and nested shows that a chart or show names, case-insensitively.
+- **Whole folders and ZIP archives.** Drop a folder (or choose one), or open a `.zip` of it, and the viewer finds the palettes, fonts, bitmaps (`.PCX`/`.PCC`), sounds and nested shows that a chart or show names, case-insensitively. Archives are unpacked in the browser (stored and deflated entries, ZIP64 included; encrypted entries are skipped with a note).
 - **Inspection tools.** A record tree, a hex inspector and a diagnostics panel that lists warnings, missing files and where each font came from.
 
 ## Not yet supported

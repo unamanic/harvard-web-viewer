@@ -53,6 +53,7 @@ viewer's own code has verified so far.
 | PCX bitmaps | §6.3 | Yes (task 8) | Yes: all 69 sample .PCX/.PCC decode with no warnings |
 | Speedo fonts (.SPD) | §2 | Reader (task 7b); draws chart text when loaded (task 7f) | Yes: all 15 sample fonts decode with no warnings |
 | FN3 stroke fonts | §7.2 item 8 | Not yet documented | No |
+| ZIP archives (not an HG format) | — | Unpacked in the browser (src/files/zip.ts): stored and deflated entries, ZIP64, CP437 or UTF-8 names; encrypted entries and other methods are skipped with a note. An archive's files join the set under its path, so references resolve inside it | Unit tests, and the claude-vs-codex show zipped by Info-ZIP and Python (streamed and ZIP64 too) opens with every chart and picture found |
 
 ### Verified findings
 
@@ -318,8 +319,8 @@ Add entries as `- finding (sample file checked, task number)`.
   only [I]: flat radius 0.34 × min(h, column) with two label lines and
   0.40 with one, 3-D rx 0.44 h, a cut slice shrinks the pie to 0.7. The
   10 × 7.5 in samples need 0.32, 0.42 and 0.85, so those stay for other
-  page sizes; the cause is not known. Legend [C for PLEG to PLEGL3]: the
-  box is area 810 in the 1306 byte 4 and 5 roles, one entry per slice of
+  page sizes (an older layout build; see below). Legend [C for PLEG to
+  PLEGL3]: the box is area 810 in the 1306 byte 4 and 5 roles, one entry per slice of
   the first pie (swatch and name), a column for locations 5 and 6, a row
   for 7 and 8. (pie option tests, task 16)
 - XY fallback from the 3.05 option records (task 17; test charts in
@@ -359,17 +360,16 @@ Add entries as `- finding (sample file checked, task number)`.
   and 0.15 × its height down in role Shadow (XS2DST); legend frame style
   1 draws no box with items flush left (XLEGOC). (XY option tests,
   task 17)
-- Open from the option tests: the 3.05 test charts are Letter pages
-  (11 × 8.5 in) and their text is larger than our metrics give there
-  (size 3.5 line box 1200, not 1100; digits 500 wide, not 550), while the
-  10 × 7.5 in samples fit the current metrics; the chart title is 100
-  units too high on every test chart. Fill style 2 with pattern 0 draws a
-  hollow bar with a white outline (XS6FS), not reproduced. A data table
-  with swatches is placed differently in XLEGNO (3.05) and the samples
-  (GALD317, GALD367); the sample rule is kept. The bottom-up legend
-  order still follows 1418 byte 1 = 2 with layered series, which fits
-  the samples, but byte 1 is Placement, so the real cause is open.
-  (option tests)
+- Answered by the later 3.05 test charts (SPEC §5.5, "Layout rules
+  measured in 3.05"): the larger text on the Letter test charts, the title
+  sitting 100 units high, and the pie shares 0.32/0.42/0.85 in the
+  10 × 7.5 in samples all come from the samples being laid out by an older
+  build, not from page size; the bottom-up legend order follows Stack and
+  100 % bar styles, not 1418 byte 1; fill style Pattern with pattern 0 and
+  the data table with swatches are given there too. The viewer does not
+  apply these yet: its fallback still uses the sample metrics and pie
+  shares on 10 × 7.5 in pages, the Letter shares only on Letter pages, and
+  the old legend-order rule. (option tests)
 - Stored-copy drawing corrections (task 13d, fixed): each text line entry
   stores the copy's own line box and em, so lines are drawn there (79
   multi-line blocks: error 240 → 0 units); HELP1's 8/9 scale is its

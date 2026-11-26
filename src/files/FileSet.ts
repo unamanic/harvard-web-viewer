@@ -46,7 +46,8 @@ function compareEntries(a: FileEntry, b: FileEntry): number {
 /**
  * Every file the user opened (several files or whole folders), so that
  * parsers can find the palettes, fonts and bitmaps a document names.
- * Pure TypeScript: build it from browser `File`s with `fileSetFromBrowser`.
+ * Pure TypeScript: build it from browser `File`s with `fileSetFromBrowser`
+ * (which also unpacks ZIP archives, see openFiles.ts).
  */
 export class FileSet {
   private readonly byPath = new Map<string, FileEntry>();
@@ -61,6 +62,13 @@ export class FileSet {
    */
   readonly lineage: object;
 
+  /**
+   * Things worth telling the user about the set as a whole, such as entries
+   * of an opened ZIP archive that could not be read. Shown with the
+   * warnings of whatever file is open; kept by `withFiles`.
+   */
+  readonly notes: string[] = [];
+
   constructor(entries: Iterable<{ path: string; bytes: Uint8Array }> = [], lineage: object = {}) {
     this.lineage = lineage;
     for (const e of entries) this.add(e.path, e.bytes);
@@ -73,6 +81,7 @@ export class FileSet {
    */
   withFiles(files: Iterable<{ path: string; bytes: Uint8Array }>): FileSet {
     const set = new FileSet(this.entries(), this.lineage);
+    set.notes.push(...this.notes);
     for (const f of files) set.add(f.path, f.bytes);
     return set;
   }
