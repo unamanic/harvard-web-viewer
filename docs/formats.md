@@ -19,7 +19,8 @@ reader and layout code is `src/formats/hg2/`, and the test charts are
 | 1.0 charts (`PCOK`, fixed 4716 bytes) | §2 | Read and laid out from data: text, bar/line, pie, org | All 50 1.0 test charts read and draw with no unexpected warnings |
 | 2.x charts (`Falc` records) | §3, §4 | Read and laid out from data: title, list, bullet, column, free form, bar/line, area, high/low/close, pie, org, multiple | All 201 2.x test charts read and draw; 2.10 and 2.12 resaves read the same as their 2.30 originals |
 | Annotations (1.0 trailer, 2.x tag 300) | §2.6, §3.1 | Not decoded; a warning says so | No test chart has any |
-| 2.x slide shows (`.SHW`), `HG.DIR` | §5 | No | No |
+| 1.0 and 2.x slide shows (`.SHW`) | §5 | Read and played: play order, times, default row, draw/erase effects (Weave and Rain drawn as Blinds and Fade), HyperShow keys, nested shows, PCX slides; a missing file shows as a note | The eight one-setting 2.30 test shows in `samples/hg1-hg2/shows/` (`src/formats/hg2/show.test.ts`); the 1.0 and 2.30 story shows play as 20 slides |
+| `HG.DIR` / `HPG.DIR` | §5 | No (not needed: charts carry their own class) | No |
 
 ### Verified findings
 

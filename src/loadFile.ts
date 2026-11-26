@@ -90,7 +90,7 @@ export async function loadEntry(fileSet: FileSet, entry: FileEntry, options: Loa
   return openEntry(fileSet, entry, options);
 }
 
-/** The entry to open first: first .SH3, else .CH3, else recognised, else first. */
+/** The entry to open first: first .SH3, else .SHW, else .CH3, else .CHT, else recognised, else first. */
 export function primaryEntry(fileSet: FileSet): FileEntry | null {
   return choosePrimary(fileSet.entries(), (e) => detectFormat(e.bytes, e.name) !== null);
 }

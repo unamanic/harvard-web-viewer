@@ -4,7 +4,7 @@ Nov 25, 2026 · @William Witt
 
 ## 1. Scope and method
 
-This spec covers chart files (.CHT) from four DOS releases: Harvard Presentation Graphics **A.00** (shown as "Version A 27 Feb 1986", called 1.0 here), Harvard Graphics **2.10**, **2.12** and **2.30** (2.301). Version 1.0 uses a fixed 4716-byte layout with the signature `PCOK`; all 2.x versions use a tagged record container with the signature `Falc`. Neither is the 3.05 format (`HGB3`), which has its own spec.
+This spec covers chart files (.CHT) and slide show files (.SHW, §5) from four DOS releases: Harvard Presentation Graphics **A.00** (shown as "Version A 27 Feb 1986", called 1.0 here), Harvard Graphics **2.10**, **2.12** and **2.30** (2.301). Version 1.0 uses a fixed 4716-byte layout with the signature `PCOK`; all 2.x versions use a tagged record container with the signature `Falc`. Neither is the 3.05 format (`HGB3`), which has its own spec.
 
 Method (clean room): every field here comes from files the programs saved and what their screens show. Each program was installed from William's disks and run in an emulator (DOSBox-X for 2.x; PCE with GLaBIOS and FreeDOS for 1.0, run from its original copy-protected floppy, protection untouched). For each option a base chart was saved, one setting changed, the chart saved again, and the two files diffed. No program code was disassembled or read. The 2.10 manual PDF was used as background for option names only.
 
@@ -321,13 +321,79 @@ Six tag 90 records, one per slot: u16 slot number (1 to 6), four u16 values that
 
 ## 5. Show and directory files
 
-No show or directory files were saved in tests; these come from the shipped samples only, so everything here is [I] unless marked.
+Shows were decoded from one-setting saves in 2.30 (`samples/hg1-hg2/shows/`, see its README), checked against the shipped samples of 1.0, 2.10, 2.12 and 2.30. Values marked [I] are inferred; the rest were confirmed by a test save.
 
 **Directory file (HPG.DIR in 1.0, HG.DIR in 2.x).** The program keeps one per data directory to list charts with their descriptions. 1024 bytes: `pdir`, a u8 1, then 60-byte entries from offset 5. Both versions use the same entry: [0] u8 flag (0, 3 or `S` seen), [1] u8 1, [2] u8 class, [3] u8 subtype, [4] u8 unknown, [5] 13-byte pstring 8.3 filename, [18] description pstring. Class and subtype match the chart's own header, which a viewer should prefer.
 
-**1.0 slide show (.SHW).** 5120 bytes: `show`, u16 2, u16 1, u16 slide count. Entries of 60 bytes start at 104: [0] 13-byte pstring filename, [13] u8 0x51, [14] u8 class, [15] u8 subtype, [16] description pstring.
+### 5.1 How a show keeps its charts together
 
-**2.x slide show (.SHW).** A different layout: `SHOW` (upper case), u16 5, u16 16, the show title pstring, then a slide table that starts with u16 indexes 1, 2, 3...; filename entries follow from about offset 236. Not decoded. [?]
+A show file holds no pictures. It names each slide's file (8.3 name only, no folder) and the program looks for it in the current data directory, so a show only works with its charts beside it. Both versions keep a **slot table** (one slot per file) and a separate **play order** that lists slot numbers. Moving a slide rewrites only the play order; deleting one frees its slot, and the next slide added takes the lowest free slot (S2MOVE, S3DELADD).
+
+When a chart is missing, 2.30 skips it without a message in the middle of a show, and shows "PROBLEM: Cannot find the file. Press any key" when it is the last slide, then returns to the menu.
+
+### 5.2 2.x layout (`SHOW`)
+
+2.10, 2.12 and 2.30 use the same layout (the 2.10 and 2.12 SAMPLE.SHW files read the same way). 8192 bytes, little-endian.
+
+| Offset | Size | Field |
+| --- | --- | --- |
+| 0 | 4 | `SHOW` |
+| 4 | u16 | Slide count |
+| 6 | u16 | Always 16 (unknown) |
+| 8 | 41 | Show description, pstring |
+| 49 | u8 | 0 |
+| 50 | u8 | Default time, minutes (ff with 51 = ff: none) |
+| 51 | u8 | Default time, seconds |
+| 52 | u8 | Default draw effect (sample shows: 1 when the row is blank [I]) |
+| 53 | u8 | Default draw direction |
+| 54 | u8 | Default erase effect |
+| 55 | u8 | Default erase direction |
+| 56 | u16 x 90 | Play order: 1-based slot numbers |
+| 236 | 88 x 90 | Slots: slot n at 236 + 88 x (n - 1) |
+
+Slot (88 bytes):
+
+| Offset | Size | Field |
+| --- | --- | --- |
+| 0 | 13 | File name, pstring, padded 8.3 (`HWV01   .CHT`) |
+| 13 | u8 | Leftover memory |
+| 14 | u8 | Class (as in the chart header): 0 file, 1 text, 2 graph, 3 org |
+| 15 | u8 | Subtype. For class 0: 0 template `.TPL`, 1 show `.SHW`, 2 chart not in the directory cache, 3 bitmap `.PCX` [I] |
+| 16 | 41 | Description, pstring (leftover memory after the text) |
+| 57 | u8 | Leftover memory |
+| 58 | 2 | 0 |
+| 60 | u8 | Time, minutes; 60 and 61 both ff = blank (use the default; wait for a key when that is blank too) |
+| 61 | u8 | Time, seconds (0:00 is stored 00 00) |
+| 62 | u8 | Draw effect (0 = blank: use the default) |
+| 63 | u8 | Draw direction (0 = blank) |
+| 64 | u8 | Erase effect (0 = blank) |
+| 65 | u8 | Erase direction |
+| 66 | 2 | 0 |
+| 68 | 10 | HyperShow keys for buttons 1 to 10, the character as typed (case kept; 0 = none) |
+| 78 | 10 | HyperShow "Go To" for buttons 1 to 10: a play position, 1-based. The program renumbers these when slides move (S8MOVEHYP) |
+
+**Effects** (draw and erase use one list, the F6 choices in order): 1 Replace, 2 Overlay, 3 Wipe, 4 Scroll, 5 Fade, 6 Weave, 7 Open, 8 Close, 9 Blinds, 10 Iris, 11 Rain. **Directions:** 1 Left, 2 Right, 3 Up, 4 Down, 5 In, 6 Out. There is no speed field.
+
+Times are minutes and seconds in two bytes (0:05 is `00 05`, 1:30 is `01 1e`). The Default row's time and effects apply to slides whose own field is blank [I: read from the screen, not tested in playback].
+
+A slot can name another show (`.SHW`, class 0/1), which plays in place, or a PCX bitmap (class 0/3); the 2.30 samples ANIMATOR.SHW and WPICK.SHW use both. WPICK.SHW's HyperShow menu binds keys 1 to 9 and H to Go To positions 3 to 12.
+
+### 5.3 1.0 layout (`show`)
+
+Decoded from the 1.0 sample (5120 bytes) and the 1.0 story show (23552 bytes, 20 slides); no one-setting tests, so [I] throughout.
+
+| Offset | Size | Field |
+| --- | --- | --- |
+| 0 | 4 | `show` (lower case) |
+| 4 | u16 | Slide count |
+| 6 | u16 x 49 | Play order; read as 1-based slot numbers like 2.x (both samples are in slot order, so this is untested) |
+| 104 | 60 x 49 | Slots: slot n at 104 + 60 x (n - 1) |
+
+Slot (60 bytes): [0] 13-byte pstring file name, [13] leftover byte (0x51 seen), [14] class, [15] subtype, [16] description pstring to 56, [57] leftover byte, [58] u16 that equals 2 x n + 4 for slot n, used or not, and 0 in the last slot (a chain of some kind [?]). There are no times, effects or keys: a 1.0 show waits for a key on every slide.
+
+### 5.4 How the viewer plays a show
+
+Slide 0 is a placeholder and slides 1 to n are the play positions, so HyperShow Go To numbers index the slides directly. Charts are found beside the show, case-insensitively, also inside a `.zip`. A missing file shows a note naming it (the program itself skips it). Weave and Rain have no equivalent in the viewer and are drawn as Blinds and Fade [I]. A letter key is matched in either case [I].
 
 ## 6. How 1.0 and 2.x compare with 3.05
 
@@ -353,7 +419,7 @@ One trap when porting values: 1.0 stores many yes/no options as 1/0, while 2.x s
 Open questions, most useful first for a viewer:
 
 1. **2.x annotations (tag 300)** and **1.0 annotation objects** beyond one polyline or polygon: text, arrows and several objects per chart need Draw/Annotate test pairs.
-2. **2.x slide shows**: layout not decoded; 1.0 shows only from one sample.
+2. **Shows**: 1.0 play order with slides out of slot order, the 1.0 slot word at 58, the 2.x u16 at 6, and whether the program applies the Default row in playback exactly as the viewer does.
 3. **X data types** other than Name (days, months, numbers) and tags 201 and 207 in 2.x, and the X type field at 1304 in 1.0.
 4. Unknown bytes: 1.0 graph options 4659 to 4663 and 4665 to 4667; 2.x tag 120 bytes 5 to 7, 24, 39 to 44, 46 to 54 (including where the Y2 scale lives); tags 10 and 15; org tail 18 to 21 and 44.
 5. 1.0 text byte 4598, and 1.0 subtypes 1, 3 and 4 (numbering assumed from 2.x and the directory file).

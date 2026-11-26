@@ -124,7 +124,7 @@ export function OpenButton({ onFiles }: { onFiles: OnFiles }) {
 /** What the viewer opens, by kind (the empty state and the help panel). */
 export const SUPPORTED_FILES: readonly { kind: string; extensions: string[] }[] = [
   { kind: "charts", extensions: [".CH3", ".CHT"] },
-  { kind: "shows", extensions: [".SH3"] },
+  { kind: "shows", extensions: [".SH3", ".SHW"] },
   { kind: "palettes", extensions: [".PL3", ".PC3"] },
   { kind: "fonts", extensions: [".SPD", ".FN3"] },
   { kind: "bitmaps", extensions: [".PCX", ".PCC"] },
@@ -147,8 +147,9 @@ export function SupportedFilesHelp() {
             keys and buttons, and <strong>.CH3</strong> charts are drawn on their own.
           </li>
           <li>
-            Harvard Presentation Graphics 1.0 and Harvard Graphics 2.10, 2.12 and 2.30: <strong>.CHT</strong> charts
-            are laid out from their data.
+            Harvard Presentation Graphics 1.0 and Harvard Graphics 2.10, 2.12 and 2.30: <strong>.SHW</strong> slide
+            shows play in order with their timing and effects, and <strong>.CHT</strong> charts are laid out from their
+            data.
           </li>
           <li>
             <strong>.PL3</strong> and <strong>.PC3</strong> palettes, <strong>.SPD</strong> and <strong>.FN3</strong>{" "}
@@ -185,8 +186,8 @@ export function EmptyState({ onFiles, over = false, status }: { onFiles: OnFiles
           here and see it again.
         </p>
         <p className="empty-versions">
-          Opens charts and shows from Harvard Graphics 3 (checked against 3.05), and charts from Harvard Presentation
-          Graphics 1.0 and Harvard Graphics 2.10, 2.12 and 2.30.
+          Opens charts and shows from Harvard Graphics 3 (checked against 3.05), Harvard Presentation Graphics 1.0 and
+          Harvard Graphics 2.10, 2.12 and 2.30.
         </p>
         <div className="empty-buttons">
           <FileInputButton onFiles={onFiles} className="button button-primary button-large">
