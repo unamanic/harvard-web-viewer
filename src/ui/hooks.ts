@@ -1,5 +1,5 @@
-/** Small React hooks shared by the presentation views and the slide strip. */
-import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
+/** Small React hooks shared by the views: presentation controls, the slide strip, menus and dialogs. */
+import { type KeyboardEvent as ReactKeyboardEvent, type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import { CONTROLS_HIDE_MS, type IdleTimer, createIdleTimer } from "./idleTimer";
 
 /**
@@ -111,4 +111,58 @@ export function useDismissableDetails(ref: RefObject<HTMLDetailsElement | null>)
       document.removeEventListener("keydown", onKey);
     };
   }, [ref]);
+}
+
+/** What a dialog's keyboard handling treats as focusable. */
+const DIALOG_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Keyboard and focus handling of a modal dialog (`ref`): its first control
+ * takes the focus when it opens, and the focus goes back when it closes
+ * (to `restoreFocus(before)` when given, else to what had it before);
+ * Escape calls `onEscape`, and Tab and Shift+Tab stay inside the dialog.
+ * Returns the dialog element's keydown handler.
+ */
+export function useDialogKeys(
+  ref: RefObject<HTMLElement | null>,
+  onEscape: () => void,
+  restoreFocus?: (before: HTMLElement | null) => HTMLElement | null | undefined,
+): (e: ReactKeyboardEvent<HTMLElement>) => void {
+  const restore = useRef(restoreFocus);
+  useEffect(() => {
+    const before = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    ref.current?.querySelector<HTMLElement>(DIALOG_FOCUSABLE)?.focus();
+    return () => {
+      const target = restore.current ? restore.current(before) : before;
+      target?.focus?.();
+    };
+    // Once per dialog.
+  }, []);
+  return (e) => {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      e.preventDefault();
+      onEscape();
+      return;
+    }
+    if (e.key !== "Tab" || !ref.current) return;
+    const items = Array.from(ref.current.querySelectorAll<HTMLElement>(DIALOG_FOCUSABLE)).filter(
+      (el) => el.offsetParent !== null || el === document.activeElement,
+    );
+    if (items.length === 0) return;
+    const first = items[0]!;
+    const last = items[items.length - 1]!;
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+}
+
+/** The first focusable control in `root` (a dialog), or null. */
+export function firstFocusable(root: HTMLElement | null): HTMLElement | null {
+  return root?.querySelector<HTMLElement>(DIALOG_FOCUSABLE) ?? null;
 }

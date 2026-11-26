@@ -4,17 +4,16 @@
  * picks one; the rest stay in the set, so the file switcher can open them
  * later.
  */
-import { type KeyboardEvent, useEffect, useId, useRef } from "react";
+import { useId, useRef } from "react";
 import type { FileEntry } from "../files/FileSet";
 import { fileKind } from "../files/fileKind";
+import { useDialogKeys } from "../ui/hooks";
 
 export interface DocumentPickerProps {
   choices: readonly FileEntry[];
   onPick: (entry: FileEntry) => void;
   onCancel: () => void;
 }
-
-const FOCUSABLE = "button:not([disabled])";
 
 /** Folder of a set path ("SALES.ZIP/Q1/SALES.SH3" → "SALES.ZIP/Q1"). */
 function folderOf(path: string): string {
@@ -36,32 +35,7 @@ export function DocumentPicker({ choices, onPick, onCancel }: DocumentPickerProp
   const titleId = useId();
   const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const before = document.activeElement as HTMLElement | null;
-    ref.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
-    return () => before?.focus?.();
-  }, []);
-
-  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "Escape") {
-      e.preventDefault();
-      e.stopPropagation();
-      onCancel();
-      return;
-    }
-    if (e.key !== "Tab" || !ref.current) return;
-    const items = Array.from(ref.current.querySelectorAll<HTMLElement>(FOCUSABLE));
-    if (items.length === 0) return;
-    const first = items[0]!;
-    const last = items[items.length - 1]!;
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
-      first.focus();
-    }
-  };
+  const onKeyDown = useDialogKeys(ref, onCancel);
 
   return (
     <div className="dialog-backdrop" onClick={(e) => e.target === e.currentTarget && onCancel()}>

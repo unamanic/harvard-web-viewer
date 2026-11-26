@@ -4,12 +4,13 @@
  * tab. Loaded on demand (React.lazy in Viewer); the encoders and muxers
  * load when the dialog first asks what the browser supports.
  */
-import { type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Presentation } from "../model/presentation";
 import type { DisplayMode } from "../render/displayMode";
 import type { ResolveFile } from "../player/sound/controller";
 import { TRANSITION_MODES, type TransitionMode } from "../player/transitions/mode";
-import type { Progress } from "../video/encode";
+import { firstFocusable, useDialogKeys } from "../ui/hooks";
+import { loadVideo, useVideoExport } from "../ui/useVideoExport";
 import type { Support } from "../video/index";
 import {
   FPS,
@@ -22,7 +23,6 @@ import {
   estimate,
   formatDuration,
   timelineFor,
-  videoFileName,
   videoSize,
 } from "../video/options";
 
@@ -36,16 +36,6 @@ export interface VideoExportDialogProps {
   onClose: () => void;
 }
 
-type Phase =
-  | { kind: "options" }
-  | { kind: "running"; progress: Progress | null }
-  | { kind: "done"; url: string; name: string; bytes: number; notes: string[] }
-  | { kind: "error"; message: string };
-
-const loadVideo = () => import("../video/index");
-
-const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
 function formatBytes(n: number): string {
   if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
@@ -55,7 +45,6 @@ export function VideoExportDialog({ presentation, fileName, displayMode, transit
   const titleId = useId();
   const ref = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
-  const abortRef = useRef<AbortController | null>(null);
   // "Include transitions" uses the Transitions setting; with the setting Off it means the show's own.
   const mode: TransitionMode = transitionMode === "off" ? "file" : transitionMode;
   const modeLabel = TRANSITION_MODES.find((m) => m.mode === mode)?.label ?? mode;
@@ -66,7 +55,8 @@ export function VideoExportDialog({ presentation, fileName, displayMode, transit
   );
   const [options, setOptions] = useState<VideoOptions>(() => defaultVideoOptions(transitionMode, soundCount > 0));
   const [waitText, setWaitText] = useState(String(options.waitSeconds));
-  const [phase, setPhase] = useState<Phase>({ kind: "options" });
+  const run = useVideoExport({ presentation, fileName, transitionMode: mode, displayMode, resolveFile, previewHost: previewRef });
+  const { phase } = run;
   const [support, setSupport] = useState<Support | null>(null);
   const [supportError, setSupportError] = useState<string | null>(null);
 
@@ -89,18 +79,6 @@ export function VideoExportDialog({ presentation, fileName, displayMode, transit
     // Checked once per dialog.
   }, []);
 
-  // Focus the dialog; give focus back when it closes; stop a running export.
-  useEffect(() => {
-    const before = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    ref.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
-    return () => {
-      abortRef.current?.abort();
-      // "Video…" sits in the Export menu, closed by now: its summary takes the focus back.
-      const target = before?.closest("details")?.querySelector<HTMLElement>("summary") ?? before;
-      target?.focus?.();
-    };
-  }, []);
-
   // Each step's first control takes the focus (the button pressed has gone).
   const phaseKind = phase.kind;
   const firstRender = useRef(true);
@@ -109,16 +87,9 @@ export function VideoExportDialog({ presentation, fileName, displayMode, transit
       firstRender.current = false;
       return;
     }
-    const target = ref.current?.querySelector<HTMLElement>(phaseKind === "done" ? "a[download]" : FOCUSABLE);
+    const target = phaseKind === "done" ? ref.current?.querySelector<HTMLElement>("a[download]") : firstFocusable(ref.current);
     target?.focus();
   }, [phaseKind]);
-
-  // The download link's blob is freed when the dialog closes or a new export starts.
-  const doneUrl = phase.kind === "done" ? phase.url : null;
-  useEffect(() => {
-    if (!doneUrl) return;
-    return () => URL.revokeObjectURL(doneUrl);
-  }, [doneUrl]);
 
   const formatSupport = support?.[options.format] ?? null;
   const mp4Offered = support?.mp4.method != null;
@@ -126,73 +97,14 @@ export function VideoExportDialog({ presentation, fileName, displayMode, transit
 
   const update = (patch: Partial<VideoOptions>) => setOptions((o) => ({ ...o, ...patch }));
 
-  const start = async () => {
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setPhase({ kind: "running", progress: null });
-    try {
-      const { exportVideo } = await loadVideo();
-      const result = await exportVideo({
-        presentation,
-        options,
-        transitionMode: mode,
-        displayMode,
-        resolveFile,
-        previewHost: previewRef.current,
-        signal: controller.signal,
-        onProgress: (progress) => setPhase((p) => (p.kind === "running" ? { kind: "running", progress } : p)),
-      });
-      if (controller.signal.aborted) return;
-      setPhase({
-        kind: "done",
-        url: URL.createObjectURL(result.blob),
-        name: videoFileName(fileName, result.format),
-        bytes: result.blob.size,
-        notes: result.notes,
-      });
-    } catch (e) {
-      if (controller.signal.aborted) {
-        setPhase({ kind: "options" });
-        return;
-      }
-      setPhase({ kind: "error", message: e instanceof Error ? e.message : String(e) });
-    } finally {
-      if (abortRef.current === controller) abortRef.current = null;
-    }
-  };
-
-  const cancel = () => {
-    abortRef.current?.abort();
-    abortRef.current = null;
-    setPhase({ kind: "options" });
-  };
-
   const close = () => {
-    abortRef.current?.abort();
+    run.abort();
     onClose();
   };
 
-  // Esc closes (cancelling an export); Tab stays inside the dialog.
-  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "Escape") {
-      e.stopPropagation();
-      e.preventDefault();
-      close();
-      return;
-    }
-    if (e.key !== "Tab" || !ref.current) return;
-    const items = Array.from(ref.current.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => el.offsetParent !== null || el === document.activeElement);
-    if (items.length === 0) return;
-    const first = items[0];
-    const last = items[items.length - 1];
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
-      first.focus();
-    }
-  };
+  // Esc closes (cancelling an export); Tab stays inside the dialog. "Video…"
+  // sits in the Export menu, closed by now: its summary takes the focus back.
+  const onKeyDown = useDialogKeys(ref, close, (before) => before?.closest("details")?.querySelector<HTMLElement>("summary") ?? before);
 
   const notes: string[] = [];
   if (est.midi.length) notes.push(`MIDI music (${est.midi.join(", ")}) is skipped: the viewer has no MIDI synthesizer.`);
@@ -217,7 +129,7 @@ export function VideoExportDialog({ presentation, fileName, displayMode, transit
             className="video-form"
             onSubmit={(e) => {
               e.preventDefault();
-              if (canStart) void start();
+              if (canStart) void run.start(options);
             }}
           >
             <p className="muted dialog-note">
@@ -332,7 +244,7 @@ export function VideoExportDialog({ presentation, fileName, displayMode, transit
                 : "Preparing…"}
             </p>
             <div className="dialog-actions">
-              <button type="button" className="button" onClick={cancel}>
+              <button type="button" className="button" onClick={run.cancel}>
                 Cancel
               </button>
             </div>
@@ -350,7 +262,7 @@ export function VideoExportDialog({ presentation, fileName, displayMode, transit
               </p>
             ))}
             <div className="dialog-actions">
-              <button type="button" className="button" onClick={() => setPhase({ kind: "options" })}>
+              <button type="button" className="button" onClick={run.back}>
                 Back
               </button>
               <a className="button button-primary" href={phase.url} download={phase.name}>
@@ -366,7 +278,7 @@ export function VideoExportDialog({ presentation, fileName, displayMode, transit
               Video export failed: {phase.message}
             </p>
             <div className="dialog-actions">
-              <button type="button" className="button" onClick={() => setPhase({ kind: "options" })}>
+              <button type="button" className="button" onClick={run.back}>
                 Back
               </button>
               <button type="button" className="button" onClick={close}>
