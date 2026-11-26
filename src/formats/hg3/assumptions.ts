@@ -474,9 +474,6 @@ export const DATA_ROW_OVERLAP = 0.15;
  */
 export const DATA_BLANK_ROW_HEIGHT = 1;
 
-/** Baseline below the top of a line's box, as a multiple of the glyph size (as OBJECT_TEXT_ASCENT). No longer read: baselines come from textAscent (OBJECT_TEXT_BASELINE_AT_ASCENT). */
-export const DATA_TEXT_ASCENT = OBJECT_TEXT_ASCENT;
-
 /**
  * The copies' text boxes are wider than our glyph advances (from the
  * original .SPD fonts) by about 24 page units per character, at every size
@@ -932,15 +929,14 @@ export const GRADIENT_ANGLE_ZERO = 90;
 /** Draw 0x1110 as a gradient (true) or, as before, flat in colour 1 (GRADIENT_AS_FIRST_COLOR). */
 export const DRAW_GRADIENTS = true;
 
-/**
- * Not reproduced: an ellipse with a gradient (PLANET's sphere, 240, (0,0,2)
+/*
+ * Not reproduced, and not a setting: an ellipse with a gradient (PLANET's sphere, 240, (0,0,2)
  * to (81,81,114)) is not linear in the reference: the light colour hugs
  * the rim on the colour 2 side as a crescent and most of the disc stays
  * near colour 1 (8x8 tiles stay at 10/64 blue from 40 px inside the rim),
  * as if HG drew shrinking ellipses towards that side. Polygons (SHADE2's
  * quadrants) are linear. Drawn linear here.
  */
-export const ELLIPSE_GRADIENT_IS_LINEAR = true;
 
 /**
  * Point markers of 0x10A0/0x10A1 data curves [I, from the reference

@@ -4,16 +4,9 @@
  * `transitionPlan` picks the `Transition`s to draw by the viewer's setting,
  * and the stage draws them.
  */
-import type {
-  SlideTransition,
-  SlideTransitionDirection,
-  SlideTransitionEffect,
-  SlideTransitionSpeed,
-} from "../../formats/types";
+import type { SlideTransition, SlideTransitionSpeed } from "../../formats/types";
 
-/** The shapes are defined beside `PresentationSlide.effects`. */
-export type TransitionEffect = SlideTransitionEffect;
-export type TransitionDirection = SlideTransitionDirection;
+/** The shape is defined beside `PresentationSlide.effects`. */
 export type Transition = SlideTransition;
 
 /** Slow, Medium, Fast (§4.5: "about 1.5 s, 0.75 s and 0.3 s") [I]. */

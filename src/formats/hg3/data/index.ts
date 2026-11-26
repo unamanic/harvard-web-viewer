@@ -24,7 +24,6 @@ export interface NoChartData {
 }
 
 export type ChartData = PieData | XyData | OrgData | TitleData | BulletData | TableData | NoChartData;
-export type ChartDataKind = ChartData["kind"];
 
 export function parseChartData(chart: Chart): { data: ChartData; warnings: string[] } {
   const warnings: string[] = [];

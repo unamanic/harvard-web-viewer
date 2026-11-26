@@ -28,8 +28,6 @@ export const TextSlot = {
   BulletList: 8,
 } as const;
 
-export type TextSlotName = keyof typeof TextSlot;
-
 /** Justification values in the low bits of the justification word (SPEC §5.3). */
 export const Justification = {
   /** Not stored: take it from the style table. */

@@ -71,11 +71,3 @@ export function i16At(data: Uint8Array, offset: number): number {
 export function paddedAt(data: Uint8Array, offset: number, n: number): string {
   return readerAt(data, offset).paddedString(n);
 }
-
-/** Sequential f64 values (not set → null) from `offset` to the end of `data`. */
-export function f64Array(data: Uint8Array, offset = 0): (number | null)[] {
-  const r = readerAt(data, offset);
-  const out: (number | null)[] = [];
-  while (r.remaining >= 8) out.push(r.f64OrNotSet());
-  return out;
-}

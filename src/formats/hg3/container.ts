@@ -299,11 +299,6 @@ export function findAll(nodes: readonly RecordNode[], tag: number): LeafRecord[]
   return out;
 }
 
-/** First leaf record with `tag` (deep), or undefined. */
-export function findFirst(nodes: readonly RecordNode[], tag: number): LeafRecord | undefined {
-  return findAll(nodes, tag)[0];
-}
-
 /** First block with `openTag`, depth-first in file order, or undefined. */
 export function findBlock(nodes: readonly RecordNode[], openTag: number): BlockRecord | undefined {
   for (const n of nodes) {

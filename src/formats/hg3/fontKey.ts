@@ -40,8 +40,3 @@ export function isEmptyFontKey(key: FontKey): boolean {
 export function fontKeyString(key: FontKey): string {
   return `${key.source}:${key.number}:0x${key.style.toString(16).padStart(4, "0")}`;
 }
-
-/** Field-by-field equality. */
-export function fontKeysEqual(a: FontKey, b: FontKey): boolean {
-  return a.source === b.source && a.number === b.number && a.style === b.style;
-}

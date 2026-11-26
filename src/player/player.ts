@@ -198,13 +198,6 @@ export function currentSlide(state: PlayerState): PresentationSlide | null {
   return frame.presentation.slides[frame.index] ?? null;
 }
 
-/** The slide at the player's position even after the end (the last slide shown). */
-export function positionSlide(state: PlayerState): PresentationSlide | null {
-  if (state.empty) return null;
-  const frame = top(state.position);
-  return frame.presentation.slides[frame.index] ?? null;
-}
-
 /**
  * What a key does on the current slide: the slide's key table, then the
  * current presentation's show-wide keys, then the defaults (§4.7 step 3).
