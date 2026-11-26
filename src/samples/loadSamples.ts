@@ -26,7 +26,7 @@ function load(): FileSet | null {
   const dir = samplesDir();
   if (!existsSync(dir) || !statSync(dir).isDirectory()) return null;
   const set = new FileSet();
-  for (const raw of readdirSync(dir, { recursive: true })) {
+  for (const raw of readdirSync(dir, { recursive: true, encoding: "utf8" })) {
     const rel = raw.replace(/\\/g, "/");
     // Skip dotfiles such as the folder's .gitkeep.
     if (rel.split("/").some((part) => part.startsWith("."))) continue;

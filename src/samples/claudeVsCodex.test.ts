@@ -26,7 +26,7 @@ const DIR = new URL("../../samples/claude-vs-codex/", import.meta.url);
 function load(): FileSet | null {
   if (!existsSync(DIR) || !statSync(DIR).isDirectory()) return null;
   const set = new FileSet();
-  for (const raw of readdirSync(DIR, { recursive: true })) {
+  for (const raw of readdirSync(DIR, { recursive: true, encoding: "utf8" })) {
     const rel = raw.replace(/\\/g, "/");
     const full = new URL(rel.split("/").map(encodeURIComponent).join("/"), DIR);
     if (statSync(full).isFile()) set.add(rel, new Uint8Array(readFileSync(full)));

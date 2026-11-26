@@ -1,0 +1,11 @@
+{
+  // Code that runs under Node: tests, test helpers, the sample suite, the
+  // comparison tools and the build config. The generator scripts (plain
+  // JavaScript) are checked by tsconfig.scripts.json.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vite/client", "node"]
+  },
+  "include": ["src", "tools", "vite.config.ts"],
+  "exclude": ["tools/*/out/**"]
+}

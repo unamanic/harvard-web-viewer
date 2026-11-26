@@ -1,0 +1,12 @@
+{
+  // The generator scripts are plain JavaScript without type annotations:
+  // check what can be inferred (wrong calls, missing names), not types.
+  "extends": "./tsconfig.node.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noImplicitAny": false
+  },
+  "include": ["scripts"],
+  "exclude": []
+}

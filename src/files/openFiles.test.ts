@@ -91,7 +91,7 @@ describe("openFiles", () => {
 describe("a zipped show (samples/claude-vs-codex)", () => {
   it("opens the show from one archive and finds every chart and picture it names", async () => {
     const dir = new URL("../../samples/claude-vs-codex/", import.meta.url);
-    const names = readdirSync(dir, { recursive: true }).filter((n) => !/[\\/]/.test(n) && /\.(SH3|CH3|PCX)$/i.test(n) && statSync(new URL(n, dir)).isFile());
+    const names = readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((n) => !/[\\/]/.test(n) && /\.(SH3|CH3|PCX)$/i.test(n) && statSync(new URL(n, dir)).isFile());
     expect(names.length).toBeGreaterThan(20);
     const zip = await makeZip(names.map((n) => ({ name: `claude-vs-codex/${n}`, data: new Uint8Array(readFileSync(new URL(n, dir))) })));
     const { fileSet, choices } = await openFiles([{ path: "claude-vs-codex.zip", bytes: zip }]);

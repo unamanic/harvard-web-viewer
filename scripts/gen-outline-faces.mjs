@@ -214,7 +214,9 @@ for (const clone of OUTLINE_CLONES) {
   const srcs = SOURCES[clone.id].map(source);
   const shear = OBLIQUE.has(clone.id) ? Math.tan((metrics.italicAngle * Math.PI) / 180) : 0;
   if (srcs[0].cap === null || srcs[0].x === null) throw new Error(`${srcs[0].name} has no 'H' or 'x'`);
+  /** @type {(string | null)[]} */
   const paths = [];
+  /** @type {{ fallback: string[]; missing: string[]; clamped: string[] }} */
   const notes = { fallback: [], missing: [], clamped: [] };
   let maxDev = 0;
   for (let code = 0; code < 256; code++) {

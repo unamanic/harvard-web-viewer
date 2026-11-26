@@ -149,6 +149,7 @@ export function parsePathData(d: string, tol: number): { pts: Poly; closed: bool
 // Filling
 // ---------------------------------------------------------------------------
 
+type Rgb = [number, number, number];
 type Paint = (px: number, py: number) => readonly [number, number, number] | null;
 
 class Canvas {
@@ -347,8 +348,9 @@ export function rasterizeScene(scene: Scene, W = 640, H = 480, opts: { stretch?:
     if (!css.startsWith(PATTERN_FILL_PREFIX)) return solid(css);
     const p: FillPattern | undefined = patterns[css.slice(PATTERN_FILL_PREFIX.length)];
     if (!p) return null;
-    const ink = parseColor(p.ink) ?? [255, 0, 255], paper = parseColor(p.paper) ?? [255, 0, 255];
-    const multi = p.colors?.map((c) => parseColor(c) ?? [255, 0, 255]);
+    const MAGENTA: Rgb = [255, 0, 255];
+    const ink: Rgb = parseColor(p.ink) ?? MAGENTA, paper: Rgb = parseColor(p.paper) ?? MAGENTA;
+    const multi = p.colors?.map((c): Rgb => parseColor(c) ?? MAGENTA);
     // device -> element units -> pattern units
     let inv = invert(m);
     if (p.transform) inv = mul(invert(p.transform), inv);

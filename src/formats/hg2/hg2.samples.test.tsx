@@ -19,7 +19,7 @@ const ROOT = new URL("../../../samples/hg1-hg2/", import.meta.url);
 const FOLDERS = ["v100", "v210", "v212", "v230"] as const;
 
 function files(folder: string): string[] {
-  return readdirSync(new URL(`${folder}/`, ROOT), { recursive: true })
+  return readdirSync(new URL(`${folder}/`, ROOT), { recursive: true, encoding: "utf8" })
     .filter((f) => !f.includes("/") && !f.includes("\\"))
     .filter((f) => f.toUpperCase().endsWith(".CHT"))
     .sort();
