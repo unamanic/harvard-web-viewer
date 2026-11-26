@@ -11,6 +11,8 @@
  * header); each local header is followed by the entry's data.
  */
 
+import { decodeCp437 } from "../formats/cp437";
+
 /** One file from an archive. */
 export interface ZipEntry {
   /** Path inside the archive, forward slashes. */
@@ -53,15 +55,9 @@ export function isZipName(name: string): boolean {
   return /\.zip$/i.test(name);
 }
 
-/** Code page 437, bytes 0x80 to 0xFF: the default for ZIP names without the UTF-8 flag (DOS-era archivers). */
-const CP437_HIGH =
-  "ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ ";
-
 function decodeName(bytes: Uint8Array, utf8: boolean): string {
-  if (utf8) return new TextDecoder("utf-8").decode(bytes);
-  let s = "";
-  for (const b of bytes) s += b < 0x80 ? String.fromCharCode(b) : CP437_HIGH[b - 0x80];
-  return s;
+  // Without the UTF-8 flag, names are in code page 437 (DOS-era archivers).
+  return utf8 ? new TextDecoder("utf-8").decode(bytes) : decodeCp437(bytes);
 }
 
 let crcTable: Uint32Array | null = null;

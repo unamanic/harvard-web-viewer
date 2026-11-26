@@ -167,32 +167,3 @@ export function applyDisplayMode(scene: Scene, mode: DisplayMode): Scene {
   if (mode === "ega") return applyScreen(scene, egaScreen(scene.screenColors));
   return applyScreenIntent(scene); // modern
 }
-
-// ---------------------------------------------------------------------------
-// Persistence (per browser)
-// ---------------------------------------------------------------------------
-
-const STORAGE_KEY = "hwv.displayMode";
-
-/** Earlier name of the "mono" mode, still found in stored settings. */
-const LEGACY_CGA_MODE = "cga";
-
-/** The remembered mode, or the default if none (or storage is unavailable). */
-export function loadDisplayMode(): DisplayMode {
-  try {
-    const v = globalThis.localStorage?.getItem(STORAGE_KEY);
-    if (v === LEGACY_CGA_MODE) return "mono";
-    if (isDisplayMode(v)) return v;
-  } catch {
-    // Storage blocked (private mode, sandbox): fall through to the default.
-  }
-  return DEFAULT_DISPLAY_MODE;
-}
-
-export function saveDisplayMode(mode: DisplayMode): void {
-  try {
-    globalThis.localStorage?.setItem(STORAGE_KEY, mode);
-  } catch {
-    // Not remembered; the choice still applies for this session.
-  }
-}

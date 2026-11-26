@@ -5,8 +5,6 @@ import {
   type SoundStatus,
   SoundController,
   browserSoundEnv,
-  loadMuted,
-  saveMuted,
 } from "./controller";
 
 /** How long a sound note stays on screen. */
@@ -25,12 +23,13 @@ export interface ShowSound {
 
 /**
  * React side of the sound controller: one controller per mounted player,
- * stopped on unmount; the mute setting is remembered per browser. Pass
- * `controlledMuted` when the mute setting lives elsewhere (the app's
- * settings); `toggleMute` then only applies to the hook's own setting.
+ * stopped on unmount. Pass `controlledMuted` when the mute setting lives
+ * elsewhere (the app keeps it, remembered per browser in ui/settings.ts);
+ * without it the hook keeps its own, for this player only, and
+ * `toggleMute` changes that.
  */
 export function useShowSound(resolveFile: ResolveFile | undefined, controlledMuted?: boolean): ShowSound {
-  const [ownMuted, setMuted] = useState(loadMuted);
+  const [ownMuted, setMuted] = useState(false);
   const muted = controlledMuted ?? ownMuted;
   const [status, setStatus] = useState<SoundStatus>({ playing: null, blocked: false, muted });
   const [note, setNote] = useState<{ id: number; text: string } | null>(null);
@@ -76,7 +75,6 @@ export function useShowSound(resolveFile: ResolveFile | undefined, controlledMut
     const next = !mutedRef.current;
     mutedRef.current = next;
     setMuted(next);
-    saveMuted(next);
     controllerRef.current?.setMuted(next);
     setStatus((s) => ({ ...s, muted: next }));
   }, []);

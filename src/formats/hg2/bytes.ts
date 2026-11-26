@@ -4,6 +4,8 @@
  * data reads as 0 (or an empty string), so a short record never throws.
  */
 
+import { cp437Char } from "../cp437";
+
 /** f32 values at or above this mean "missing" or "auto" (1e30, bytes ca f2 49 71). */
 const MISSING_THRESHOLD = 1e29;
 
@@ -43,15 +45,11 @@ export class Bytes {
   }
 }
 
-/** Code page 437 upper half (0x80..0xFF). */
-const CP437_HIGH =
-  "ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ ";
-
+/** Text in code page 437: control codes as spaces, stopping at a NUL. */
 export function cp437(bytes: Uint8Array): string {
   let s = "";
   for (const b of bytes) {
-    if (b >= 0x80) s += CP437_HIGH[b - 0x80];
-    else if (b >= 0x20 && b < 0x7f) s += String.fromCharCode(b);
+    if (b >= 0x80 || (b >= 0x20 && b < 0x7f)) s += cp437Char(b);
     else if (b === 0) break;
     else s += " ";
   }

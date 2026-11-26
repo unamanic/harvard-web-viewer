@@ -17,8 +17,6 @@ export const PALETTE_SETTINGS: readonly { setting: PaletteSetting; label: string
   { setting: "monochrw", label: "Greyscale, white background (MONOCHRW.PL3)", file: "MONOCHRW.PL3" },
 ];
 
-const STORAGE_KEY = "hwv.palette";
-
 export function isPaletteSetting(v: unknown): v is PaletteSetting {
   return PALETTE_SETTINGS.some((p) => p.setting === v);
 }
@@ -27,23 +25,4 @@ export function isPaletteSetting(v: unknown): v is PaletteSetting {
 export function paletteLoadOptions(setting: PaletteSetting): LoadOptions {
   const file = PALETTE_SETTINGS.find((p) => p.setting === setting)?.file;
   return file ? { paletteOverride: file } : {};
-}
-
-/** The setting remembered in this browser, else the default. */
-export function loadPaletteSetting(): PaletteSetting {
-  try {
-    const v = globalThis.localStorage?.getItem(STORAGE_KEY);
-    if (isPaletteSetting(v)) return v;
-  } catch {
-    // Storage blocked: fall through to the default.
-  }
-  return DEFAULT_PALETTE_SETTING;
-}
-
-export function savePaletteSetting(setting: PaletteSetting): void {
-  try {
-    globalThis.localStorage?.setItem(STORAGE_KEY, setting);
-  } catch {
-    // Not remembered; the choice still applies for this session.
-  }
 }

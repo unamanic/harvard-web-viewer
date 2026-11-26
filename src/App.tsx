@@ -3,14 +3,23 @@ import { AppHeader } from "./components/AppHeader";
 import { DocumentPicker } from "./components/DocumentPicker";
 import { EmptyState, SupportedFilesHelp, useFileDrop } from "./components/FileDropzone";
 import { Settings } from "./components/Settings";
-import { type PaletteSetting, loadPaletteSetting, paletteLoadOptions, savePaletteSetting } from "./components/paletteSetting";
+import { type PaletteSetting, paletteLoadOptions } from "./ui/paletteSetting";
 import { Viewer } from "./components/Viewer";
 import type { FileEntry } from "./files/FileSet";
 import { fileSetFromBrowser, pathOf, type PathedFile } from "./files/fromBrowser";
 import type { OpenedFiles } from "./files/openFiles";
-import { loadDisplayMode, saveDisplayMode, type DisplayMode } from "./render/displayMode";
-import { loadMuted, saveMuted } from "./player/sound/controller";
-import { loadTransitionMode, saveTransitionMode, type TransitionMode } from "./player/transitions/mode";
+import type { DisplayMode } from "./render/displayMode";
+import type { TransitionMode } from "./player/transitions/mode";
+import {
+  loadDisplayMode,
+  loadMuted,
+  loadPaletteSetting,
+  loadTransitionMode,
+  saveDisplayMode,
+  saveMuted,
+  savePaletteSetting,
+  saveTransitionMode,
+} from "./ui/settings";
 import { loadEntry, loadFileSet, type LoadedFile, type LoadOptions } from "./files/loadFile";
 import { addedSummary, placeAddedFiles, providedNames } from "./ui/addFiles";
 

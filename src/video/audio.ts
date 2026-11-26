@@ -5,7 +5,7 @@
  * them mixed into one PCM track at their timeline offsets, resampled to
  * the output rate.
  */
-import { describeWav, soundFormat } from "../player/sound/format";
+import { describeWav, soundFormat, wavChunks } from "../player/sound/format";
 import type { ResolveFile } from "../player/sound/controller";
 import type { AudioCue } from "./timeline";
 
@@ -66,44 +66,29 @@ export function planAudio(cues: readonly AudioCue[], resolveFile: ResolveFile | 
 // WAV decoding
 // ---------------------------------------------------------------------------
 
-const ascii = (b: Uint8Array, o: number, n: number) => String.fromCharCode(...b.subarray(o, o + n));
-
 /**
  * Samples of a WAV file: PCM 8/16/24/32-bit, IEEE float 32/64, and
  * WAVE_FORMAT_EXTENSIBLE of those. Null for anything else (ADPCM, µ-law
  * ...), which the browser's decoder may still read.
  */
 export function readWav(bytes: Uint8Array): Pcm | null {
-  if (bytes.length < 12 || ascii(bytes, 0, 4) !== "RIFF" || ascii(bytes, 8, 4) !== "WAVE") return null;
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  let fmt: { tag: number; channels: number; rate: number; bits: number; align: number } | null = null;
-  let data: Uint8Array | null = null;
-  for (let pos = 12; pos + 8 <= bytes.length; ) {
-    const id = ascii(bytes, pos, 4);
-    const size = view.getUint32(pos + 4, true);
-    const body = pos + 8;
-    if (id === "fmt " && size >= 16 && body + 16 <= bytes.length) {
-      let tag = view.getUint16(body, true);
-      if (tag === 0xfffe && size >= 26 && body + 26 <= bytes.length) tag = view.getUint16(body + 24, true);
-      fmt = {
-        tag,
-        channels: view.getUint16(body + 2, true),
-        rate: view.getUint32(body + 4, true),
-        align: view.getUint16(body + 12, true),
-        bits: view.getUint16(body + 14, true),
-      };
-    } else if (id === "data") {
-      data = bytes.subarray(body, Math.min(bytes.length, body + size));
-    }
-    pos = body + size + (size & 1);
-  }
-  if (!fmt || !data || fmt.channels < 1 || fmt.rate < 1) return null;
-  const { tag, channels, rate, bits } = fmt;
+  const chunks = wavChunks(bytes);
+  const data = chunks?.data;
+  if (!chunks?.fmt || !data) return null;
+  const view = new DataView(chunks.fmt.buffer, chunks.fmt.byteOffset, chunks.fmt.byteLength);
+  let tag = view.getUint16(0, true);
+  // WAVE_FORMAT_EXTENSIBLE: the real format tag is the sub-format's first two bytes.
+  if (tag === 0xfffe && chunks.fmt.length >= 26) tag = view.getUint16(24, true);
+  const channels = view.getUint16(2, true);
+  const rate = view.getUint32(4, true);
+  const align = view.getUint16(12, true);
+  const bits = view.getUint16(14, true);
+  if (channels < 1 || rate < 1) return null;
   const bytesPer = bits / 8;
   const pcm = tag === 1 && [8, 16, 24, 32].includes(bits);
   const float = tag === 3 && (bits === 32 || bits === 64);
   if (!pcm && !float) return null;
-  const frameBytes = Math.max(fmt.align, bytesPer * channels);
+  const frameBytes = Math.max(align, bytesPer * channels);
   const frames = Math.floor(data.length / frameBytes);
   const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
   const out = Array.from({ length: channels }, () => new Float32Array(frames));

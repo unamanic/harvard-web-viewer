@@ -1,6 +1,6 @@
 import { DISPLAY_MODES, type DisplayMode, isDisplayMode } from "../render/displayMode";
 import { TRANSITION_MODES, type TransitionMode, isTransitionMode } from "../player/transitions/mode";
-import { PALETTE_SETTINGS, type PaletteSetting, isPaletteSetting } from "./paletteSetting";
+import { PALETTE_SETTINGS, type PaletteSetting, isPaletteSetting } from "../ui/paletteSetting";
 
 export interface SettingsValues {
   displayMode: DisplayMode;

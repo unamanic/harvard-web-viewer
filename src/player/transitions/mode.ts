@@ -93,38 +93,3 @@ export function transitionPlan(from: PresentationSlide | null, to: PresentationS
     }
   }
 }
-
-// ---------------------------------------------------------------------------
-// Persistence (per browser)
-// ---------------------------------------------------------------------------
-
-const STORAGE_KEY = "hwv.transitions";
-
-/** Stored values of earlier versions → the mode that replaces them. */
-const MIGRATED: Readonly<Record<string, TransitionMode>> = {
-  // "Guessed from the file" read a guessed byte layout; the file is now decoded.
-  guessed: "file",
-};
-
-/** The remembered mode, or the default if none (or storage is unavailable). */
-export function loadTransitionMode(): TransitionMode {
-  try {
-    const v = globalThis.localStorage?.getItem(STORAGE_KEY);
-    if (isTransitionMode(v)) return v;
-    if (v != null && Object.hasOwn(MIGRATED, v)) {
-      saveTransitionMode(MIGRATED[v]);
-      return MIGRATED[v];
-    }
-  } catch {
-    // Storage blocked: fall through to the default.
-  }
-  return DEFAULT_TRANSITION_MODE;
-}
-
-export function saveTransitionMode(mode: TransitionMode): void {
-  try {
-    globalThis.localStorage?.setItem(STORAGE_KEY, mode);
-  } catch {
-    // Not remembered; the choice still applies for this session.
-  }
-}

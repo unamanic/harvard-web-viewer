@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { PresentationSlide, SlideEffects } from "../../model/presentation";
 import {
   BLINDS_STRIPES,
@@ -17,8 +17,6 @@ import {
   REPLACE_PLAN,
   TRANSITION_MODES,
   effectTransition,
-  loadTransitionMode,
-  saveTransitionMode,
   transitionPlan,
 } from "./mode";
 import {
@@ -107,41 +105,6 @@ describe("transitionPlan", () => {
     expect(transitionPlan(from, slide(), "demo", DEMO_TRANSITIONS.length + 3).draw).toEqual(DEMO_TRANSITIONS[2]);
   });
 
-  describe("persistence", () => {
-    afterEach(() => vi.unstubAllGlobals());
-
-    it("remembers the mode and falls back to the default", () => {
-      const store = new Map<string, string>();
-      vi.stubGlobal("localStorage", { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v) });
-      expect(loadTransitionMode()).toBe("file");
-      saveTransitionMode("demo");
-      expect(loadTransitionMode()).toBe("demo");
-      saveTransitionMode("off");
-      expect(loadTransitionMode()).toBe("off");
-      store.set("hwv.transitions", "bogus");
-      expect(loadTransitionMode()).toBe("file");
-    });
-
-    it("migrates the old \"guessed\" setting to \"From the file\"", () => {
-      const store = new Map<string, string>([["hwv.transitions", "guessed"]]);
-      vi.stubGlobal("localStorage", { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v) });
-      expect(loadTransitionMode()).toBe("file");
-      expect(store.get("hwv.transitions")).toBe("file");
-    });
-
-    it("survives blocked storage", () => {
-      vi.stubGlobal("localStorage", {
-        getItem: () => {
-          throw new Error("blocked");
-        },
-        setItem: () => {
-          throw new Error("blocked");
-        },
-      });
-      expect(() => saveTransitionMode("demo")).not.toThrow();
-      expect(loadTransitionMode()).toBe("file");
-    });
-  });
 });
 
 describe("frameAt", () => {

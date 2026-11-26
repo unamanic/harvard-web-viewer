@@ -221,25 +221,3 @@ export function browserSoundEnv(resolveFile: ResolveFile): SoundEnv {
     warn: (message) => console.warn(message),
   };
 }
-
-// ---------------------------------------------------------------------------
-// Mute setting (per browser)
-// ---------------------------------------------------------------------------
-
-const MUTE_KEY = "hwv.soundMuted";
-
-export function loadMuted(): boolean {
-  try {
-    return globalThis.localStorage?.getItem(MUTE_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-export function saveMuted(muted: boolean): void {
-  try {
-    globalThis.localStorage?.setItem(MUTE_KEY, muted ? "1" : "0");
-  } catch {
-    // Not remembered; the setting still applies for this session.
-  }
-}

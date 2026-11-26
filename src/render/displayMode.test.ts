@@ -1,15 +1,12 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { LANDSCAPE_VIEW_BOX, type FillPattern, type Scene, type SceneElement } from "../model/scene";
 import {
-  DEFAULT_DISPLAY_MODE,
   DISPLAY_MODES,
   EGA_COLORS,
   applyDisplayMode,
   formatCssColor,
   isDisplayMode,
-  loadDisplayMode,
   parseCssColor,
-  saveDisplayMode,
   toScreenColor,
   vgaChannel,
 } from "./displayMode";
@@ -262,53 +259,6 @@ describe("mono (Hercules)", () => {
     const copy = structuredClone(s);
     applyDisplayMode(s, "mono");
     expect(s).toEqual(copy);
-  });
-});
-
-describe("loadDisplayMode", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-  const stored = (value: string | null) =>
-    vi.stubGlobal("localStorage", { getItem: () => value, setItem: () => {} });
-
-  it("maps the stored legacy value \"cga\" to \"mono\"", () => {
-    stored("cga");
-    expect(loadDisplayMode()).toBe("mono");
-  });
-
-  it("returns a stored mode, or the default for unknown values", () => {
-    stored("ega");
-    expect(loadDisplayMode()).toBe("ega");
-    stored("hercules");
-    expect(loadDisplayMode()).toBe("vga");
-    stored(null);
-    expect(loadDisplayMode()).toBe("vga");
-  });
-
-  it("keeps a stored \"vga\" (now the dithered ScreenShow driver) as it is", () => {
-    stored("vga");
-    expect(loadDisplayMode()).toBe("vga");
-    expect(DEFAULT_DISPLAY_MODE).toBe("vga");
-    expect(DISPLAY_MODES.find((m) => m.mode === "vga")?.label).toBe("VGA ScreenShow (16 colours, dithered)");
-  });
-
-  it("falls back to the default when storage throws", () => {
-    vi.stubGlobal("localStorage", { getItem: () => { throw new Error("blocked"); }, setItem: () => {} });
-    expect(loadDisplayMode()).toBe("vga");
-  });
-});
-
-describe("saveDisplayMode", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("stores the mode id under hwv.displayMode", () => {
-    const setItem = vi.fn();
-    vi.stubGlobal("localStorage", { getItem: () => null, setItem });
-    saveDisplayMode("vga");
-    expect(setItem).toHaveBeenCalledWith("hwv.displayMode", "vga");
   });
 });
 

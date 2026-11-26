@@ -47,25 +47,39 @@ export interface WavInfo {
   dataBytes: number | null;
 }
 
-/** Read a RIFF/WAVE header, or null if the bytes are not one. */
-export function describeWav(bytes: Uint8Array): WavInfo | null {
+/** The "fmt " and "data" chunks of a WAV file (each cut short at the end of the bytes). */
+export interface WavChunks {
+  /** Body of the last "fmt " chunk of at least 16 bytes, or null. */
+  fmt: Uint8Array | null;
+  /** Body of the last "data" chunk, or null. */
+  data: Uint8Array | null;
+}
+
+/** Walk a RIFF/WAVE file's chunks, or null if the bytes are not one. */
+export function wavChunks(bytes: Uint8Array): WavChunks | null {
   if (bytes.length < 12 || ascii(bytes, 0, 4) !== "RIFF" || ascii(bytes, 8, 4) !== "WAVE") return null;
-  let fmt: Omit<WavInfo, "dataBytes"> | null = null;
-  let dataBytes: number | null = null;
+  const out: WavChunks = { fmt: null, data: null };
   for (let pos = 12; pos + 8 <= bytes.length; ) {
     const id = ascii(bytes, pos, 4);
     const size = u32(bytes, pos + 4);
-    if (id === "fmt " && size >= 16 && pos + 24 <= bytes.length) {
-      fmt = {
-        formatTag: u16(bytes, pos + 8),
-        channels: u16(bytes, pos + 10),
-        sampleRate: u32(bytes, pos + 12),
-        bitsPerSample: u16(bytes, pos + 22),
-      };
-    } else if (id === "data") {
-      dataBytes = Math.min(size, bytes.length - pos - 8);
-    }
+    const body = bytes.subarray(pos + 8, Math.min(bytes.length, pos + 8 + size));
+    if (id === "fmt " && size >= 16 && body.length >= 16) out.fmt = body;
+    else if (id === "data") out.data = body;
     pos += 8 + size + (size & 1);
   }
-  return fmt && { ...fmt, dataBytes };
+  return out;
+}
+
+/** Read a RIFF/WAVE header, or null if the bytes are not one. */
+export function describeWav(bytes: Uint8Array): WavInfo | null {
+  const chunks = wavChunks(bytes);
+  const fmt = chunks?.fmt;
+  if (!fmt) return null;
+  return {
+    formatTag: u16(fmt, 0),
+    channels: u16(fmt, 2),
+    sampleRate: u32(fmt, 4),
+    bitsPerSample: u16(fmt, 14),
+    dataBytes: chunks.data ? chunks.data.length : null,
+  };
 }
