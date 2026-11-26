@@ -2,7 +2,7 @@
   "name": "harvard-web-viewer",
   "version": "0.1.0",
   "private": true,
-  "description": "Browser-only viewer for Harvard Graphics 3 for DOS charts, shows and palettes",
+  "description": "Browser-only viewer for Harvard Graphics for DOS files: 3.x charts, shows and palettes, and 1.x/2.x charts and shows",
   "license": "MIT",
   "repository": {
     "type": "git",

@@ -1,5 +1,11 @@
 # Screen renderer: task breakdown
 
+**Status (November 2026):** every task below has been built except 7c (FN3
+stroke fonts, not decoded yet). This file is kept as the plan the renderer
+was built from; what each part verified, and what is still open, is in
+[formats.md](formats.md). Later restructuring (for example the scene model
+moving to `src/model/`) is described in [CODE_QUALITY.md](CODE_QUALITY.md).
+
 This plan splits the screen renderer for Harvard Graphics 3 files into tasks
 that can each be built and tested on their own. Section numbers (§) refer to
 [SPEC.md](SPEC.md).

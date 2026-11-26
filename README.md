@@ -60,7 +60,7 @@ The open items are tracked in [docs/formats.md](docs/formats.md). The main ones:
 - The Harvard Graphics stroke fonts (`.FN3`) are not decoded yet. Text in those fonts is always drawn with the Hershey-based clones.
 - MIDI sound slides are skipped.
 - A few drawing details still differ from the original, for example bitmap tiling, bitmap patterns in the EGA and Hercules modes, and some 3-D shapes.
-- 1.x/2.x charts: drawn annotations (text and shapes added on top of a chart), fill patterns and the program's own fonts are not drawn yet, and the colours are an assumed EGA set (see `src/formats/hg2/assumptions.ts`). In 1.x/2.x shows, the Weave and Rain transitions are drawn as Blinds and Fade, and `.TPL` template slides are not drawn.
+- 1.x/2.x charts: drawn annotations (text and shapes added on top of a chart), fill patterns and the program's own fonts are not drawn yet (text uses our HWV Sans clone faces), and the colours are an assumed EGA set (see `src/formats/hg2/assumptions.ts`). In 1.x/2.x shows, the Weave and Rain transitions are drawn as Blinds and Fade, and `.TPL` template slides are not drawn.
 - Harvard Graphics for Windows and the editor's own file types (such as `.SY3` symbol libraries) are out of scope for now.
 
 ## Clean-room approach
@@ -73,16 +73,24 @@ The file formats are documented in [docs/SPEC.md](docs/SPEC.md). The spec was wr
 
 | Path | Contents |
 | --- | --- |
+| `src/model/` | The scene, show and document model every layer shares: what parsers produce and the renderer, player and video export draw |
+| `src/formats/` | The parser interface and registry, the byte reader and the character sets shared by the formats |
 | `src/formats/hg3/` | Harvard Graphics 3 parsers (records, charts, shows, palettes, font index) and the scene builder |
+| `src/formats/hg2/` | Harvard Graphics 1.0 and 2.x chart and show readers, and their layout from data |
 | `src/formats/speedo/`, `src/formats/pcx/` | Bitstream Speedo font reader, PCX bitmap decoder |
 | `src/fonts/` | Text drawing, plus the bundled outline clones (`outline/`) and stroke clones (`stroke/`) |
 | `src/render/` | SVG scene renderer and the display modes (VGA ScreenShow, EGA, Hercules) |
-| `src/player/` | Show player, transitions and sound |
-| `src/files/` | The set of files you opened, with name resolution |
-| `src/components/`, `src/ui/` | React user interface |
+| `src/player/` | Show playing (state machine), transitions and sound |
+| `src/video/` | Video export: timeline, frame drawing, encoders and WebM/MP4 muxers |
+| `src/files/` | The set of files you opened, with name resolution, ZIP archives and loading |
+| `src/components/` | React components only |
+| `src/ui/` | Everything the components use that is not a component: settings, loading rules, hooks, export helpers |
 | `src/samples/` | Regression suite over the private sample files |
 | `scripts/` | Generators for the built-in palettes and fonts |
-| `docs/` | Format spec, verified findings and the implementation plan |
+| `tools/` | Comparison with the reference renders (`compare/`) and the layout-from-data check (`copycheck/`) |
+| `docs/` | Format specs, verified findings, the implementation plan and the code quality review |
+
+Dependencies run one way: `model` is used by everything; `formats` and `fonts` build scenes; `render`, `player` and `video` draw them; `files` and `ui` drive loading; `components` and `App.tsx` sit on top.
 
 ## Development
 
@@ -95,6 +103,7 @@ Requirements:
 yarn install   # install dependencies
 yarn dev       # run the local dev server
 yarn test      # run the test suite
+yarn typecheck # type-check the app, the tests and tools, and the scripts
 yarn build     # type-check and produce a static build in dist/
 ```
 
