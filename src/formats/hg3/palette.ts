@@ -14,6 +14,7 @@
  * task 6b, src/render/displayMode.ts) is applied afterwards by mapping the RGB returned by `colorForRole`;
  * the raw 1554/1555 records are kept on the Palette for that purpose.
  */
+import type { RGB } from "../../model/color";
 import { DEFAULT_PALETTE_ENTRIES } from "./defaultPalette";
 import { GREYSCALE_PALETTES } from "./greyscalePalettes";
 import { decodeHg3Text } from "../charset";
@@ -146,8 +147,8 @@ export function seriesRole(n: number): number {
 // Types
 // ---------------------------------------------------------------------------
 
-/** Red, green, blue, each 0 to 255, as stored in record 1552. */
-export type RGB = readonly [number, number, number];
+/** Red, green, blue, each 0 to 255, as stored in record 1552 (model/color.ts). */
+export type { RGB };
 
 export interface PaletteEntry {
   /** Entry index, 0 to 63. Role index + 1 refers to it. */
@@ -471,9 +472,7 @@ export function colorForRole(palette: Palette, role: number, warn?: WarningSink)
 }
 
 /** CSS colour "#rrggbb" for an RGB triple (values clamped to 0..255). */
-export function rgbToCss(rgb: RGB): string {
-  return "#" + rgb.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("");
-}
+export { rgbToCss } from "../../model/color";
 
 /**
  * A WarningSink that appends each distinct message to `target` once, e.g.

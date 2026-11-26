@@ -17,7 +17,7 @@ import { DEFAULT_PALETTE, ROLE, colorForRole, rgbToCss } from "../../palette";
 import { type RecordSpec, concat, f32, f64, f64NotSet, i16, leaf, padded, u16, u8 } from "../../testing/bytes";
 import { buildChartScene, notYetDrawn } from "../buildChartScene";
 import { createChartSceneContext } from "../context";
-import { shadeCss } from "../objectLayer";
+import { shadeCss } from "../../../../model/color";
 import { lineBoxHeight } from "./text";
 import { drawXYChart } from "./xy";
 import { XY_TABLE_GAP, xyTextWidth } from "./xyLayout";

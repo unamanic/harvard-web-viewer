@@ -72,17 +72,6 @@ export function classicColor(n: number): string {
   return CLASSIC_PALETTE[(Math.floor(n) - 1) % CLASSIC_PALETTE.length];
 }
 
-/** The colour mixed toward black by `factor` (0 = black, 1 = unchanged), for 3-D sides and shadows. */
-export function shade(css: string, factor: number): string {
-  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(css);
-  if (!m) return css;
-  const part = (h: string) =>
-    Math.round(Number.parseInt(h, 16) * factor)
-      .toString(16)
-      .padStart(2, "0");
-  return `#${part(m[1])}${part(m[2])}${part(m[3])}`;
-}
-
 /** [I] CSS stand-in for the program's own fonts (not decoded), used until the clone faces load (text.ts). */
 export const FONT_FAMILY = "Helvetica, Arial, sans-serif";
 

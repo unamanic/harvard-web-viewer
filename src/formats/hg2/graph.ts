@@ -3,7 +3,8 @@
  * viewer's own: the files hold the options, not the drawing.
  */
 import type { Point, SceneElement, TextAnchor } from "../../model/scene";
-import { DEFAULT_SIZES, classicColor, shade, sizeToUnits } from "./assumptions";
+import { shadeCss } from "../../model/color";
+import { DEFAULT_SIZES, classicColor, sizeToUnits } from "./assumptions";
 import type { AxisScale, ClassicChart, ClassicSeries, ClassicText, GraphData, GridStyle, LabelFormat } from "./model";
 import { drawLine, hasText, plainText, textWidth } from "./text";
 
@@ -389,8 +390,8 @@ export function drawGraph(chart: ClassicChart, graph: GraphData, area: Box, warn
           const y1p = Math.max(a.y, b.y);
           const dx = depth;
           const dy = -depth;
-          out.push({ kind: "path", points: [{ x: x0, y: y0 }, { x: x0 + dx, y: y0 + dy }, { x: x1 + dx, y: y0 + dy }, { x: x1, y: y0 }], closed: true, fill: shade(color, 0.8), stroke: null });
-          out.push({ kind: "path", points: [{ x: x1, y: y0 }, { x: x1 + dx, y: y0 + dy }, { x: x1 + dx, y: y1p + dy }, { x: x1, y: y1p }], closed: true, fill: shade(color, 0.55), stroke: null });
+          out.push({ kind: "path", points: [{ x: x0, y: y0 }, { x: x0 + dx, y: y0 + dy }, { x: x1 + dx, y: y0 + dy }, { x: x1, y: y0 }], closed: true, fill: shadeCss(color, 0.8), stroke: null });
+          out.push({ kind: "path", points: [{ x: x1, y: y0 }, { x: x1 + dx, y: y0 + dy }, { x: x1 + dx, y: y1p + dy }, { x: x1, y: y1p }], closed: true, fill: shadeCss(color, 0.55), stroke: null });
         }
         if (valueLabelFor(q.series)) {
           const tip = pt(p + offset + w / 2, base + v, q.series.axis);
@@ -430,7 +431,7 @@ export function drawGraph(chart: ClassicChart, graph: GraphData, area: Box, warn
           if (run.length >= 2) {
             if (enh === "area") {
               const base = run.map((p) => (o.horizontal ? { x: plot.left, y: p.y } : { x: p.x, y: plot.bottom }));
-              out.push({ kind: "path", points: [...run, ...base.reverse()], closed: true, fill: shade(color, 0.6), stroke: null });
+              out.push({ kind: "path", points: [...run, ...base.reverse()], closed: true, fill: shadeCss(color, 0.6), stroke: null });
             }
             out.push({ kind: "path", points: run, closed: false, smooth: s.type === "curve", fill: null, stroke: color, strokeWidth });
           }

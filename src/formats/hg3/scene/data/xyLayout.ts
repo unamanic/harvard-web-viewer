@@ -8,7 +8,7 @@ import { BOX_3D_SIDE_SHADE, BOX_3D_TOP_SHADE, XY_TEXT_WIDTH_STEP } from "../../a
 import type { XyAxis, XyData, XySeries } from "../../data/xy";
 import { Justification } from "../../text";
 import type { ChartSceneContext } from "../context";
-import { shadeCss } from "../objectLayer";
+import { shadeCss } from "../../../../model/color";
 import { toScene } from "../page";
 import { baselineBelow, type Box, drawnAdvance, lineBoxHeight, type StyledText, textElement } from "./text";
 import type { XyOptions } from "./xyOptions";

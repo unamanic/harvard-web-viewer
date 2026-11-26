@@ -125,6 +125,7 @@ import {
   isClosedShape,
   parseObjectLayer,
 } from "../objects";
+import { shadeCss } from "../../../model/color";
 import { ROLE, rgbToCss } from "../palette";
 import { Justification } from "../text";
 import { gradientAttributeFill } from "./chartColors";
@@ -232,12 +233,6 @@ export function isPieSlice(shape: Shape): boolean {
   return shape.kind === "arc" && shape.raw8 === PIE_SLICE_ARC_STYLE;
 }
 
-/** Scale a "#rrggbb" colour towards black (other CSS colours are returned unchanged). */
-export function shadeCss(css: string, factor: number): string {
-  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(css);
-  if (!m) return css;
-  return rgbToCss([1, 2, 3].map((i) => parseInt(m[i]!, 16) * factor) as Rgb);
-}
 
 /** The 0x112A brightness in the state as a factor 0..1, or null for none or 100 % (assumptions.ts SHADE_SUBTAG). */
 function shadeFactor(state: readonly Attribute[]): number | null {

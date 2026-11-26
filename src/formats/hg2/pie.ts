@@ -2,7 +2,8 @@
  * Pie charts (SPEC §2.4, §4.4): one or two pies (or columns) side by side.
  */
 import type { Point, SceneElement, TextAnchor } from "../../model/scene";
-import { DEFAULT_SIZES, classicColor, shade, sizeToUnits } from "./assumptions";
+import { shadeCss } from "../../model/color";
+import { DEFAULT_SIZES, classicColor, sizeToUnits } from "./assumptions";
 import type { Box } from "./graph";
 import type { ClassicPie } from "./model";
 import { drawLine, hasText, plainText, textWidth } from "./text";
@@ -92,7 +93,7 @@ function drawOnePie(pie: ClassicPie, region: Box, radius: number, warnings: stri
   });
   if (depth > 0) {
     for (const p of placed) {
-      const color = shade(classicColor(pie.colors[p.s.index]), 0.6);
+      const color = shadeCss(classicColor(pie.colors[p.s.index]), 0.6);
       out.push({ kind: "band", cx: cx + p.ox, cy: cy + p.oy, rx, ry, startAngle: p.a0, endAngle: p.a1, depth, fill: color, stroke: "#000000", strokeWidth: 20 });
     }
   }

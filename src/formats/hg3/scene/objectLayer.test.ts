@@ -41,11 +41,11 @@ import {
   drawObjectLayer,
   flippedMatrix,
   pieSlicePoints,
-  shadeCss,
   storedLineLayout,
   textBlockLines,
 } from "./objectLayer";
 import { type TextBlockShape, decodeShape } from "../objects";
+import { shadeCss } from "../../../model/color";
 
 // ---------------------------------------------------------------------------
 // Builders

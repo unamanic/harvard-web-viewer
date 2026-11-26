@@ -3,7 +3,9 @@
  * display modes (displayMode.ts) and the dithering engine (dither.ts).
  */
 
-export type RGB = readonly [number, number, number];
+import { type RGB, rgbToCss } from "../model/color";
+
+export type { RGB };
 
 const HEX3 = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i;
 const HEX6 = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i;
@@ -25,10 +27,8 @@ export function clamp255(v: number): number {
   return Math.max(0, Math.min(255, Math.round(v)));
 }
 
-/** Formats as lower-case #rrggbb. */
-export function formatCssColor(rgb: RGB): string {
-  return "#" + rgb.map((v) => clamp255(v).toString(16).padStart(2, "0")).join("");
-}
+/** Formats as lower-case #rrggbb (model/color.ts). */
+export const formatCssColor = rgbToCss;
 
 /** One channel through the VGA DAC: 8 bits to 6 bits and back. */
 export function vgaChannel(v: number): number {
