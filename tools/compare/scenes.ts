@@ -54,7 +54,10 @@ export async function loadScene(path: string): Promise<{ scene: Scene; warnings:
   const s = fileSet();
   const e = s.get(path);
   if (!e) throw new Error("missing " + path);
-  await hg3Parser.prepare!(e.bytes, e.name, s.contextFor(e.path));
-  const doc = hg3Parser.parse(e.bytes, e.name, s.contextFor(e.path));
+  // CMP_LAYOUT=always draws data charts from their data (the fallback) instead of their stored copy.
+  const layout = process.env.CMP_LAYOUT as "auto" | "always" | "never" | undefined;
+  const ctx = () => (layout ? { ...s.contextFor(e.path), layoutFromData: layout } : s.contextFor(e.path));
+  await hg3Parser.prepare!(e.bytes, e.name, ctx());
+  const doc = hg3Parser.parse(e.bytes, e.name, ctx());
   return { scene: doc.scenes[0]!, warnings: doc.warnings ?? [] };
 }

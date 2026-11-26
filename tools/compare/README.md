@@ -59,6 +59,7 @@ CMP_MODE=mono CH=FLOOR HEAT=0 yarn compare    # no heatmaps
 | `OUT` | `tools/compare/out/<mode>` | Output folder (git-ignored). |
 | `BLUR`, `TOL`, `SHIFT` | 2, 48, 1 | Blur box, colour tolerance, shift tolerance (px). |
 | `HEAT` | on | `HEAT=0` skips the heatmap PNGs. |
+| `CMP_LAYOUT` | `auto` | `always` lays every chart out from its data even when it has a stored drawing, `never` only draws stored drawings; `auto` draws the stored drawing when there is one. |
 | `PA` | (4/3)/(W/H) | Pixel aspect override. |
 | `CMP_SCALE` | none | Experiment: shrink the whole scene about the page centre by this factor. |
 

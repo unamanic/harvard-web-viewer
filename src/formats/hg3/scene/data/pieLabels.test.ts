@@ -50,4 +50,10 @@ describe("pie label text", () => {
     expect(outsideLineCount(opts({ v: { place: LabelPlace.Inside }, p: { show: true } }))).toBe(2);
     expect(outsideLineCount(opts({ labels: false, v: { show: false } }))).toBe(0);
   });
+  it("always puts the value before the percent where they share a place (PBOTHIN, PPCTADJ, PVPADJ)", () => {
+    const both = (place: number) => opts({ v: { place }, p: { show: true, place } });
+    expect(sliceLabelTexts("Alpha", 40, 0.4, both(LabelPlace.Below))).toEqual({ outside: ["Alpha", "40  40%"], inside: null });
+    expect(sliceLabelTexts("Alpha", 40, 0.4, both(LabelPlace.Adjacent))).toEqual({ outside: ["Alpha  40  40%"], inside: null });
+    expect(sliceLabelTexts("Alpha", 40, 0.4, both(LabelPlace.Inside))).toEqual({ outside: ["Alpha"], inside: "40  40%" });
+  });
 });

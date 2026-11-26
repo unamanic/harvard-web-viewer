@@ -22,7 +22,9 @@ import {
   DATA_TEXT_BOX_STEP,
   DATA_TEXT_CHAR_EXTRA,
   DATA_TEXT_CSS_ADVANCE_EM,
-  textAscent,
+  ascent305,
+  layoutEm305,
+  lineBox305,
   textSizeToUnits,
 } from "../../assumptions";
 import type { PageArea } from "../../chart";
@@ -72,18 +74,30 @@ export function pageBox(ctx: ChartSceneContext): Box {
 // ---------------------------------------------------------------------------
 
 /**
- * Em of a size for the vertical layout (page units): the same as the glyph
- * size, a percentage of the page's short side from 816 (24576 on a
- * 10 × 7.5 in page, 25321 on Letter; assumptions.ts pageShortSide and
- * DATA_TEXT_BOX_FACTOR).
+ * Em of a size for the layout (page units): size % of the page's short
+ * side from 816 (24576 on a 10 × 7.5 in page, 25321 on Letter), rounded
+ * down as Harvard Graphics 3.05 stores it (assumptions.ts layoutEm305).
  */
 export function layoutEm(ctx: ChartSceneContext, size: number): number {
-  return textSizeToUnits(size, ctx.page.shortSide);
+  return layoutEm305(size, ctx.page.shortSide);
 }
 
-/** Height of a text line's box (page units): what one text row takes before the pitch factor. */
+/**
+ * Height of a text line's box (page units) as Harvard Graphics 3.05 lays
+ * a chart out, on every page size: (1.25 × em + 50) rounded up to a
+ * multiple of 100 (assumptions.ts lineBox305).
+ */
 export function lineBoxHeight(ctx: ChartSceneContext, size: number): number {
-  const raw = DATA_TEXT_BOX_FACTOR * layoutEm(ctx, size);
+  return lineBox305(layoutEm(ctx, size));
+}
+
+/**
+ * Line box height by the rule fitted to the sample copies, which an older
+ * build laid out (floor(DATA_TEXT_BOX_FACTOR × em / 100) × 100). Only for
+ * object-layer text blocks that store no line entries (objectLayer.ts).
+ */
+export function legacyLineBoxHeight(ctx: ChartSceneContext, size: number): number {
+  const raw = DATA_TEXT_BOX_FACTOR * textSizeToUnits(size, ctx.page.shortSide);
   return DATA_TEXT_BOX_STEP > 0 ? Math.floor(raw / DATA_TEXT_BOX_STEP) * DATA_TEXT_BOX_STEP : raw;
 }
 
@@ -92,9 +106,9 @@ export function rowHeight(ctx: ChartSceneContext, size: number, blank: boolean):
   return blank ? DATA_BLANK_ROW_HEIGHT * layoutEm(ctx, size) : lineBoxHeight(ctx, size);
 }
 
-/** Baseline of a line whose box top is `top` (page y). */
+/** Baseline of a line whose box top is `top` (page y): the 3.05 ascent below it (assumptions.ts ascent305). */
 export function baselineBelow(ctx: ChartSceneContext, top: number, size: number): number {
-  return top - textAscent(textSizeToUnits(size, ctx.page.shortSide));
+  return top - ascent305(layoutEm(ctx, size));
 }
 
 /** Byte codes of a decoded string (characters outside the HG3 set become "?"). */
@@ -104,7 +118,7 @@ export function codesOf(text: string): number[] {
 
 /** Advance of a line as drawn (glyph advances, or an estimate for CSS text), page units. */
 export function drawnAdvance(ctx: ChartSceneContext, text: string, fontKey: FontKey, size: number): number {
-  const em = textSizeToUnits(size, ctx.page.shortSide);
+  const em = layoutEm(ctx, size);
   const { glyphs } = ctx.faces.faceFor(fontKey);
   if (!glyphs) return text.length * DATA_TEXT_CSS_ADVANCE_EM * em;
   return (layoutGlyphLine(glyphs, codesOf(text), advanceRounder(em, ctx.page.screenPixel)).advance * em) / EM_UNITS;
@@ -143,7 +157,7 @@ export function textElement(
   if (!t.text.trim()) return null;
   const fill = ctx.color(t.color);
   if (!fill) return null;
-  const size = textSizeToUnits(t.size, ctx.page.shortSide);
+  const size = layoutEm(ctx, t.size);
   const p = toScene(x, baseline);
   const face = ctx.faces.faceFor(t.fontKey);
   if (face.glyphs) return glyphLineElement(face.glyphs, t.text, codesOf(t.text), fill, anchor, p.x, p.y, size, ctx.page.screenPixel);

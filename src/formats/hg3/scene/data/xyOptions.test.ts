@@ -60,6 +60,8 @@ interface AxisSpec {
   sci?: number;
   dec?: number;
   thou?: number;
+  goalMin?: number;
+  goalMax?: number;
 }
 /** A 1402 record as Harvard Graphics 3.05 writes it (XBASE defaults), with `a` changed. */
 function axis(n: number, a: AxisSpec = {}): RecordSpec {
@@ -73,8 +75,8 @@ function axis(n: number, a: AxisSpec = {}): RecordSpec {
   d.set([a.grid ?? (n === 0 ? 3 : 1), a.major ?? 4, a.minor ?? 4], 26);
   d.set(f(a.inc), 29);
   d.set(f(a.minorInc), 37);
-  d.set(f64NotSet(), 45);
-  d.set(f64NotSet(), 53);
+  d.set(f(a.goalMin), 45);
+  d.set(f(a.goalMax), 53);
   d.set([n === 1 ? 27 : 28, a.show ?? 1, a.pct ?? 2, a.cur ?? 2, a.sci ?? 2], 61);
   d.set(f(a.dec), 66);
   d[74] = a.thou ?? 1;
@@ -317,5 +319,35 @@ describe("XY options from the 3.05 test charts", () => {
     const framed = draw(withSeries([legend, leaf(1418, [1, 2, 5, 2, 15, 29])])).elements;
     expect(rects(framed).some((r) => r.fill === role(29) && r.stroke === role(15))).toBe(true);
     expect(rects(framed).find((r) => r.fill === role(21) && r.width < 1500)!.x).toBeGreaterThan(10000);
+  });
+  it("draws a goal range only when both bounds are set, after the frame fill and before the bars (XGOALB, XGOALMN, XGOALMX)", () => {
+    const goal = (y1: AxisSpec) => draw(withSeries([], y1)).elements;
+    const both = goal({ goalMin: 20, goalMax: 60 });
+    const frame = frameRect(both)!;
+    const band = rects(both).find((r) => r.fill === role(27) && r.stroke === role(27))!;
+    expect(band).toBeDefined();
+    expect(band.x).toBeCloseTo(frame.x, 6);
+    expect(band.width).toBeCloseTo(frame.width, 6);
+    expect(both.indexOf(band)).toBeGreaterThan(both.indexOf(frame));
+    expect(both.indexOf(band)).toBeLessThan(both.indexOf(bars(both)[0]!));
+    expect(rects(goal({ goalMin: 20 })).some((r) => r.fill === role(27))).toBe(false);
+    expect(rects(goal({ goalMax: 60 })).some((r) => r.fill === role(27))).toBe(false);
+  });
+
+  it("fills bars by fill style: pattern 0 solid, other patterns left open (XFSP, XFSPP, XFSB, XFSBP, XFSBC)", () => {
+    const look = (s0: Record<number, number>) => {
+      const els = draw(withSeries([], {}, s0)).elements;
+      // Series 1 keeps its colour (role 22), so the first two bar-sized rects not in role 22 are series 0's.
+      return rects(els)
+        .filter((r) => r !== frameRect(els) && r.fill !== role(22) && r.height > 0 && r.width > 1000 && r.width < 10000)
+        .map((r) => [r.fill, r.stroke]);
+    };
+    const white = "#ffffff";
+    // Pattern: white pattern colour and white outline, whatever the series colour (PPATC, XFSP).
+    expect(look({ 7: 2, 8: 0 })).toEqual([[white, white], [white, white]]);
+    expect(look({ 7: 2, 8: 5 })).toEqual([[null, white], [null, white]]);
+    // Both: the series colour as the pattern colour, the usual outline (XFSB, XFSBC).
+    expect(look({ 7: 3, 8: 0 })).toEqual([[role(21), role(ROLE.Outlines)], [role(21), role(ROLE.Outlines)]]);
+    expect(look({ 7: 3, 8: 2 })).toEqual([[null, role(ROLE.Outlines)], [null, role(ROLE.Outlines)]]);
   });
 });

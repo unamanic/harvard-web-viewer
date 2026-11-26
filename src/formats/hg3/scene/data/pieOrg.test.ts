@@ -1,13 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BandElement, PathElement, RectElement, SceneElement, TextElement } from "../../../types";
-import {
-  PIE_3D_DEPTH,
-  PIE_3D_TILT,
-  PIE_EXPLODED_SCALE,
-  PIE_EXPLODE_DISTANCE,
-  PIE_LABEL_LEADER,
-  PIE_RADIUS,
-} from "../../assumptions";
+import { PIE_3D_DEPTH, PIE_3D_RADIUS_OF_HEIGHT, PIE_3D_RADIUS_OF_WIDTH, PIE_3D_TILT, PIE_EXPLODE_DISTANCE, PIE_LABEL_LEADER } from "../../assumptions";
 import type { Chart } from "../../chart";
 import { DocumentType } from "../../container";
 import { chartWith, textLine, textTail } from "../../data/testing";
@@ -16,7 +9,7 @@ import { type RecordSpec, concat, f32, f64, i16, leaf, padded, u16, u8 } from ".
 import { buildChartScene, notYetDrawn } from "../buildChartScene";
 import { createChartSceneContext } from "../context";
 import { drawOrgChart, lastLevelIsList, orgStyle, storedBoxSize } from "./org";
-import { drawPieChart, labelBoxPosition, percentText, wallShade } from "./pie";
+import { PIE_305_3D_RADIUS, PIE_305_EXPLODED_SCALE, PIE_305_RADIUS_1_LINE, PIE_305_RADIUS_2_LINES, drawPieChart, labelBoxPosition, percentText, wallShade } from "./pie";
 
 const role = (r: number): string => rgbToCss(colorForRole(DEFAULT_PALETTE, r)!);
 const area = (tag: number, x1: number, y1: number, x2: number, y2: number) =>
@@ -67,7 +60,7 @@ describe("drawPieChart", () => {
     const { elements } = draw(chart, drawPieChart);
     const slices = paths(elements).filter((p) => p.closed);
     expect(slices).toHaveLength(3);
-    const r = Math.trunc(PIE_RADIUS * 20000);
+    const r = Math.trunc(PIE_305_RADIUS_2_LINES * 20000);
     for (const [i, s] of slices.entries()) {
       expect(s.fill).toBe(role(21 + i));
       expect(s.stroke).toBe(role(ROLE.Outlines));
@@ -91,7 +84,7 @@ describe("drawPieChart", () => {
   it("shrinks a pie with an exploded slice and moves the slice out along its middle", () => {
     const chart = chartWith(DocumentType.Pie, [PLOT, flat1304, slice(0, 0, 50, "A"), slice(0, 1, 50, "B", 1)]);
     const slices = paths(draw(chart, drawPieChart).elements).filter((p) => p.closed);
-    const r = Math.trunc(PIE_RADIUS * 20000 * PIE_EXPLODED_SCALE);
+    const r = Math.trunc(PIE_305_RADIUS_2_LINES * 20000 * PIE_305_EXPLODED_SCALE);
     expect(slices[0]!.points[0]).toEqual({ x: 0, y: 1000 });
     // B spans 180° to 360°: middle 270°, straight down on the page.
     expect(slices[1]!.points[0]!.x).toBeCloseTo(0, 6);
@@ -102,7 +95,8 @@ describe("drawPieChart", () => {
     const chart = chartWith(DocumentType.Pie, [PLOT, threeD1304, slice(0, 0, 25, "A"), slice(0, 1, 75, "B")]);
     const { elements } = draw(chart, drawPieChart);
     const bands = elements.filter((e): e is BandElement => e.kind === "band");
-    const rx = Math.trunc(Math.min(0.42 * 20000, 0.28 * 32000));
+    // 3.05: the width radius is 0.44 × the plot height (PM3D), capped by the column width as before.
+    const rx = Math.trunc(Math.min(PIE_305_3D_RADIUS * 20000, PIE_3D_RADIUS_OF_WIDTH * (PIE_305_3D_RADIUS / PIE_3D_RADIUS_OF_HEIGHT) * 32000));
     expect(bands).toHaveLength(1); // only B reaches the front (180° to 360°)
     expect(bands[0]).toMatchObject({ rx, ry: Math.trunc(PIE_3D_TILT * rx), depth: Math.trunc(PIE_3D_DEPTH * rx), startAngle: 180, endAngle: 360 });
     const walls = paths(elements).filter((p) => p.closed && p.points.length === 4);
@@ -111,6 +105,30 @@ describe("drawPieChart", () => {
     // Sides come before the tops.
     const firstTop = elements.findIndex((e) => e.kind === "path" && e.closed && e.points.length > 4);
     expect(elements.indexOf(bands[0]!)).toBeLessThan(firstTop);
+  });
+
+  it("sizes the pie by its label lines as 3.05 does on every page: 0.34, 0.40 with one line (PMBASE, PMVADJ)", () => {
+    const radius = (o: RecordSpec[]) => {
+      const s = paths(draw(chartWith(DocumentType.Pie, [PLOT, flat1304, ...o, slice(0, 0, 50, "A"), slice(0, 1, 50, "B")]), drawPieChart).elements).filter((p) => p.closed)[0]!;
+      return Math.hypot(s.points[1]!.x - s.points[0]!.x, s.points[1]!.y - s.points[0]!.y);
+    };
+    expect(radius([pieOptionsFull(0)])).toBeCloseTo(Math.trunc(PIE_305_RADIUS_2_LINES * 20000), 3);
+    // Labels off: only the value line remains.
+    expect(radius([pieOptionsFull(0, { labels: 2 })])).toBeCloseTo(Math.trunc(PIE_305_RADIUS_1_LINE * 20000), 3);
+  });
+
+  it("fills slices by fill style: pattern 0 solid, other patterns left open (PFILLP, PFILLB, PPATC, PBCOL)", () => {
+    // Slice n carries pattern n (1316 byte 4): A solid, B patterned.
+    const look = (fillStyle: number) =>
+      paths(draw(chartWith(DocumentType.Pie, [PLOT, leaf(1304, [2, 2, 2, 2, fillStyle, 0x20, 0x12]), slice(0, 0, 50, "A"), slice(0, 1, 50, "B")]), drawPieChart).elements)
+        .filter((p) => p.closed)
+        .map((p) => [p.fill, p.stroke]);
+    const white = "#ffffff";
+    expect(look(1)).toEqual([[role(21), role(ROLE.Outlines)], [role(22), role(ROLE.Outlines)]]);
+    // Pattern: white pattern colour and outline, the slice colour ignored.
+    expect(look(2)).toEqual([[white, white], [null, white]]);
+    // Both: the slice colour as the pattern colour, the usual outline.
+    expect(look(3)).toEqual([[role(21), role(ROLE.Outlines)], [null, role(ROLE.Outlines)]]);
   });
 
   it("shades walls like the copies' 0x112A brightness", () => {
@@ -205,7 +223,7 @@ describe("drawPieChart", () => {
   it("centres items placed Inside at 2/3 of the radius (PVALIN, PPCTPI)", () => {
     const chart = chartWith(DocumentType.Pie, [PLOT, flat1304, pieOptions(0), values(0, { place: 3 }), slice(0, 0, 50, "A"), slice(0, 1, 50, "B")]);
     const { elements } = draw(chart, drawPieChart);
-    const r = Math.trunc(PIE_RADIUS * 20000);
+    const r = Math.trunc(PIE_305_RADIUS_2_LINES * 20000);
     const inside = texts(elements).find((t) => t.text === "50")!;
     // A spans 0° to 180°: its middle is straight up from the centre (0, −1000).
     expect(inside.anchor).toBe("middle");
@@ -221,7 +239,7 @@ describe("drawPieChart", () => {
     expect(slices.map((s) => s.fill)).toEqual([role(23), role(22), role(21)]);
     expect(deg(slices[0]!.points[1]!, slices[0]!.points[0]!)).toBeCloseTo(45, 6);
     expect(deg(slices[1]!.points[1]!, slices[1]!.points[0]!)).toBeCloseTo(-135, 6); // 45 + 180 = 225°
-    const r = Math.trunc(PIE_RADIUS * 20000 * Math.SQRT1_2);
+    const r = Math.trunc(PIE_305_RADIUS_2_LINES * 20000 * Math.SQRT1_2);
     expect(Math.hypot(slices[0]!.points[1]!.x, slices[0]!.points[1]!.y - 1000)).toBeCloseTo(r, 3);
   });
 
@@ -232,7 +250,7 @@ describe("drawPieChart", () => {
     expect(paths(draw(none, drawPieChart).elements).filter((p) => !p.closed)).toEqual([]);
     const long = chartWith(DocumentType.Pie, [PLOT, flat1304, pieOptionsFull(0, { pointer: 4 }), slice(0, 0, 1, "a"), slice(0, 1, 1, "b")]);
     const leaders = paths(draw(long, drawPieChart).elements).filter((p) => !p.closed);
-    const r = Math.trunc(PIE_RADIUS * 20000);
+    const r = Math.trunc(PIE_305_RADIUS_2_LINES * 20000);
     expect(leaders[0]!.points).toHaveLength(3);
     // a's middle is 90°: the tail runs right, 0.3 × the radius, at the leader end's height.
     expect(leaders[0]!.points[2]!.x - leaders[0]!.points[1]!.x).toBeCloseTo(0.3 * r, 6);

@@ -7,6 +7,7 @@ import {
   XY_FRAME_MARGIN,
   XY_LABEL_GAP,
   XY_LEGEND_SWATCH,
+  lineBox305,
 } from "../../assumptions";
 import type { Chart } from "../../chart";
 import { DocumentType } from "../../container";
@@ -28,6 +29,7 @@ import {
   tickLabel,
   tickValues,
   xyOptions,
+  XY_TABLE_GAP,
   xyTextWidth,
 } from "./xy";
 
@@ -150,8 +152,9 @@ describe("xyOptions", () => {
       depth: 35,
       dataTable: true,
       valueLabels: true,
-      legendBottomUp: true,
     });
+    // The legend order follows the bar style, not 1418 byte 1 (SPEC §5.5, "Legend order").
+    expect(o).not.toHaveProperty("legendBottomUp");
   });
 });
 
@@ -255,7 +258,7 @@ describe("drawXYChart", () => {
     expect(groups.map((g) => g.kind)).toEqual(["area", "bars", "line"]);
   });
 
-  it("lays out the legend in its 810 area, bottom-up for stacked bars when 1418 byte 1 = 2", () => {
+  it("lays out the legend in its 810 area, bottom-up for Stack and 100% bars (XSTK, XPCT1)", () => {
     const legend = area(810, 10000, -4000, 15000, 2000);
     const { elements } = draw(clusterChart([legend, options({ bar: 3 }), leaf(1418, [1, 2, 5, 2, 14, 20])]));
     const box = rects(elements).find((r) => r.fill === role(ROLE.Legend))!;
@@ -268,12 +271,38 @@ describe("drawXYChart", () => {
     expect(swatches[0]!.width).toBeCloseTo(XY_LEGEND_SWATCH * lineBoxHeight(createChartSceneContext(clusterChart(), undefined).context, 4), 6);
   });
 
+  it("orders the legend by bar style alone, whatever 1418 byte 1 says (XSTK, XOVL, XSTEP)", () => {
+    const legend = area(810, 10000, -4000, 15000, 2000);
+    const order = (bar: number, byte1: number) =>
+      texts(draw(clusterChart([legend, options({ bar }), leaf(1418, [1, byte1, 5, 2, 14, 20])])).elements)
+        .filter((t) => t.text === "North" || t.text === "South")
+        .map((t) => t.text);
+    // Stack and 100 %: bottom-up even with byte 1 = 1.
+    expect(order(3, 1)).toEqual(["South", "North"]);
+    expect(order(4, 1)).toEqual(["South", "North"]);
+    // Cluster, Overlap and Step: top-down even with byte 1 = 2.
+    expect(order(1, 2)).toEqual(["North", "South"]);
+    expect(order(2, 2)).toEqual(["North", "South"]);
+    expect(order(5, 2)).toEqual(["North", "South"]);
+  });
+
   it("draws a data table with one row per series under the frame (1410 byte 0 = 2), with swatches when the legend is off", () => {
     const { elements } = draw(clusterChart([leaf(1410, [2, 1, 2]), leaf(1418, [2, 2, 5, 2, 14, 20])]));
     const cells = texts(elements).map((t) => t.text);
     expect(cells).toEqual(expect.arrayContaining(["10", "28", "15", "103", "North", "South"]));
-    const table = rects(elements).find((r) => r.stroke === role(ROLE.Frame) && r.fill === role(ROLE.FrameBkg))!;
+    // 3.05 leaves the table box unfilled and starts it at the plot's left edge (XMLEGNO) [C].
+    const table = rects(elements).find((r) => r.stroke === role(ROLE.Frame) && r.fill === null && r.height < 10000)!;
     expect(table.y + table.height).toBeCloseTo(-(-11000 + XY_FRAME_BOTTOM_MARGIN * H), 6);
+    expect(table.x).toBe(-16000);
+    // Swatches: 0.7 × the row box square, ending 0.2 × the row box left of the frame.
+    const rowH = table.height / 2;
+    const frame = rects(elements).find((r) => r.fill === role(ROLE.FrameBkg))!;
+    const swatches = rects(elements).filter((r) => r.y > frame.y + frame.height && Math.abs(r.width - XY_LEGEND_SWATCH * rowH) < 1e-6);
+    expect(swatches).toHaveLength(2);
+    for (const sw of swatches) expect(sw.x + sw.width).toBeCloseTo(frame.x - 0.2 * rowH, 6);
+    // 3.05 leaves the same gap above the table as without swatches (XY_TABLE_GAP; XMLEGNO, XREV7).
+    const q1 = texts(elements).find((t) => t.text === "Q1")!;
+    expect(-(frame.y + frame.height) - -table.y).toBeCloseTo(XY_TABLE_GAP * H + lineBox305(q1.size), 6);
   });
 
   it("draws high/low/close series as I bars with a close tick (1408 byte 11 = 3)", () => {

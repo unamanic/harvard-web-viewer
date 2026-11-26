@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SceneElement, TextElement } from "../../../types";
-import { textAscent, textSizeToUnits } from "../../assumptions";
+import { ascent305, layoutEm305, lineBox305, textSizeToUnits } from "../../assumptions";
 import { type Chart, parseChart } from "../../chart";
 import { DocumentType, readContainer } from "../../container";
 import { DEFAULT_PALETTE, ROLE, colorForRole, rgbToCss } from "../../palette";
@@ -161,11 +161,26 @@ describe("dataLayout modes", () => {
 // Task 14: text layout
 // ---------------------------------------------------------------------------
 
+// 3.05 text metrics on a 10 × 7.5 page (short side 24576): em rounded down, ascent rounded up to 100.
+const em305 = (s: number) => layoutEm305(s, 24576);
+const ascentOf = (s: number) => ascent305(em305(s));
+const boxOf305 = (s: number) => lineBox305(em305(s));
+
 describe("text layout", () => {
   const ctx = createChartSceneContext(bulletChart(), undefined).context;
 
-  it("box heights are floor(1.285 em / 100) × 100", () => {
-    expect([4, 7, 9, 12].map((s) => lineBoxHeight(ctx, s))).toEqual([1200, 2200, 2800, 3700]);
+  it("box heights are (1.25 em + 50) rounded up to 100 (3.05; PT6 to PT25, PMT6 to PMT25)", () => {
+    expect([4, 7, 9, 12].map((s) => lineBoxHeight(ctx, s))).toEqual([1300, 2200, 2900, 3800]);
+    // SPEC §5.5: size 3.5 gives a 1200 label line on 10 × 7.5.
+    expect(lineBoxHeight(ctx, 3.5)).toBe(1200);
+  });
+
+  it("measures ems and ascents as 3.05 stores them", () => {
+    // SPEC §5.5: sizes 6 and 2.5 give ems 1474 and 614 on 10 × 7.5, sizes 6 and 12 give 1519 and 3038 on
+    // Letter. The stored size 12 on 10 × 7.5 (2948) and size 2.5 on Letter (632) are a unit under the rule.
+    expect([6, 2.5].map((s) => layoutEm305(s, 24576))).toEqual([1474, 614]);
+    expect([6, 12].map((s) => layoutEm305(s, 25321))).toEqual([1519, 3038]);
+    expect([614, 1474, 2948, 3038].map(ascent305)).toEqual([700, 1500, 3000, 3100]);
   });
 
   it("stacks rows overlapping by 0.15 of the next row; blank rows take one em", () => {
@@ -192,7 +207,7 @@ describe("text layout", () => {
     const title = texts(els).find((t) => t.text === "Bullets")!;
     expect(title.anchor).toBe("middle");
     expect(title.x).toBe(0);
-    expect(title.y).toBeCloseTo(-(12000 - textAscent(textSizeToUnits(9))), 6);
+    expect(title.y).toBeCloseTo(-(12000 - ascentOf(9)), 6);
     expect(title.fill).toBe(role(1));
     const sep = els.find((e) => e.kind === "path");
     expect(sep).toMatchObject({ points: [{ x: -16000, y: -9000 }, { x: 16000, y: -9000 }], stroke: role(ROLE.Lines) });
@@ -214,11 +229,11 @@ describe("title chart", () => {
     ]);
     const t = texts(buildChartScene(chart, undefined).scene.elements);
     const baseline = (name: string) => -t.find((e) => e.text === name)!.y;
-    const asc = (s: number) => textAscent(textSizeToUnits(s));
+    const asc = ascentOf;
     expect(baseline("Top")).toBeCloseTo(12000 - asc(12), 6);
-    expect(baseline("Bottom")).toBeCloseTo(-12000 + 1200 - asc(4), 6);
-    // Middle box (2800) centred between 12000 − 3700 and −12000 + 1200.
-    expect(baseline("Middle")).toBeCloseTo((8300 - 10800) / 2 + 1400 - asc(9), 6);
+    expect(baseline("Bottom")).toBeCloseTo(-12000 + boxOf305(4) - asc(4), 6);
+    // Middle box (2900) centred between 12000 − 3800 and −12000 + 1300.
+    expect(baseline("Middle")).toBeCloseTo((12000 - boxOf305(12) + (-12000 + boxOf305(4))) / 2 + boxOf305(9) / 2 - asc(9), 6);
     expect(t.every((e) => e.anchor === "middle" && e.x === 0)).toBe(true);
   });
 });
@@ -248,7 +263,7 @@ describe("bullet chart", () => {
     expect(l1!.x).toBe(l2!.x);
     expect(m1!.x).toBeLessThan(l1!.x);
     // Row 0 box top at the plot top; row 2 after a blank row.
-    expect(-l1!.y).toBeCloseTo(8800 - textAscent(textSizeToUnits(7)), 6);
+    expect(-l1!.y).toBeCloseTo(8800 - ascentOf(7), 6);
     expect(-l1!.y - -l2!.y).toBeCloseTo(3331, -1);
   });
 
@@ -337,8 +352,8 @@ describe("table chart", () => {
     expect(cell("8").anchor).toBe("end");
     expect(cell("8").x).toBeCloseTo(8192 - m, 6);
     // Band 1 (30 % to 40 %) centred: y from 12288 − 0.3 × 24576.
-    const top = (12288 - 0.3 * 24576 + 12288 - 0.4 * 24576) / 2 + 1200 / 2;
-    expect(-cell("A").y).toBeCloseTo(top - textAscent(textSizeToUnits(4)), 6);
+    const top = (12288 - 0.3 * 24576 + 12288 - 0.4 * 24576) / 2 + boxOf305(4) / 2;
+    expect(-cell("A").y).toBeCloseTo(top - ascentOf(4), 6);
     const rects = els.filter((e) => e.kind === "rect" && e.fill !== null);
     expect(rects.map((r) => r.kind === "rect" && r.fill)).toEqual([role(33), role(36)]);
     expect(rects[0]).toMatchObject({ x: 0, width: 8192, stroke: role(ROLE.Outlines) });
