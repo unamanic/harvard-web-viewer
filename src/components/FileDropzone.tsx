@@ -143,13 +143,12 @@ export function SupportedFilesHelp() {
         <p>Harvard Graphics for DOS files:</p>
         <ul>
           <li>
-            <strong>.SH3</strong> slide shows play with their transitions, keys and buttons.
+            Harvard Graphics 3 (checked against 3.05): <strong>.SH3</strong> slide shows play with their transitions,
+            keys and buttons, and <strong>.CH3</strong> charts are drawn on their own.
           </li>
           <li>
-            <strong>.CH3</strong> charts are drawn on their own.
-          </li>
-          <li>
-            <strong>.CHT</strong> charts from Harvard Graphics 1.0 and 2.x are laid out from their data.
+            Harvard Presentation Graphics 1.0 and Harvard Graphics 2.10, 2.12 and 2.30: <strong>.CHT</strong> charts
+            are laid out from their data.
           </li>
           <li>
             <strong>.PL3</strong> and <strong>.PC3</strong> palettes, <strong>.SPD</strong> and <strong>.FN3</strong>{" "}
@@ -160,6 +159,7 @@ export function SupportedFilesHelp() {
         <p className="muted">
           Open the whole folder a show lives in, or a <strong>.ZIP</strong> of it, so the files it names are found.
         </p>
+        <p className="muted">Harvard Graphics for Windows files are not supported.</p>
       </div>
     </details>
   );
@@ -178,11 +178,15 @@ export function EmptyState({ onFiles, over = false, status }: { onFiles: OnFiles
         <h1 id="empty-title" className="empty-title">
           Open a chart
           <br />
-          from 1991.
+          from 1986 to 1992.
         </h1>
         <p className="empty-lead">
           Harvard Graphics for DOS saved millions of charts and slide shows that almost nothing can open today. Drop one
           here and see it again.
+        </p>
+        <p className="empty-versions">
+          Opens charts and shows from Harvard Graphics 3 (checked against 3.05), and charts from Harvard Presentation
+          Graphics 1.0 and Harvard Graphics 2.10, 2.12 and 2.30.
         </p>
         <div className="empty-buttons">
           <FileInputButton onFiles={onFiles} className="button button-primary button-large">

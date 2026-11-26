@@ -1,6 +1,14 @@
 # Harvard Web Viewer
 
-A browser-only viewer for **Harvard Graphics 3 for DOS** files: charts (`.CH3`), screen shows (`.SH3`) and palettes (`.PL3`, `.PC3`). It also opens charts (`.CHT`) from the earlier DOS releases: Harvard Presentation Graphics 1.0 and Harvard Graphics 2.10, 2.12 and 2.30.
+A browser-only viewer for **Harvard Graphics for DOS** files.
+
+| Version | What it opens |
+| --- | --- |
+| Harvard Graphics 3 (checked against 3.05, 1992) | Charts (`.CH3`), screen shows (`.SH3`) and palettes (`.PL3`, `.PC3`), with the fonts, bitmaps and sounds they name |
+| Harvard Graphics 2.10, 2.12 and 2.30 | Charts (`.CHT`) |
+| Harvard Presentation Graphics 1.0 (1986) | Charts (`.CHT`) |
+
+Only chart files are read from 1.0 and 2.x. Harvard Graphics for Windows is not supported.
 
 **Open the viewer: <https://unamanic.github.io/harvard-web-viewer/>**
 
