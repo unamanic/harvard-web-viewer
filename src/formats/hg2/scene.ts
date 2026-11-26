@@ -4,7 +4,8 @@
  * charts lay their own lines out; multiple charts draw the charts they name
  * (other .CHT files) into their slots.
  */
-import { LANDSCAPE_VIEW_BOX, type ParseContext, type Scene, type SceneElement } from "../types";
+import { LANDSCAPE_VIEW_BOX, type Scene, type SceneElement } from "../../model/scene";
+import { type ParseContext } from "../parser";
 import { BACKGROUND, DEFAULT_SIZES, MARGIN_X, MARGIN_Y, PAGE, classicColor, sizeToUnits } from "./assumptions";
 import { type Box, drawGraph } from "./graph";
 import type { ClassicChart, MultipleSlot } from "./model";

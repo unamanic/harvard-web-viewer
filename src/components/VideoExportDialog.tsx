@@ -5,7 +5,7 @@
  * load when the dialog first asks what the browser supports.
  */
 import { type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react";
-import type { Presentation } from "../formats/types";
+import type { Presentation } from "../model/presentation";
 import type { DisplayMode } from "../render/displayMode";
 import type { ResolveFile } from "../player/sound/controller";
 import { TRANSITION_MODES, type TransitionMode } from "../player/transitions/mode";

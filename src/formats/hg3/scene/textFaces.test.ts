@@ -8,7 +8,8 @@
 import { describe, expect, it } from "vitest";
 import { outlineCloneFor, outlineCloneInfo } from "../../../fonts/outline";
 import { strokeCloneFor, textToStrokePaths } from "../../../fonts/stroke";
-import type { GlyphsElement, GroupElement, ParseContext, ResolvedFile, SceneElement } from "../../types";
+import type { GlyphsElement, GroupElement, SceneElement } from "../../../model/scene";
+import type { ParseContext, ResolvedFile } from "../../parser";
 import { textAscent, textSizeToUnits } from "../assumptions";
 import { parseChart } from "../chart";
 import { DocumentType, readContainer } from "../container";

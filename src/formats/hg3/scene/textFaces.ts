@@ -19,8 +19,8 @@ import { outlineGlyphSource, speedoGlyphSource, strokeGlyphSource } from "../../
 import type { GlyphSource } from "../../../fonts/glyphRun";
 import { strokeCloneFor } from "../../../fonts/stroke";
 import { type SpeedoFont, parseSpeedo } from "../../speedo/speedo";
-import type { ResolvedFile } from "../../types";
-import { fontKeyString } from "../fontKey";
+import type { ResolvedFile } from "../../parser";
+import { fontKeyString } from "../../../fonts/fontKey";
 import type { FontResolver, ResolvedFont } from "../fonts";
 
 export type TextFaceOrigin = "original" | "clone" | "css";

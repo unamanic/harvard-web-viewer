@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ImageElement, IndexedPixels, Scene, SceneElement } from "../formats/types";
+import type { ImageElement, IndexedPixels, Scene, SceneElement } from "../model/scene";
 import type { RGB } from "./color";
 import { type Dither, type Screen, applyScreen } from "./dither";
 import { herculesScreen } from "./hercules";

@@ -3,7 +3,7 @@
  * dialog): what the browser can encode, and running an export with
  * WebCodecs or, where that is missing, MediaRecorder.
  */
-import type { Presentation } from "../formats/types";
+import type { Presentation } from "../model/presentation";
 import type { DisplayMode } from "../render/displayMode";
 import type { ResolveFile } from "../player/sound/controller";
 import type { TransitionMode } from "../player/transitions/mode";

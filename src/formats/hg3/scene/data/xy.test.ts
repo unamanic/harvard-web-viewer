@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { BandElement, PathElement, RectElement, SceneElement, TextElement } from "../../../types";
+import type { BandElement, PathElement, RectElement, SceneElement, TextElement } from "../../../../model/scene";
 import {
   BOX_3D_SIDE_SHADE,
   BOX_3D_TOP_SHADE,

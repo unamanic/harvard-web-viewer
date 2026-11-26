@@ -13,7 +13,7 @@
  * - font style word → CSS weight, look-alike stacks: fonts.ts
  *   (STYLE_WEIGHTS, LOOK_ALIKES), task 7
  */
-import { DEFAULT_STROKE_WIDTH } from "../types";
+import { DEFAULT_STROKE_WIDTH } from "../../model/scene";
 
 // ---------------------------------------------------------------------------
 // Task 7: text size

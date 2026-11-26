@@ -1,5 +1,5 @@
 import { type KeyboardEvent, useRef, useState } from "react";
-import type { Scene } from "../formats/types";
+import type { Scene } from "../model/scene";
 import { SceneRenderer } from "../render/SceneRenderer";
 import { useAutoHide, useFullscreenWhile } from "../ui/hooks";
 

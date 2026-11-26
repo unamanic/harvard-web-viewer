@@ -29,7 +29,7 @@
  */
 import type { Chart } from "../chart";
 import type { LeafRecord } from "../container";
-import { ByteReader } from "../ByteReader";
+import { ByteReader } from "../../ByteReader";
 import { type TextTail, readTextTail } from "../text";
 import { type RawRecord, i16At, otherRecords, recordsOf, singleRaw, u16At } from "./common";
 

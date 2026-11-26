@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LANDSCAPE_VIEW_BOX, centredViewBox, type Scene, type SceneElement } from "../formats/types";
+import { LANDSCAPE_VIEW_BOX, centredViewBox, type Scene, type SceneElement } from "../model/scene";
 import { type RGB, luma } from "./color";
 import {
   BAYER_4X4,

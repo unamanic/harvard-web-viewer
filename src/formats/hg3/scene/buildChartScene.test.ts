@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { LANDSCAPE_VIEW_BOX, PORTRAIT_VIEW_BOX, type ParseContext, type ResolvedFile } from "../../types";
+import { LANDSCAPE_VIEW_BOX, PORTRAIT_VIEW_BOX } from "../../../model/scene";
+import { type ParseContext, type ResolvedFile } from "../../parser";
 import { DRAW_PAGE_FRAME } from "../assumptions";
 import { parseChart } from "../chart";
 import { DocumentType, readContainer } from "../container";

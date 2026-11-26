@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { LANDSCAPE_VIEW_BOX, type FillPattern, type Scene, type SceneElement } from "../formats/types";
+import { LANDSCAPE_VIEW_BOX, type FillPattern, type Scene, type SceneElement } from "../model/scene";
 import {
   DEFAULT_DISPLAY_MODE,
   DISPLAY_MODES,

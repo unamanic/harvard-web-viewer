@@ -30,7 +30,7 @@
 import type { Chart } from "../chart";
 import type { LeafRecord } from "../container";
 import { type TextLine, TextSlot } from "../text";
-import { decodeHg3Text } from "../charset";
+import { decodeHg3Text } from "../../charset";
 import { type RawRecord, checkLength, f32At, f64At, otherRecords, paddedAt, readerAt, recordsOf, singleRaw, u16At } from "./common";
 
 export const XyTag = {

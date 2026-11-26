@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { FileSet } from "./files/FileSet";
-import { DocumentType } from "./formats/hg3/container";
-import { block, buildDocument, concat, cstr, f32, i16, leaf, u16 } from "./formats/hg3/testing/bytes";
+import { FileSet } from "./FileSet";
+import { DocumentType } from "../formats/hg3/container";
+import { block, buildDocument, concat, cstr, f32, i16, leaf, u16 } from "../formats/hg3/testing/bytes";
 import { loadFileSet, openFileSet } from "./loadFile";
 
 /** A drawing whose one text line uses Swiss 721 Bold (3:5:0x42a8), which has an outline clone. */

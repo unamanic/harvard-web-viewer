@@ -9,7 +9,7 @@
  * (`choices`); see `documentChoices`.
  */
 import { type FileEntry, FileSet } from "./FileSet";
-import { fileGroupKind } from "../ui/fileGroups";
+import { fileKind } from "./fileKind";
 import { ZipError, isZipName, looksLikeZip, readZip } from "./zip";
 
 export interface OpenedFiles {
@@ -38,8 +38,8 @@ export function documentChoices(fileSet: FileSet, archives: readonly string[]): 
   if (archives.length === 0) return [];
   const prefixes = archives.map((a) => a.toLowerCase() + "/");
   const inArchive = fileSet.entries().filter((e) => prefixes.some((p) => e.path.toLowerCase().startsWith(p)));
-  const shows = inArchive.filter((e) => fileGroupKind(e.name, e.bytes) === "show");
-  return shows.length > 0 ? shows : inArchive.filter((e) => fileGroupKind(e.name, e.bytes) === "chart");
+  const shows = inArchive.filter((e) => fileKind(e.name, e.bytes) === "show");
+  return shows.length > 0 ? shows : inArchive.filter((e) => fileKind(e.name, e.bytes) === "chart");
 }
 
 /**

@@ -1,11 +1,12 @@
 import { type ReactNode, Suspense, lazy, useCallback, useMemo, useRef, useState } from "react";
 import type { PathedFile } from "../files/fromBrowser";
-import type { PresentationSlide, Scene } from "../formats/types";
-import type { LoadedFile } from "../loadFile";
+import type { PresentationSlide } from "../model/presentation";
+import type { Scene } from "../model/scene";
+import type { LoadedFile } from "../files/loadFile";
 import { DEFAULT_DISPLAY_MODE, applyDisplayMode, type DisplayMode } from "../render/displayMode";
 import { SceneRenderer } from "../render/SceneRenderer";
 import type { SavedPosition } from "../player/player";
-import { type ShowControl, ShowPlayer } from "../player/ShowPlayer";
+import { type ShowControl, ShowPlayer } from "./ShowPlayer";
 import { DEFAULT_TRANSITION_MODE, type TransitionMode } from "../player/transitions/mode";
 import { collectDiagnostics } from "../ui/diagnostics";
 import type { ExportChoice } from "../ui/exportImage";
@@ -151,7 +152,7 @@ export function Viewer({
     const number = presentation ? showSlideNumber(presentation.firstSlide, position) : shownPage + 1;
     setExportError(null);
     // Loaded on first use: keeps the export code out of the first screen.
-    void import("./exportScene")
+    void import("../ui/exportScene")
       .then(({ exportScene: save }) => save(exportScene, choice, file.name, number))
       .catch((e: unknown) => setExportError(e instanceof Error ? e.message : String(e)));
   };

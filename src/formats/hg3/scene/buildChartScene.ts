@@ -17,7 +17,8 @@
  * each takes the shared ChartSceneContext. When a task lands, it replaces its
  * stub and removes its part from NOT_YET_DRAWN.
  */
-import type { GroupElement, Matrix, ParseContext, RectElement, Scene, SceneElement, ViewBox } from "../../types";
+import type { GroupElement, Matrix, RectElement, Scene, SceneElement, ViewBox } from "../../../model/scene";
+import type { ParseContext } from "../../parser";
 import {
   BUTTON_BAND_SNAP_ROWS,
   BUTTON_CHART_FITS_DATA_CHART,

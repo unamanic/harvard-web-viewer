@@ -12,9 +12,9 @@
  * `cssFamily` look-alike as a last resort) is decided by
  * scene/textFaces.ts (task 7f).
  */
-import { type ParseContext, type ResolvedFile, findFile } from "../types";
+import { type ParseContext, type ResolvedFile, findFile } from "../parser";
 import { BUILT_IN_FONTS, type FgfEntry, parseFgf } from "./fgf";
-import { type FontKey, FontSource, fontKeyString } from "./fontKey";
+import { type FontKey, FontSource, fontKeyString } from "../../fonts/fontKey";
 
 /** Name of the font index file (SPEC §2). */
 export const FONT_INDEX_NAME = "HG3.FGF";

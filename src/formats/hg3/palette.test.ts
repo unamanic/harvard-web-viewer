@@ -20,7 +20,7 @@ import {
   uniqueWarningSink,
 } from "./palette";
 import { type RecordSpec, block, buildDocument, concat, cstr, leaf, padded, u16 } from "./testing/bytes";
-import type { ParseContext, ResolvedFile } from "../types";
+import type { ParseContext, ResolvedFile } from "../parser";
 
 // ---------------------------------------------------------------------------
 // Builders

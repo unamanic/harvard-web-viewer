@@ -1,7 +1,7 @@
 /** What the diagnostics panel lists (pure, no React). */
 import type { MissingFile } from "../files/FileSet";
-import type { LoadedFile } from "../loadFile";
-import type { PresentationSlide } from "../formats/types";
+import type { LoadedFile } from "../files/loadFile";
+import type { PresentationSlide } from "../model/presentation";
 
 export interface Diagnostics {
   /** Files the document named that are not open, read from the file set now (includes names met in lazy slide builds). */

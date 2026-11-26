@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LANDSCAPE_VIEW_BOX, type Scene } from "../formats/types";
+import { LANDSCAPE_VIEW_BOX, type Scene } from "../model/scene";
 import { type RGB } from "./color";
 import { BAYER_8X8, applyScreen, ditherTile, normalizeDither } from "./dither";
 import {

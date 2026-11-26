@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ParseContext, ResolvedFile } from "../types";
+import type { ParseContext, ResolvedFile } from "../parser";
 import { textSizeToUnits, PAGE_SHORT_SIDE } from "./assumptions";
 import { ascii, concat, padded, u16 } from "./testing/bytes";
 import {

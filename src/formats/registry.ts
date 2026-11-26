@@ -1,4 +1,4 @@
-import type { Confidence, FormatParser } from "./types";
+import type { Confidence, FormatParser } from "./parser";
 import { hg2Parser } from "./hg2";
 import { hg3Parser } from "./hg3";
 

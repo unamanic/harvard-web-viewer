@@ -13,7 +13,7 @@ original `.SPD` files are not loaded.
   rescaled to the original metrics by `node scripts/gen-outline-faces.mjs <source-dir>`
   (the method is described in that script's header comment).
 - **Character set** (`charset.ts`): built from the shared Harvard Graphics table in
-  `src/formats/hg3/charset.ts` (the upper half is not CP437); it says which character each
+  `src/formats/charset.ts` (the upper half is not CP437); it says which character each
   code draws in the originals.
 
 ## How the viewer draws with them (task 7f)

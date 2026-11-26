@@ -2,7 +2,7 @@
  * Bar/line, area and high/low/close charts (SPEC §2.3, §4.3). Layout is the
  * viewer's own: the files hold the options, not the drawing.
  */
-import type { Point, SceneElement, TextAnchor } from "../types";
+import type { Point, SceneElement, TextAnchor } from "../../model/scene";
 import { DEFAULT_SIZES, classicColor, shade, sizeToUnits } from "./assumptions";
 import type { AxisScale, ClassicChart, ClassicSeries, ClassicText, GraphData, GridStyle, LabelFormat } from "./model";
 import { drawLine, hasText, plainText, textWidth } from "./text";

@@ -8,8 +8,8 @@
  * height), x from the glyph origin, y downwards with the baseline at y = 0.
  * Glyphs are meant to be stroked (round caps and joins), not filled.
  */
-import type { Point } from "../../formats/types";
-import { hg3CodeOf } from "../../formats/hg3/charset";
+import type { Point } from "../../model/scene";
+import { hg3CodeOf } from "../../formats/charset";
 import { HERSHEY_SETS, type HersheySetId } from "./hersheyData";
 
 export interface StrokeGlyph {
@@ -178,7 +178,7 @@ type Recipe =
 const acc = (base: string, accent: Accent): Recipe => ({ kind: "accent", base, accent });
 
 /**
- * HG3 code (src/formats/hg3/charset.ts) → how to build it from the set's
+ * HG3 code (src/formats/charset.ts) → how to build it from the set's
  * ASCII glyphs. The original stroke fonts follow the same character set:
  * HG3.FGF gives them glyphs for the letters at 0xB5–0xEB and none for the
  * box drawing between them.

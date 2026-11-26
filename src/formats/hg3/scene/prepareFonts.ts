@@ -18,10 +18,10 @@
  * preparation; original .SPD files are parsed synchronously (and cached).
  */
 import { outlineCloneFor } from "../../../fonts/outline";
-import type { ParseContext } from "../../types";
+import type { ParseContext } from "../../parser";
 import { parseChart } from "../chart";
 import { type Container, readContainer } from "../container";
-import { type FontKey, fontKeyString, isEmptyFontKey } from "../fontKey";
+import { type FontKey, fontKeyString, isEmptyFontKey } from "../../../fonts/fontKey";
 import { createFontResolver } from "../fonts";
 import { type LayerItem, parseObjectLayer } from "../objects";
 import { MAX_NESTING_DEPTH } from "../presentation";

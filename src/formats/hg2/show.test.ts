@@ -7,9 +7,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { choosePrimary } from "../../files/choosePrimary";
 import { navigate, pressKey, startPlayer, currentSlide } from "../../player/player";
-import { fileGroupKind } from "../../ui/fileGroups";
+import { fileKind } from "../../files/fileKind";
 import { detectFormat } from "../registry";
-import type { ParseContext, Presentation, ResolvedFile, TextElement } from "../types";
+import type { Presentation } from "../../model/presentation";
+import type { TextElement } from "../../model/scene";
+import type { ParseContext, ResolvedFile } from "../parser";
 import { hg2Parser } from "./index";
 import { classicShowToPresentation } from "./presentation";
 import { readClassicShow, slideFileKind } from "./show";
@@ -271,7 +273,7 @@ describe("1.0 shows", () => {
 
   it("is detected by signature and listed as a show", () => {
     expect(detectFormat(bytes, "anything.dat")?.parser.id).toBe("hg2");
-    expect(fileGroupKind("anything.dat", bytes)).toBe("show");
+    expect(fileKind("anything.dat", bytes)).toBe("show");
     expect(hg2Parser.parse(bytes, "S.SHW").formatName).toBe("Harvard Graphics 1.0 slide show (2 slides)");
   });
 
@@ -328,6 +330,6 @@ describe("file lists", () => {
     const entries = [{ name: "A.CHT" }, { name: "B.SHW" }];
     expect(choosePrimary(entries, () => true)?.name).toBe("B.SHW");
     expect(choosePrimary([{ name: "C.SH3" }, ...entries], () => true)?.name).toBe("C.SH3");
-    expect(fileGroupKind("story.shw")).toBe("show");
+    expect(fileKind("story.shw")).toBe("show");
   });
 });

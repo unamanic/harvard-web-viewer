@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import type { ViewBox } from "../formats/types";
+import type { ViewBox } from "../model/scene";
 import { type ExportChoice, exportChoices } from "../ui/exportImage";
 import { useDismissableDetails } from "../ui/hooks";
 

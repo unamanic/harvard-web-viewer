@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { ByteReader } from "./ByteReader";
+import { ByteReader } from "../ByteReader";
 import type { LeafRecord } from "./container";
-import { fontKeyString, isEmptyFontKey, readFontKey } from "./fontKey";
+import { fontKeyString, isEmptyFontKey, readFontKey } from "../../fonts/fontKey";
 import { concat, cstr, f32, f64, u16, u8 } from "./testing/bytes";
 import { Justification, TEXT_TAIL_LENGTH, readStyleTable, readTextLine, readTextTail } from "./text";
 

@@ -4,7 +4,7 @@
  * [I] (inferred) in the sense of docs/SPEC-HG1-HG2.md; change them here
  * when a screenshot of the original program shows otherwise.
  */
-import { LANDSCAPE_VIEW_BOX } from "../types";
+import { LANDSCAPE_VIEW_BOX } from "../../model/scene";
 
 /** The page: the viewer's 4:3 landscape page, x -16384..16384, y -12288..12288 (scene y down). */
 export const PAGE = {

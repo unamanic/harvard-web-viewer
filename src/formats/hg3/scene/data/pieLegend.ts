@@ -21,9 +21,9 @@
  *   centred. Other locations: one row when the area is less than two rows
  *   tall, else a column [I].
  */
-import type { SceneElement } from "../../../types";
+import type { SceneElement } from "../../../../model/scene";
 import { lineWidthFor } from "../../assumptions";
-import type { FontKey } from "../../fontKey";
+import type { FontKey } from "../../../../fonts/fontKey";
 import { ROLE } from "../../palette";
 import { Justification } from "../../text";
 import type { PieLegendOptions, PieSlice } from "../../data/pie";

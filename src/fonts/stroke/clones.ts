@@ -9,8 +9,8 @@
  *   HG Script     Light → Script Simplex, Bold → Script Complex
  *   HG Gothic     Bold  → Gothic English
  */
-import type { FontKey } from "../../formats/hg3/fontKey";
-import { FontSource } from "../../formats/hg3/fontKey";
+import type { FontKey } from "../fontKey";
+import { FontSource } from "../fontKey";
 import type { HersheySetId } from "./hersheyData";
 import { createStrokeFont, type StrokeFont, type StrokeWeight } from "./strokeFont";
 

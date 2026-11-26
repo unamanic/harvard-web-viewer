@@ -2,7 +2,8 @@
  * Video export options (pure): defaults, the sizes offered, the estimate
  * shown before starting, codec choice, and the file name.
  */
-import type { Presentation, ViewBox } from "../formats/types";
+import type { Presentation } from "../model/presentation";
+import type { ViewBox } from "../model/scene";
 import type { TransitionMode } from "../player/transitions/mode";
 import type { ResolveFile } from "../player/sound/controller";
 import { planAudio } from "./audio";

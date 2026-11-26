@@ -16,7 +16,7 @@
  *   SPEC §5.4 says: GALD291 has "r0 c0" and "r0 c1" for its two pies. [I]
  */
 import type { Chart } from "../chart";
-import { decodeHg3Text } from "../charset";
+import { decodeHg3Text } from "../../charset";
 import type { LeafRecord } from "../container";
 import { type TextLine, TextSlot } from "../text";
 import { type RawRecord, checkLength, f32At, f64At, otherRecords, paddedAt, recordsOf, singleRaw, u16At } from "./common";

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { LANDSCAPE_VIEW_BOX, type Presentation, type PresentationSlide, type Scene } from "../formats/types";
+import { type Presentation, type PresentationSlide } from "../model/presentation";
+import { LANDSCAPE_VIEW_BOX, type Scene } from "../model/scene";
 import { ShowPlayer } from "./ShowPlayer";
 
 function pictureSlide(label: string, background: string): PresentationSlide {

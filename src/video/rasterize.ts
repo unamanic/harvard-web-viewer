@@ -6,9 +6,10 @@
  * page shape differs from the video's. Only a few pictures are kept: the
  * timeline moves forward, so the least recently used ones are dropped.
  */
-import type { PresentationSlide, Scene } from "../formats/types";
+import type { PresentationSlide } from "../model/presentation";
+import type { Scene } from "../model/scene";
 import { type DisplayMode, applyDisplayMode } from "../render/displayMode";
-import { sceneToSvg, svgToImage } from "../components/exportScene";
+import { sceneToSvg, svgToImage } from "../render/sceneToSvg";
 import { BLACK, fitRect } from "./compose";
 import type { PictureStore } from "./encode";
 

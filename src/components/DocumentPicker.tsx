@@ -6,7 +6,7 @@
  */
 import { type KeyboardEvent, useEffect, useId, useRef } from "react";
 import type { FileEntry } from "../files/FileSet";
-import { fileGroupKind } from "../ui/fileGroups";
+import { fileKind } from "../files/fileKind";
 
 export interface DocumentPickerProps {
   choices: readonly FileEntry[];
@@ -24,7 +24,7 @@ function folderOf(path: string): string {
 
 /** "3 shows" / "2 charts" / "1 show and 2 charts". */
 export function pickerSummary(choices: readonly FileEntry[]): string {
-  const shows = choices.filter((c) => fileGroupKind(c.name, c.bytes) === "show").length;
+  const shows = choices.filter((c) => fileKind(c.name, c.bytes) === "show").length;
   const charts = choices.length - shows;
   const part = (n: number, one: string, many: string) => (n === 1 ? `1 ${one}` : `${n} ${many}`);
   if (charts === 0) return part(shows, "show", "shows");
@@ -78,7 +78,7 @@ export function DocumentPicker({ choices, onPick, onCancel }: DocumentPickerProp
               <button type="button" className="picker-item" onClick={() => onPick(c)}>
                 <span className="picker-name">{c.name}</span>
                 <span className="picker-meta">
-                  {fileGroupKind(c.name, c.bytes) === "show" ? "Show" : "Chart"}
+                  {fileKind(c.name, c.bytes) === "show" ? "Show" : "Chart"}
                   {folderOf(c.path) && ` · ${folderOf(c.path)}`}
                 </span>
               </button>

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ParseContext, ResolvedFile, SceneElement } from "../../types";
+import type { SceneElement } from "../../../model/scene";
+import type { ParseContext, ResolvedFile } from "../../parser";
 import { DocumentType } from "../container";
 import { hg3Parser } from "../index";
 import { type RecordSpec, block, buildDocument, concat, cstr, f32, i16, leaf, u16 } from "../testing/bytes";

@@ -5,7 +5,7 @@
  * header that the sample copies draw. Guesses are in assumptions.ts
  * ("Tasks 14, 15, 19").
  */
-import type { SceneElement } from "../../../types";
+import type { SceneElement } from "../../../../model/scene";
 import {
   TABLE_CELL_MARGIN_EM,
   TABLE_CELL_OUTLINE_STYLE,

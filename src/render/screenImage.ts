@@ -26,7 +26,7 @@
  * Images without `pixels`, and images in rotated, sheared or mirrored
  * groups, are left unchanged.
  */
-import type { ImageElement, IndexedPixels, Matrix } from "../formats/types";
+import type { ImageElement, IndexedPixels, Matrix } from "../model/scene";
 import { pcxToDataUrl } from "../formats/pcx/toDataUrl";
 import { parseCssColor } from "./color";
 import type { ScreenGeometry } from "./dither";

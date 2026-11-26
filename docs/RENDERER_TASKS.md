@@ -270,7 +270,7 @@ still win when the user loads them.
 
 The upper half of the byte codes is the Harvard Graphics set (close to code
 page 850), not CP437 (§1, §6.4). **Done:** text decoding in the parsers now
-uses src/formats/hg3/charset.ts, the old CP437 table is removed (moved to a shared
+uses src/formats/charset.ts, the old CP437 table is removed (moved to a shared
 place), keep file names as raw ASCII, and keep the byte codes on text runs so
 fonts can draw by code.
 

@@ -4,10 +4,10 @@
  *
  * All coordinates are scene units (y grows downwards). Angles are degrees
  * counter-clockwise from +x as seen on the page, so the point at angle t on
- * an ellipse is (cx + rx cos t, cy - ry sin t). See src/formats/types.ts.
+ * an ellipse is (cx + rx cos t, cy - ry sin t). See src/model/scene.ts.
  */
 
-import type { Point, SceneElement } from "../formats/types";
+import type { Point, SceneElement } from "../model/scene";
 
 export interface EllipseGeom {
   cx: number;

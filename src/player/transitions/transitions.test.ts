@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { PresentationSlide, SlideEffects } from "../../formats/types";
+import type { PresentationSlide, SlideEffects } from "../../model/presentation";
 import {
   BLINDS_STRIPES,
   FADE_COLUMNS,

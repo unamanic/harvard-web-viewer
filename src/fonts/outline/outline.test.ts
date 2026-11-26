@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BUILT_IN_FONTS } from "../../formats/hg3/fgf";
-import { fontKeyString } from "../../formats/hg3/fontKey";
+import { fontKeyString } from "../fontKey";
 import { HG3_OUTLINE_CHARSET, codeForChar } from "./charset";
 import { OUTLINE_CLONES, outlineCloneFor, outlineCloneInfo, textToOutlinePath } from "./index";
 import { OUTLINE_FACE_METRICS } from "./metrics";

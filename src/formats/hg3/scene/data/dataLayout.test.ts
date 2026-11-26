@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SceneElement, TextElement } from "../../../types";
+import type { SceneElement, TextElement } from "../../../../model/scene";
 import { ascent305, layoutEm305, lineBox305, textSizeToUnits } from "../../assumptions";
 import { type Chart, parseChart } from "../../chart";
 import { DocumentType, readContainer } from "../../container";

@@ -7,7 +7,7 @@
  * Faces load lazily: each lives in its own generated module under faces/,
  * fetched by dynamic import on first use.
  */
-import { type FontKey, fontKeyString } from "../../formats/hg3/fontKey";
+import { type FontKey, fontKeyString } from "../fontKey";
 import { codeForChar } from "./charset";
 import { OUTLINE_FACE_METRICS } from "./metrics";
 import { outlineCloneEntry } from "./table";

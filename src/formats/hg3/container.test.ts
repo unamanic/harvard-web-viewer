@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TruncatedError } from "./ByteReader";
+import { TruncatedError } from "../ByteReader";
 import {
   BLOCKS,
   type BlockRecord,

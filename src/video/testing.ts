@@ -1,5 +1,6 @@
 /** Test fixtures for the video export: small presentations. */
-import { LANDSCAPE_VIEW_BOX, type Presentation, type PresentationSlide, type PresentationSlideKind, type SlideEffects } from "../formats/types";
+import { type Presentation, type PresentationSlide, type PresentationSlideKind, type SlideEffects } from "../model/presentation";
+import { LANDSCAPE_VIEW_BOX } from "../model/scene";
 
 export interface SlideSpec {
   label: string;

@@ -1,4 +1,4 @@
-import type { ParseContext, ResolvedFile } from "../formats/types";
+import type { ParseContext, ResolvedFile } from "../formats/parser";
 
 /** One file the user opened. */
 export type FileEntry = ResolvedFile;

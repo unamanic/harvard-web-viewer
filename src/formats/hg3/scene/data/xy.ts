@@ -32,7 +32,7 @@
  *   the category centres when there are bars, else edge to edge.
  * - The legend fills its 810 area: swatch, gap, name per series.
  */
-import type { Point, SceneElement } from "../../../types";
+import type { Point, SceneElement } from "../../../../model/scene";
 import {
   BOX_3D_SIDE_SHADE,
   BOX_3D_TOP_SHADE,
@@ -61,7 +61,7 @@ import {
   textSizeToUnits,
 } from "../../assumptions";
 import { NO, type XyAxis, type XyData, type XySeries, parseXyData } from "../../data/xy";
-import type { FontKey } from "../../fontKey";
+import type { FontKey } from "../../../../fonts/fontKey";
 import { ROLE } from "../../palette";
 import { Justification } from "../../text";
 import type { ChartSceneContext } from "../context";

@@ -45,7 +45,7 @@
  * renders show exactly that for FLOOR, ROCKTOP, LOGOBKG1 and PATTVIEW in
  * all three modes). Modern leaves images as they are.
  */
-import type { Scene, SceneElement } from "../formats/types";
+import type { Scene, SceneElement } from "../model/scene";
 import { type RGB, formatCssColor, parseCssColor } from "./color";
 import { applyScreen, ditherAverage, normalizeDither } from "./dither";
 import { egaScreen } from "./ega";

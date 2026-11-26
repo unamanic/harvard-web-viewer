@@ -2,10 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { DocumentType } from "../formats/hg3/container";
 import { block, buildDocument, cstr, leaf } from "../formats/hg3/testing/bytes";
 import { FileSet } from "../files/FileSet";
-import type { LoadedFile } from "../loadFile";
-import type { PresentationSlide } from "../formats/types";
+import type { LoadedFile } from "../files/loadFile";
+import type { PresentationSlide } from "../model/presentation";
 import { collectDiagnostics } from "./diagnostics";
-import { fileGroupKind, groupFiles } from "./fileGroups";
+import { fileKind } from "../files/fileKind";
+import { groupFiles } from "./fileGroups";
 import { hexRows, hexWindow, rowTouches } from "./hexRows";
 import { createIdleTimer } from "./idleTimer";
 import { recordTreeOf, visibleRows } from "./recordTree";
@@ -32,13 +33,13 @@ describe("groupFiles", () => {
 
   it("leaves out empty groups", () => {
     expect(groupFiles([{ name: "X.PL3" }]).map((g) => g.kind)).toEqual(["other"]);
-    expect(fileGroupKind("noext")).toBe("other");
+    expect(fileKind("noext")).toBe("other");
   });
 
   it("counts Harvard Graphics 1.x/2.x charts as charts", () => {
-    expect(fileGroupKind("OLD.CHT")).toBe("chart");
-    expect(fileGroupKind("ODD.BIN", ascii("PCOK...."))).toBe("chart");
-    expect(fileGroupKind("ODD.BIN", ascii("Falc...."))).toBe("chart");
+    expect(fileKind("OLD.CHT")).toBe("chart");
+    expect(fileKind("ODD.BIN", ascii("PCOK...."))).toBe("chart");
+    expect(fileKind("ODD.BIN", ascii("Falc...."))).toBe("chart");
   });
 });
 

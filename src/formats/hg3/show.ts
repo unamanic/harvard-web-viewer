@@ -14,7 +14,7 @@
  * decoded from test shows saved by Harvard Graphics 3.05, one setting
  * changed at a time.
  */
-import { ByteReader } from "./ByteReader";
+import { ByteReader } from "../ByteReader";
 import {
   type Container,
   DocumentType,
@@ -28,7 +28,7 @@ import {
   readDescription,
   readFileReference,
 } from "./container";
-import { decodeHg3Text } from "./charset";
+import { decodeHg3Text } from "../charset";
 import { STYLE_ENTRY_LENGTH, type StyleEntry, readStyleTable } from "./text";
 
 // ---------------------------------------------------------------------------

@@ -36,7 +36,7 @@
  *   the 1304 byte 6 role (GALD231, GALD261).
  * - The legend (1306) is drawn by pieLegend.ts.
  */
-import type { Point, SceneElement } from "../../../types";
+import type { Point, SceneElement } from "../../../../model/scene";
 import {
   PIE_3D_BACK_WALL_SHADE,
   PIE_3D_BAND_SHADE,
@@ -66,7 +66,7 @@ import {
   textSizeToUnits,
 } from "../../assumptions";
 import { type Pie, type PieData, PieShowAs, type PieSlice, SlicePointer, parsePieData } from "../../data/pie";
-import type { FontKey } from "../../fontKey";
+import type { FontKey } from "../../../../fonts/fontKey";
 import { ROLE } from "../../palette";
 import { Justification } from "../../text";
 import type { ChartSceneContext } from "../context";

@@ -50,17 +50,7 @@
  * A group preceded by a 404 kind 4 reference embeds another chart (task
  * 13c): its scene is drawn inside the group, mapped by the group's 616.
  */
-import type {
-  GlyphsElement,
-  GroupElement,
-  ImageElement,
-  Matrix,
-  Point,
-  RectElement,
-  SceneElement,
-  TextAnchor,
-  TextElement,
-} from "../../types";
+import type { GlyphsElement, GroupElement, ImageElement, Matrix, Point, RectElement, SceneElement, TextAnchor, TextElement } from "../../../model/scene";
 import { EM_UNITS, type GlyphSource, layoutGlyphLine } from "../../../fonts/glyphRun";
 import { type PcxImage, decodePcx, indexPixels } from "../../pcx/pcx";
 import { pcxToDataUrl } from "../../pcx/toDataUrl";

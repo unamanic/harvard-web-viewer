@@ -10,18 +10,10 @@
 import { decodePcx } from "../pcx/pcx";
 import { pcxToDataUrl } from "../pcx/toDataUrl";
 import { placeholderScene } from "../hg3/presentation";
-import type {
-  KeyBinding,
-  ParseContext,
-  Presentation,
-  PresentationSlide,
-  ResolvedFile,
-  Scene,
-  SlideEffect,
-  SlideEffects,
-  SlideTransitionEffect,
-} from "../types";
-import { LANDSCAPE_VIEW_BOX } from "../types";
+import type { KeyBinding, Presentation, PresentationSlide, SlideEffect, SlideEffects, SlideTransitionEffect } from "../../model/presentation";
+import type { Scene } from "../../model/scene";
+import type { ParseContext, ResolvedFile } from "../parser";
+import { LANDSCAPE_VIEW_BOX } from "../../model/scene";
 import { NotClassicChartError, isClassicChart, readClassicChart } from "./read";
 import { chartToScene } from "./scene";
 import {

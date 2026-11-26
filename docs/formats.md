@@ -183,7 +183,7 @@ Add entries as `- finding (sample file checked, task number)`.
 - Character set: the upper half of the byte codes is not CP437. Rendering
   each code's glyph from the Speedo fonts shows a set close to code page 850
   with Harvard-specific codes (curly quotes, ≤ ≥ ‰ ¶ § ►, minus). Table in
-  src/formats/hg3/charset.ts; SPEC.md §1 and §6.4 updated. All parsers now
+  src/formats/charset.ts; SPEC.md §1 and §6.4 updated. All parsers now
   decode text with it (task 7e). In the samples it changes only object-layer
   text: line breaks, 12 bullets (0xFA •) and 4 ► markers. (HG3.FGF and all
   .SPD, tasks 7d-2 and 7e)

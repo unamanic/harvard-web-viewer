@@ -16,18 +16,7 @@
  * (vgaScreenShow.ts) and its Hercules driver (hercules.ts: two colours,
  * non-square pixels, solid lines).
  */
-import {
-  DEFAULT_STROKE_WIDTH,
-  GRADIENT_FILL_PREFIX,
-  PATTERN_FILL_PREFIX,
-  type FillGradient,
-  type FillPattern,
-  type GradientBand,
-  type Matrix,
-  type Scene,
-  type SceneElement,
-  type ViewBox,
-} from "../formats/types";
+import { DEFAULT_STROKE_WIDTH, GRADIENT_FILL_PREFIX, PATTERN_FILL_PREFIX, type FillGradient, type FillPattern, type GradientBand, type Matrix, type Scene, type SceneElement, type ViewBox } from "../model/scene";
 import { type RGB, formatCssColor, parseCssColor } from "./color";
 import { type Box, gradientSpan, shapeBounds } from "./geometry";
 import { screenImage } from "./screenImage";

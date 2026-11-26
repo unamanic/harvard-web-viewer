@@ -17,7 +17,7 @@
  *   object layer.
  * - "never": object layer only, as before tasks 14 to 19.
  */
-import type { LayoutFromData } from "../../types";
+import type { LayoutFromData } from "../../parser";
 import type { Chart } from "../chart";
 import { DocumentType } from "../container";
 import { type ObjectLayer, allObjects, parseObjectLayer } from "../objects";

@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 import { FileSet } from "../../files/FileSet";
 import { SceneRenderer } from "../../render/SceneRenderer";
 import { detectFormat } from "../registry";
-import type { SceneElement, TextElement } from "../types";
+import type { SceneElement, TextElement } from "../../model/scene";
 import { hg2Parser } from "./index";
 import type { ClassicChart } from "./model";
 import { readClassicChart } from "./read";

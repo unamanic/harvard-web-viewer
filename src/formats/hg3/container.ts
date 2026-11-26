@@ -7,8 +7,8 @@
  * version record (tag 0), the last is the end record (tag 1). Some tags open
  * and close blocks; this module turns the flat stream into a tree.
  */
-import { ByteReader } from "./ByteReader";
-import { decodeFileName, decodeHg3Text } from "./charset";
+import { ByteReader } from "../ByteReader";
+import { decodeFileName, decodeHg3Text } from "../charset";
 
 // ---------------------------------------------------------------------------
 // Constants

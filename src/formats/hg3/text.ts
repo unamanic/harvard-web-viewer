@@ -4,9 +4,9 @@
  * 800, and the 16-byte-entry text style tables (906, 1002, 1102, 1202, 1308,
  * 1412).
  */
-import { ByteReader, TruncatedError } from "./ByteReader";
+import { ByteReader, TruncatedError } from "../ByteReader";
 import type { LeafRecord } from "./container";
-import { type FontKey, readFontKey } from "./fontKey";
+import { type FontKey, readFontKey } from "../../fonts/fontKey";
 
 /** Text slots: which part of a chart a text line belongs to (SPEC §5.3). */
 export const TextSlot = {

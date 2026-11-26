@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { baseName } from "../../files/FileSet";
 import { clickButton, currentSlide, navigate, pressKey, startPlayer } from "../../player/player";
-import type { ParseContext, Presentation, ResolvedFile, Scene, TextElement } from "../types";
+import type { Presentation } from "../../model/presentation";
+import type { Scene, TextElement } from "../../model/scene";
+import type { ParseContext, ResolvedFile } from "../parser";
 import { DocumentType } from "./container";
 import { hg3Parser } from "./index";
 import { keyName, slideEffects } from "./presentation";

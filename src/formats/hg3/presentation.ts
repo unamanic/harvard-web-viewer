@@ -8,24 +8,14 @@
  * player first asks for the slide's scene. Nested shows are parsed on first
  * use, with a guard against a show that includes itself (§7.1).
  */
-import type {
-  ButtonBinding,
-  Destination,
-  KeyBinding,
-  ParseContext,
-  Presentation,
-  PresentationSlide,
-  PresentationSlideKind,
-  ResolvedFile,
-  Scene,
-  SlideEffect,
-  SlideEffects,
-} from "../types";
-import { LANDSCAPE_VIEW_BOX } from "../types";
+import type { ButtonBinding, Destination, KeyBinding, Presentation, PresentationSlide, PresentationSlideKind, SlideEffect, SlideEffects } from "../../model/presentation";
+import type { Scene } from "../../model/scene";
+import type { ParseContext, ResolvedFile } from "../parser";
+import { LANDSCAPE_VIEW_BOX } from "../../model/scene";
 import { SHOW_DEFAULT_INCLUDES_DIRECTION_SPEED_AND_ERASE } from "./assumptions";
 import { chartScene } from "./chartScene";
 import { type Container, readContainer } from "./container";
-import { HG3_CHARSET } from "./charset";
+import { HG3_CHARSET } from "../charset";
 import { type ResolvedPalette, resolvePaletteOverride } from "./palette";
 import {
   type ButtonEntry,

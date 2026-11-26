@@ -1,17 +1,5 @@
 import { useId, type ReactNode } from "react";
-import {
-  DEFAULT_STROKE_WIDTH,
-  GRADIENT_FILL_PREFIX,
-  PATTERN_FILL_PREFIX,
-  type FillGradient,
-  type FillPattern,
-  type GlyphsElement,
-  type ImageElement,
-  type RectElement,
-  type Scene,
-  type SceneElement,
-  type ShapeStyle,
-} from "../formats/types";
+import { DEFAULT_STROKE_WIDTH, GRADIENT_FILL_PREFIX, PATTERN_FILL_PREFIX, type FillGradient, type FillPattern, type GlyphsElement, type ImageElement, type RectElement, type Scene, type SceneElement, type ShapeStyle } from "../model/scene";
 import {
   arcPath,
   bandPath,

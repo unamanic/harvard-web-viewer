@@ -4,7 +4,7 @@
  * Fitted to the drawn copies of the sample charts; the guesses are in
  * assumptions.ts ("Tasks 14, 15, 19").
  */
-import type { SceneElement } from "../../../types";
+import type { SceneElement } from "../../../../model/scene";
 import {
   BULLET_MARKER_GAP_EM,
   BULLET_MARKER_TEXT,

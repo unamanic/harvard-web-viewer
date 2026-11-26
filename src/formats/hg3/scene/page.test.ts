@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LANDSCAPE_VIEW_BOX, PORTRAIT_VIEW_BOX } from "../../types";
+import { LANDSCAPE_VIEW_BOX, PORTRAIT_VIEW_BOX } from "../../../model/scene";
 import type { PageSetup } from "../chart";
 import { areaToRect, pageGeometry, scaleBox, screenMapping, toScene } from "./page";
 

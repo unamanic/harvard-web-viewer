@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { LANDSCAPE_VIEW_BOX, UnsupportedFormatError } from "../types";
+import { LANDSCAPE_VIEW_BOX } from "../../model/scene";
+import { UnsupportedFormatError } from "../parser";
 import { DocumentType } from "./container";
 import { ascii, block, buildDocument, buildFile, concat, cstr, f32, leaf, u16, versionRecord } from "./testing/bytes";
 import { hg3Parser } from "./index";

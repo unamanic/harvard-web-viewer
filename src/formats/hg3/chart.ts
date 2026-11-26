@@ -4,7 +4,7 @@
  * style tables. Chart-type data records (§5.4, task 11) and the object layer
  * (§5.6, task 10) are kept for later tasks.
  */
-import { ByteReader } from "./ByteReader";
+import { ByteReader } from "../ByteReader";
 import {
   type BlockRecord,
   type Container,
@@ -21,7 +21,7 @@ import {
   readDescription,
   readFileReference,
 } from "./container";
-import { type FontKey, isEmptyFontKey } from "./fontKey";
+import { type FontKey, isEmptyFontKey } from "../../fonts/fontKey";
 import {
   type StyleEntry,
   type TextLine,

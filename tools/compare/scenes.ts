@@ -5,7 +5,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
 import { FileSet } from "../../src/files/FileSet";
 import { hg3Parser } from "../../src/formats/hg3/index";
-import type { Scene } from "../../src/formats/types";
+import type { Scene } from "../../src/model/scene";
 
 const REPO = resolve(__dirname, "../..");
 

@@ -11,7 +11,7 @@ import type { OpenedFiles } from "./files/openFiles";
 import { loadDisplayMode, saveDisplayMode, type DisplayMode } from "./render/displayMode";
 import { loadMuted, saveMuted } from "./player/sound/controller";
 import { loadTransitionMode, saveTransitionMode, type TransitionMode } from "./player/transitions/mode";
-import { loadEntry, loadFileSet, type LoadedFile, type LoadOptions } from "./loadFile";
+import { loadEntry, loadFileSet, type LoadedFile, type LoadOptions } from "./files/loadFile";
 import { addedSummary, placeAddedFiles, providedNames } from "./ui/addFiles";
 
 export interface AppProps {

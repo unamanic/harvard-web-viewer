@@ -14,9 +14,9 @@
  *
  * Also holds the built-in table used when HG3.FGF is missing (task 7).
  */
-import { ByteReader } from "./ByteReader";
-import { decodeFileName } from "./charset";
-import { type FontKey, FontSource, readFontKey } from "./fontKey";
+import { ByteReader } from "../ByteReader";
+import { decodeFileName } from "../charset";
+import { type FontKey, FontSource, readFontKey } from "../../fonts/fontKey";
 
 /** "IDXF" (SPEC §2). */
 export const FGF_SIGNATURE = "IDXF";

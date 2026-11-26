@@ -108,7 +108,7 @@ in their strokes, so their pen is only a little wider.
   scaling to the originals' measured metrics is a later step (task 7d).
 - Codes 32–126 (ASCII) come straight from the Hershey sets.
 - Composed from the same set's ASCII glyphs, keyed by Harvard Graphics code
-  (src/formats/hg3/charset.ts): accented letters, including the capitals and
+  (src/formats/charset.ts): accented letters, including the capitals and
   tildes at 0xB5–0xEB (acute from `/`, grave from `\`, circumflex from the
   head of `^`, tilde from `~`, diaeresis from two `.`, ring from a small `o`,
   cedilla from `,`, dotless i from `i`), ø Ø (slashed), æ Æ (two letters

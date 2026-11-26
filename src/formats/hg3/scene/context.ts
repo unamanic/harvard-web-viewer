@@ -3,7 +3,8 @@
  * palette, a colour helper, the font resolver, a warning sink and the page
  * geometry.
  */
-import { type FillGradient, GRADIENT_FILL_PREFIX, type GroupElement, type ParseContext, type SceneElement } from "../../types";
+import { type FillGradient, GRADIENT_FILL_PREFIX, type GroupElement, type SceneElement } from "../../../model/scene";
+import { type ParseContext } from "../../parser";
 import type { Chart } from "../chart";
 import { type FontResolver, createFontResolver } from "../fonts";
 import {

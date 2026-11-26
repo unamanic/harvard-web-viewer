@@ -7,8 +7,8 @@
 import { readContainer } from "../formats/hg3/container";
 import { parseChart } from "../formats/hg3/chart";
 import type { FileEntry } from "../files/FileSet";
-import type { PresentationSlide } from "../formats/types";
-import type { LoadedFile } from "../loadFile";
+import type { PresentationSlide } from "../model/presentation";
+import type { LoadedFile } from "../files/loadFile";
 
 /** The default palette a chart uses when it names none (SPEC §3). */
 const DEFAULT_PALETTE = "HG3.PL3";

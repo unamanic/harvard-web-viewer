@@ -9,8 +9,9 @@
  * become presentations that find their charts beside them (show.ts,
  * presentation.ts).
  */
-import type { Confidence, Document, FormatParser, ParseContext } from "../types";
-import { UnsupportedFormatError } from "../types";
+import type { Document } from "../../model/document";
+import type { Confidence, FormatParser, ParseContext } from "../parser";
+import { UnsupportedFormatError } from "../parser";
 import { kindLabel } from "./model";
 import { NotClassicChartError, isClassicChart, readClassicChart } from "./read";
 import { classicShowToPresentation } from "./presentation";

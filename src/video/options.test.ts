@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LANDSCAPE_VIEW_BOX, PORTRAIT_VIEW_BOX } from "../formats/types";
+import { LANDSCAPE_VIEW_BOX, PORTRAIT_VIEW_BOX } from "../model/scene";
 import {
   DEFAULT_WAIT_SECONDS,
   clampWaitSeconds,

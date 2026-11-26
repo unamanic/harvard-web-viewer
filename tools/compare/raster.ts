@@ -6,14 +6,7 @@
 // 32-bit BMP data-URL images (stretched nearest-neighbour as HG fits a bitmap to its box, or tiled per ImageElement.tile). Text elements without glyph paths (fallback
 // fonts) are drawn as a filled box of 0.5 em height over an estimated width
 // (counted in stats.textBoxes) since we have no font rasteriser.
-import {
-  DEFAULT_STROKE_WIDTH,
-  PATTERN_FILL_PREFIX,
-  type FillPattern,
-  type Matrix,
-  type Scene,
-  type SceneElement,
-} from "../../src/formats/types";
+import { DEFAULT_STROKE_WIDTH, PATTERN_FILL_PREFIX, type FillPattern, type Matrix, type Scene, type SceneElement } from "../../src/model/scene";
 import {
   arcPath,
   bandPath,

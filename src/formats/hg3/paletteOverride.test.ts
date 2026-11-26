@@ -4,8 +4,8 @@
  */
 import { describe, expect, it } from "vitest";
 import { FileSet } from "../../files/FileSet";
-import { openEntry } from "../../loadFile";
-import type { ParseContext, ResolvedFile } from "../types";
+import { openEntry } from "../../files/loadFile";
+import type { ParseContext, ResolvedFile } from "../parser";
 import { parseChart } from "./chart";
 import { DocumentType, readContainer } from "./container";
 import { GREYSCALE_PALETTES } from "./greyscalePalettes";

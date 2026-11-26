@@ -5,7 +5,7 @@
  * "HWV Slab", "HWV Mono"); see README.md in this folder for where each
  * clone's outlines come from.
  */
-import { type FontKey, fontKeyString } from "../../formats/hg3/fontKey";
+import { type FontKey, fontKeyString } from "../fontKey";
 
 export interface OutlineCloneEntry {
   /** Font key of the original face, as in HG3.FGF. */

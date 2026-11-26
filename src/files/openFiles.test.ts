@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { loadEntry, openEntry } from "../loadFile";
+import { loadEntry, openEntry } from "./loadFile";
 import { openFiles } from "./openFiles";
 import { makeZip } from "./testing/makeZip";
 

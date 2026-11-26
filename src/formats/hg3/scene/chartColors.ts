@@ -4,7 +4,7 @@
  * The rules and their evidence are in assumptions.ts ("Colour rules from
  * the reference renders").
  */
-import type { Scene } from "../../types";
+import type { Scene } from "../../../model/scene";
 import {
   BACKGROUND_FROM_PALETTE_1554,
   BACKGROUND_SHADE_ANGLE_OFFSET,

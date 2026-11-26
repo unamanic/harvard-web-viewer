@@ -9,8 +9,11 @@
  * yet are listed in an info warning). Shows produce a presentation
  * (presentation.ts) whose slides are drawn lazily. Palettes are not drawn.
  */
-import type { Confidence, Document, FormatParser, ParseContext, Presentation, Scene } from "../types";
-import { UnsupportedFormatError } from "../types";
+import type { Document } from "../../model/document";
+import type { Presentation } from "../../model/presentation";
+import type { Scene } from "../../model/scene";
+import type { Confidence, FormatParser, ParseContext } from "../parser";
+import { UnsupportedFormatError } from "../parser";
 import { chartScene } from "./chartScene";
 import { type Container, NotHg3Error, SIGNATURES, documentTypeName, readContainer } from "./container";
 import { showToPresentation } from "./presentation";

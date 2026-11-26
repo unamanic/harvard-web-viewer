@@ -15,7 +15,7 @@
  * progress 1, which keeps Overlay/Keep's old picture under the new one), so
  * a frame is fully described by the segment and the time in it.
  */
-import type { Presentation, PresentationSlide } from "../formats/types";
+import type { Presentation, PresentationSlide } from "../model/presentation";
 import { currentSlide, navigate, startPlayer } from "../player/player";
 import { type TransitionMode, transitionPlan } from "../player/transitions/mode";
 import { type Layer, frameAt } from "../player/transitions/frames";

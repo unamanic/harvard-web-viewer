@@ -28,9 +28,9 @@
  *
  * Never throws on content: problems become warnings (SPEC §7.1).
  */
-import { ByteReader } from "./ByteReader";
+import { ByteReader } from "../ByteReader";
 import type { BlockRecord, LeafRecord, RecordNode } from "./container";
-import { decodeHg3Text } from "./charset";
+import { decodeHg3Text } from "../charset";
 import { TEXT_TAIL_LENGTH, type TextTail, readTextTail } from "./text";
 
 // ---------------------------------------------------------------------------

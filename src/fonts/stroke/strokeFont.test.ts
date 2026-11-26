@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { STROKE_CLONE_TABLE, STROKE_FAMILY, strokeCloneFor } from "./clones";
 import { HERSHEY_SETS } from "./hersheyData";
-import { hg3CodeOf } from "../../formats/hg3/charset";
+import { hg3CodeOf } from "../../formats/charset";
 import { COMPOSED_CODES, decodeHersheyGlyph, textToStrokePaths, type StrokeFont } from "./strokeFont";
 
 const KEYS: [number, number, string, string][] = [

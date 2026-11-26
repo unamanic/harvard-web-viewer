@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { LANDSCAPE_VIEW_BOX, PORTRAIT_VIEW_BOX, type Scene } from "../formats/types";
+import { LANDSCAPE_VIEW_BOX, PORTRAIT_VIEW_BOX, type Scene } from "../model/scene";
 import { SceneRenderer } from "./SceneRenderer";
 
 const PIXEL =

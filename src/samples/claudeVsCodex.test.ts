@@ -17,7 +17,7 @@ import { FileSet } from "../files/FileSet";
 import { readContainer } from "../formats/hg3/container";
 import { hg3Parser } from "../formats/hg3/index";
 import { parseShow } from "../formats/hg3/show";
-import type { ImageElement, Scene, SceneElement } from "../formats/types";
+import type { ImageElement, Scene, SceneElement } from "../model/scene";
 import { applyDisplayMode } from "../render/displayMode";
 import { screenGeometry } from "../render/dither";
 

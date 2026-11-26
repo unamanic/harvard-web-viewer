@@ -14,7 +14,7 @@
  * - A nested presentation whose id is already playing (a show including
  *   itself), or nesting deeper than MAX_DEPTH, is skipped.
  */
-import type { Destination, Presentation, PresentationSlide } from "../formats/types";
+import type { Destination, Presentation, PresentationSlide } from "../model/presentation";
 
 /** Deepest stack of nested presentations the player enters. */
 export const MAX_DEPTH = 8;

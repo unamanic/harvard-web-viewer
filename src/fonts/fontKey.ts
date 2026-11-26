@@ -3,7 +3,7 @@
  * style word), 6 bytes, three u16. The same triple identifies an entry of the
  * font index HG3.FGF.
  */
-import type { ByteReader } from "./ByteReader";
+import type { ByteReader } from "../formats/ByteReader";
 
 export interface FontKey {
   /** 3 = Bitstream Speedo outline font, 2 = Harvard Graphics stroke font. */

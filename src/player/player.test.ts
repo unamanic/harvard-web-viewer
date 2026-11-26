@@ -1,13 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  LANDSCAPE_VIEW_BOX,
-  type ButtonBinding,
-  type KeyBinding,
-  type Presentation,
-  type PresentationSlide,
-  type PresentationSlideKind,
-  type Scene,
-} from "../formats/types";
+import { type ButtonBinding, type KeyBinding, type Presentation, type PresentationSlide, type PresentationSlideKind } from "../model/presentation";
+import { LANDSCAPE_VIEW_BOX, type Scene } from "../model/scene";
 import {
   type PlayerState,
   MAX_DEPTH,

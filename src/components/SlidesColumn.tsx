@@ -1,5 +1,6 @@
 import { memo, type ReactNode, type Ref, type RefObject, useEffect, useMemo, useRef } from "react";
-import type { Presentation, PresentationSlide, Scene } from "../formats/types";
+import type { Presentation, PresentationSlide } from "../model/presentation";
+import type { Scene } from "../model/scene";
 import { type DisplayMode, applyDisplayMode } from "../render/displayMode";
 import { SceneRenderer } from "../render/SceneRenderer";
 import { useSeenOnce } from "../ui/hooks";

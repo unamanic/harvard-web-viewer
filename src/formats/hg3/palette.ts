@@ -16,7 +16,7 @@
  */
 import { DEFAULT_PALETTE_ENTRIES } from "./defaultPalette";
 import { GREYSCALE_PALETTES } from "./greyscalePalettes";
-import { decodeHg3Text } from "./charset";
+import { decodeHg3Text } from "../charset";
 import {
   DocumentType,
   type LeafRecord,
@@ -28,7 +28,7 @@ import {
   readContainer,
   readDescription,
 } from "./container";
-import { type ParseContext, findFile } from "../types";
+import { type ParseContext, findFile } from "../parser";
 
 // ---------------------------------------------------------------------------
 // Constants

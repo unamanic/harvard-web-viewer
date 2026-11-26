@@ -23,7 +23,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSy
 import { basename, join, relative, resolve } from "node:path";
 import { FileSet } from "../../src/files/FileSet";
 import { hg3Parser } from "../../src/formats/hg3/index";
-import type { Scene, SceneElement } from "../../src/formats/types";
+import type { Scene, SceneElement } from "../../src/model/scene";
 import { rasterizeScene } from "../compare/raster";
 import { writePng } from "../compare/png";
 

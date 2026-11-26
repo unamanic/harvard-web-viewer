@@ -1,7 +1,7 @@
 /**
  * Pie charts (SPEC §2.4, §4.4): one or two pies (or columns) side by side.
  */
-import type { Point, SceneElement, TextAnchor } from "../types";
+import type { Point, SceneElement, TextAnchor } from "../../model/scene";
 import { DEFAULT_SIZES, classicColor, shade, sizeToUnits } from "./assumptions";
 import type { Box } from "./graph";
 import type { ClassicPie } from "./model";

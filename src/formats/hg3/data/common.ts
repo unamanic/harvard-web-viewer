@@ -1,7 +1,7 @@
 /**
  * Helpers shared by the chart data parsers (task 11, SPEC §5.4).
  */
-import { ByteReader } from "../ByteReader";
+import { ByteReader } from "../../ByteReader";
 import type { Chart } from "../chart";
 import type { LeafRecord } from "../container";
 

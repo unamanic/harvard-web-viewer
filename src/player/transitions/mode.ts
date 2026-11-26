@@ -7,7 +7,7 @@
  * Leaving a slide erases it with its Erase effect, then the next slide is
  * drawn with its Draw effect. The player reads no format's raw values.
  */
-import type { PresentationSlide, SlideEffect, SlideTransitionSpeed } from "../../formats/types";
+import type { PresentationSlide, SlideEffect, SlideTransitionSpeed } from "../../model/presentation";
 import { REPLACE, SPEED_MS, type Transition } from "./types";
 
 export type TransitionMode = "file" | "off" | "demo";

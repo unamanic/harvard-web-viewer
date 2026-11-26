@@ -2,7 +2,7 @@
  * Text charts: title, simple list, bullet list, two- and three-column
  * charts and free form (SPEC §2.2, §4.1). Lines are numbered as stored.
  */
-import type { SceneElement, TextAnchor } from "../types";
+import type { SceneElement, TextAnchor } from "../../model/scene";
 import { DEFAULT_SIZES, MARGIN_X, MARGIN_Y, PAGE, classicColor, sizeToUnits } from "./assumptions";
 import type { ClassicChart, ClassicText } from "./model";
 import { drawLine, hasText, plainText, textWidth } from "./text";

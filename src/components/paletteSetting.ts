@@ -1,4 +1,4 @@
-import type { LoadOptions } from "../loadFile";
+import type { LoadOptions } from "../files/loadFile";
 
 /**
  * The viewer's "Palette" setting (docs/RENDERER_TASKS.md task 6c): draw

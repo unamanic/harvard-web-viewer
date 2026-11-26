@@ -1,6 +1,6 @@
 // Layout rules from the 3.05 XY test charts (samples/option-tests/xy): synthetic charts, one option each.
 import { describe, expect, it } from "vitest";
-import type { PathElement, RectElement, SceneElement, TextElement } from "../../../types";
+import type { PathElement, RectElement, SceneElement, TextElement } from "../../../../model/scene";
 import { XY_FRAME_BOTTOM_MARGIN, XY_FRAME_MARGIN, XY_LABEL_GAP, textSizeToUnits } from "../../assumptions";
 import type { Chart } from "../../chart";
 import { DocumentType } from "../../container";

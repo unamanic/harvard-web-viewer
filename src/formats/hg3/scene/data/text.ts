@@ -13,7 +13,7 @@
  * with `toScene` (page.ts) when they are made.
  */
 import { EM_UNITS, layoutGlyphLine } from "../../../../fonts/glyphRun";
-import type { SceneElement, TextAnchor, TextElement } from "../../../types";
+import type { SceneElement, TextAnchor, TextElement } from "../../../../model/scene";
 import {
   DATA_BLANK_ROW_HEIGHT,
   DATA_FIT_MIN_SCALE,
@@ -28,8 +28,8 @@ import {
   textSizeToUnits,
 } from "../../assumptions";
 import type { PageArea } from "../../chart";
-import { hg3CodeOf } from "../../charset";
-import type { FontKey } from "../../fontKey";
+import { hg3CodeOf } from "../../../charset";
+import type { FontKey } from "../../../../fonts/fontKey";
 import { Justification } from "../../text";
 import type { ChartSceneContext } from "../context";
 import { advanceRounder, glyphLineElement } from "../objectLayer";

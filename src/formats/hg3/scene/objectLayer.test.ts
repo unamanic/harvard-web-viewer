@@ -1,13 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  DEFAULT_STROKE_WIDTH,
-  type GroupElement,
-  LANDSCAPE_VIEW_BOX,
-  type ParseContext,
-  type ResolvedFile,
-  type SceneElement,
-  type TextElement,
-} from "../../types";
+import { DEFAULT_STROKE_WIDTH, type GroupElement, LANDSCAPE_VIEW_BOX, type SceneElement, type TextElement } from "../../../model/scene";
+import { type ParseContext, type ResolvedFile } from "../../parser";
 import {
   BOX_3D_SIDE_SHADE,
   BUTTON_CHART_FITS_DATA_CHART,

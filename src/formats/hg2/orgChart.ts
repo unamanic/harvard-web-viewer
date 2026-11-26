@@ -3,7 +3,7 @@
  * side by side, the last level stacked under its manager when the chart
  * asks for it. The layout is the viewer's own [I].
  */
-import type { SceneElement } from "../types";
+import type { SceneElement } from "../../model/scene";
 import { classicColor, sizeToUnits } from "./assumptions";
 import type { Box } from "./graph";
 import type { OrgData, OrgNode } from "./model";

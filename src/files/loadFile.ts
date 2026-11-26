@@ -1,7 +1,8 @@
-import { choosePrimary } from "./files/choosePrimary";
-import type { FileEntry, FileSet, MissingFile } from "./files/FileSet";
-import { detectFormat } from "./formats/registry";
-import type { Document, ParseContext } from "./formats/types";
+import { choosePrimary } from "./choosePrimary";
+import type { FileEntry, FileSet, MissingFile } from "./FileSet";
+import { detectFormat } from "../formats/registry";
+import type { ParseContext } from "../formats/parser";
+import type { Document } from "../model/document";
 
 /** Viewer options that change how files are parsed (not just drawn). */
 export interface LoadOptions {

@@ -9,7 +9,8 @@ import {
   useRef,
   useState,
 } from "react";
-import type { Presentation, PresentationSlide, Scene } from "../formats/types";
+import type { Presentation, PresentationSlide } from "../model/presentation";
+import type { Scene } from "../model/scene";
 import { DEFAULT_DISPLAY_MODE, type DisplayMode, applyDisplayMode } from "../render/displayMode";
 import { SceneRenderer } from "../render/SceneRenderer";
 import {
@@ -24,10 +25,10 @@ import {
   pressKey,
   restorePlayer,
   savePosition,
-} from "./player";
-import type { ResolveFile } from "./sound/controller";
-import { useShowSound } from "./sound/useShowSound";
-import { DEFAULT_TRANSITION_MODE, REPLACE_PLAN, type TransitionMode, transitionPlan } from "./transitions/mode";
+} from "../player/player";
+import type { ResolveFile } from "../player/sound/controller";
+import { useShowSound } from "../player/sound/useShowSound";
+import { DEFAULT_TRANSITION_MODE, REPLACE_PLAN, type TransitionMode, transitionPlan } from "../player/transitions/mode";
 import {
   INITIAL_RUN,
   type TransitionRun,
@@ -39,9 +40,9 @@ import {
   runPhase,
   stageRunId,
   startRun,
-} from "./transitions/run";
-import { TransitionStage, phaseLayers } from "./transitions/TransitionStage";
-import { effectiveTransition, prefersReducedMotion } from "./transitions/types";
+} from "../player/transitions/run";
+import { TransitionStage, phaseLayers } from "../player/transitions/TransitionStage";
+import { effectiveTransition, prefersReducedMotion } from "../player/transitions/types";
 import { useAutoHide, useFullscreenWhile } from "../ui/hooks";
 import { transitionPlanLabel } from "../ui/transitionLabel";
 

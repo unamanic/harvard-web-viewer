@@ -6,7 +6,7 @@
  * y flip happens: every scene builder converts page points with `toScene`
  * and page areas with `areaToRect`.
  */
-import { type Matrix, type Point, type ViewBox, centredViewBox } from "../../types";
+import { type Matrix, type Point, type ViewBox, centredViewBox } from "../../../model/scene";
 import { PAGE_LONG_SIDE, PAPER_SIZES_IN, SCREEN_HEIGHT_PX, SCREEN_WIDTH_PX, pageShortSide } from "../assumptions";
 import type { Chart, PageArea } from "../chart";
 import type { Box } from "../objects";

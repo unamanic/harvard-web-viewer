@@ -23,7 +23,7 @@
  *   size is scaled by one factor (in steps of ORG_TEXT_SCALE_STEP) so that
  *   all box texts fit their boxes.
  */
-import type { Point, SceneElement } from "../../../types";
+import type { Point, SceneElement } from "../../../../model/scene";
 import {
   BOX_CORNER_RADIUS_FACTOR,
   ORG_BOX_STYLE_ROUNDED,

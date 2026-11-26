@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { BandElement, PathElement, RectElement, SceneElement, TextElement } from "../../../types";
+import type { BandElement, PathElement, RectElement, SceneElement, TextElement } from "../../../../model/scene";
 import { PIE_3D_DEPTH, PIE_3D_RADIUS_OF_HEIGHT, PIE_3D_RADIUS_OF_WIDTH, PIE_3D_TILT, PIE_EXPLODE_DISTANCE, PIE_LABEL_LEADER } from "../../assumptions";
 import type { Chart } from "../../chart";
 import { DocumentType } from "../../container";

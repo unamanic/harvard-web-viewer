@@ -3,7 +3,7 @@
  * underline, colour per character; SPEC §2.2, §4.1) laid out with an
  * approximate character width.
  */
-import type { SceneElement, TextAnchor, TextElement } from "../types";
+import type { SceneElement, TextAnchor, TextElement } from "../../model/scene";
 import { CHAR_WIDTH, FONT_FAMILY, classicColor } from "./assumptions";
 import { ATTR, type ClassicText, attrColor } from "./model";
 
