@@ -137,22 +137,8 @@ interface Prepared {
   base: number[];
 }
 
-/**
- * Draws a graph chart into `area` (the space left after titles and
- * footnotes). Returns the elements.
- */
-export function drawGraph(chart: ClassicChart, graph: GraphData, area: Box, warnings: string[]): SceneElement[] {
-  const o = graph.options;
-  const n = Math.max(1, graph.pointCount);
-  const out: SceneElement[] = [];
-  const isHlc = chart.kind === "hlc";
-  const shown = graph.series.filter((s) => s.display && s.values.some((v) => v !== null));
-  if (shown.length === 0) {
-    out.push(plainText("(no data)", (area.left + area.right) / 2, (area.top + area.bottom) / 2, sizeToUnits(4), classicColor(8), "middle"));
-    return out;
-  }
-
-  // Values after the cumulative option, stacked where the style says so.
+/** Series values after the cumulative option and 100 %, with each point's base where bars (Stack, 100 %) or areas stack. */
+function prepareValues(shown: ClassicSeries[], n: number, o: GraphData["options"]): { prepared: Prepared[]; stackBars: boolean } {
   const prepared: Prepared[] = shown.map((s) => ({ series: s, values: s.cumulative ? cumulative(s.values) : [...s.values], base: new Array(n).fill(0) }));
   const stackBars = o.barStyle === "stack" || o.barStyle === "100%";
   if (o.barStyle === "100%") {
@@ -175,6 +161,23 @@ export function drawGraph(chart: ClassicChart, graph: GraphData, area: Box, warn
       }
     }
   }
+  return { prepared, stackBars };
+}
+
+/**
+ * Everything the parts of a graph chart are drawn from: the series values
+ * (cumulative, stacked, 100 %), the value scales, the plot box left after
+ * the legend, titles, labels and data table, and the sizes used. Null
+ * when no series has data.
+ */
+function layoutGraph(chart: ClassicChart, graph: GraphData, area: Box, warnings: string[]) {
+  const o = graph.options;
+  const n = Math.max(1, graph.pointCount);
+  const isHlc = chart.kind === "hlc";
+  const shown = graph.series.filter((s) => s.display && s.values.some((v) => v !== null));
+  if (shown.length === 0) return null;
+
+  const { prepared, stackBars } = prepareValues(shown, n, o);
 
   // Scales.
   const usesY2 = prepared.some((q) => q.series.axis === 2);
@@ -267,8 +270,35 @@ export function drawGraph(chart: ClassicChart, graph: GraphData, area: Box, warn
   };
   const catWidth = (o.horizontal ? plotH : plotW) / n;
 
-  if (o.frameBackground > 0) out.push({ kind: "rect", x: plot.left, y: plot.top, width: plotW, height: plotH, fill: classicColor(o.frameBackground), stroke: null });
+  // Series.
+  const enh = o.enhancement;
+  const depth = enh === "3d" ? catWidth * Math.max(0.1, Math.min(o.depth, 1)) * 0.5 : 0;
+  const valueLabelFor = (s: ClassicSeries) => o.valueLabels === "all" || (o.valueLabels === "select" && s.valueLabels);
+  const valueLabelSize = sizeToUnits(DEFAULT_SIZES.valueLabel);
+  const axisFormat = (s: ClassicSeries) => (s.axis === 2 ? o.y2Labels : o.y1Labels) === "currency" ? "currency" : o.barStyle === "100%" ? "percent" : "value";
+  return {
+    graph, area, o, n, isHlc, prepared, stackBars, usesY2, y1, y2, scaleOf, labelSize, legendSize, plot,
+    legendEntries, swatch, entryWidth, legendRowWidth, legendColumnWidth, legend, xTitleSize, y1TitleSize,
+    y2TitleSize, catTitle, valTitle, val2Title, y1Labels, y2Labels, maxChars, catLabels, verticalCat,
+    tableSeries, tableRowH, tableNameWidth, plotW, plotH, pt, catWidth, enh, depth, valueLabelFor,
+    valueLabelSize, axisFormat,
+  };
+}
 
+type GraphLayout = NonNullable<ReturnType<typeof layoutGraph>>;
+
+/** The plot background (2.x tag 120 byte 14). */
+function drawPlotBackground(g: GraphLayout): SceneElement[] {
+  const { o, plot, plotW, plotH } = g;
+  const out: SceneElement[] = [];
+  if (o.frameBackground > 0) out.push({ kind: "rect", x: plot.left, y: plot.top, width: plotW, height: plotH, fill: classicColor(o.frameBackground), stroke: null });
+  return out;
+}
+
+/** Value axis grid lines and labels, and the category grid. */
+function drawValueAxes(g: GraphLayout): SceneElement[] {
+  const { o, n, usesY2, y1, y2, labelSize, plot, y1Labels, y2Labels, pt } = g;
+  const out: SceneElement[] = [];
   // Grid and value labels.
   const drawValueAxis = (s: Scale, labels: string[], grid: GridStyle, axis: number, far: boolean) => {
     ticksOf(s).forEach((v, k) => {
@@ -291,7 +321,13 @@ export function drawGraph(chart: ClassicChart, graph: GraphData, area: Box, warn
   if (o.gridX !== "none") {
     for (let p = 0; p < n; p++) out.push(line(pt(p + 0.5, y1.min, 1), pt(p + 0.5, y1.max, 1), gridColor(o.gridX), 20));
   }
+  return out;
+}
 
+/** Category (X) labels. */
+function drawCategoryLabels(g: GraphLayout): SceneElement[] {
+  const { o, y1, labelSize, plot, catLabels, verticalCat, pt } = g;
+  const out: SceneElement[] = [];
   // Category labels.
   catLabels.forEach((label, p) => {
     if (!label.trim()) return;
@@ -304,158 +340,176 @@ export function drawGraph(chart: ClassicChart, graph: GraphData, area: Box, warn
       out.push(plainText(label, c.x, plot.bottom + labelSize * 1.2, labelSize, classicColor(1), "middle", 400, false));
     }
   });
+  return out;
+}
 
-  // Series.
-  const enh = o.enhancement;
-  const depth = enh === "3d" ? catWidth * Math.max(0.1, Math.min(o.depth, 1)) * 0.5 : 0;
-  const valueLabelFor = (s: ClassicSeries) => o.valueLabels === "all" || (o.valueLabels === "select" && s.valueLabels);
-  const valueLabelSize = sizeToUnits(DEFAULT_SIZES.valueLabel);
-  const axisFormat = (s: ClassicSeries) => (s.axis === 2 ? o.y2Labels : o.y1Labels) === "currency" ? "currency" : o.barStyle === "100%" ? "percent" : "value";
+/** High/low/close series: a bar from low to high, ticks for close and open. */
+function drawHighLow(g: GraphLayout): SceneElement[] {
+  const { graph, o, n, pt, catWidth } = g;
+  const out: SceneElement[] = [];
+  const [hi, lo, close, open] = [0, 1, 2, 3].map((k) => graph.series[k]);
+  const color = classicColor(hi?.color ?? 2);
+  const tick = catWidth * 0.2;
+  for (let p = 0; p < n; p++) {
+    const h = hi?.values[p] ?? null;
+    const l = lo?.values[p] ?? null;
+    if (h !== null && l !== null) out.push(line(pt(p + 0.5, l, 1), pt(p + 0.5, h, 1), color, LINE_WIDTH * 1.5));
+    const c = close?.display ? (close.values[p] ?? null) : null;
+    if (c !== null) {
+      const a = pt(p + 0.5, c, 1);
+      out.push(line(a, o.horizontal ? { x: a.x, y: a.y + tick } : { x: a.x + tick, y: a.y }, color, LINE_WIDTH * 1.5));
+    }
+    const op = open?.display ? (open.values[p] ?? null) : null;
+    if (op !== null) {
+      const a = pt(p + 0.5, op, 1);
+      out.push(line(a, o.horizontal ? { x: a.x, y: a.y - tick } : { x: a.x - tick, y: a.y }, color, LINE_WIDTH * 1.5));
+    }
+  }
+  return out;
+}
 
-  if (isHlc) {
-    const [hi, lo, close, open] = [0, 1, 2, 3].map((k) => graph.series[k]);
-    const color = classicColor(hi?.color ?? 2);
-    const tick = catWidth * 0.2;
+/** Area series: stacked polygons through the category centres. */
+function drawAreas(g: GraphLayout): SceneElement[] {
+  const { n, prepared, pt } = g;
+  const out: SceneElement[] = [];
+  for (const q of prepared.filter((m) => m.series.type === "area")) {
+    const color = classicColor(q.series.color);
+    const top: Point[] = [];
+    const bottom: Point[] = [];
     for (let p = 0; p < n; p++) {
-      const h = hi?.values[p] ?? null;
-      const l = lo?.values[p] ?? null;
-      if (h !== null && l !== null) out.push(line(pt(p + 0.5, l, 1), pt(p + 0.5, h, 1), color, LINE_WIDTH * 1.5));
-      const c = close?.display ? (close.values[p] ?? null) : null;
-      if (c !== null) {
-        const a = pt(p + 0.5, c, 1);
-        out.push(line(a, o.horizontal ? { x: a.x, y: a.y + tick } : { x: a.x + tick, y: a.y }, color, LINE_WIDTH * 1.5));
+      const v = q.values[p] ?? 0;
+      top.push(pt(p + 0.5, q.base[p] + v, q.series.axis));
+      bottom.push(pt(p + 0.5, q.base[p], q.series.axis));
+    }
+    if (n === 1) {
+      top.unshift(pt(0, q.base[0] + (q.values[0] ?? 0), q.series.axis));
+      bottom.unshift(pt(0, q.base[0], q.series.axis));
+    }
+    out.push({ kind: "path", points: [...top, ...bottom.reverse()], closed: true, fill: color, stroke: null });
+  }
+  return out;
+}
+
+/** Bar series: clustered, overlapped or stacked, with shadows, 3-D sides and value labels. */
+function drawBars(g: GraphLayout): SceneElement[] {
+  const { o, n, prepared, stackBars, scaleOf, pt, catWidth, enh, depth, valueLabelFor, valueLabelSize, axisFormat } = g;
+  const out: SceneElement[] = [];
+  // Bars.
+  const bars = prepared.filter((m) => m.series.type === "bar");
+  const nb = bars.length;
+  const widthFraction = o.barWidth !== null && o.barWidth > 0 && o.barWidth <= 1 ? o.barWidth : o.barStyle === "step" ? 1 : 0.7;
+  const groupWidth = widthFraction * n > 0 ? widthFraction : 0.7;
+  bars.forEach((q, k) => {
+    const color = classicColor(q.series.color);
+    let w: number;
+    let offset: number;
+    if (stackBars || nb === 0) {
+      w = groupWidth;
+      offset = (1 - w) / 2;
+    } else if (o.barStyle === "overlap") {
+      const ov = Math.max(0, Math.min(0.9, o.overlap));
+      w = groupWidth / (1 + (nb - 1) * (1 - ov));
+      offset = (1 - groupWidth) / 2 + k * w * (1 - ov);
+    } else {
+      w = groupWidth / nb;
+      offset = (1 - groupWidth) / 2 + k * w;
+    }
+    for (let p = 0; p < n; p++) {
+      const v = q.values[p];
+      if (v === null) continue;
+      const base = q.base[p];
+      const scale = scaleOf(q.series.axis);
+      const a = pt(p + offset, scale.log ? Math.max(base, scale.min) : base, q.series.axis);
+      const b = pt(p + offset + w, base + v, q.series.axis);
+      if (enh === "shadow") {
+        const d = catWidth * w * 0.15;
+        out.push(rectFrom({ x: a.x + d, y: a.y + d }, { x: b.x + d, y: b.y + d }, classicColor(15)));
       }
-      const op = open?.display ? (open.values[p] ?? null) : null;
-      if (op !== null) {
-        const a = pt(p + 0.5, op, 1);
-        out.push(line(a, o.horizontal ? { x: a.x, y: a.y - tick } : { x: a.x - tick, y: a.y }, color, LINE_WIDTH * 1.5));
+      out.push(rectFrom(a, b, color));
+      if (depth > 0) {
+        const x0 = Math.min(a.x, b.x);
+        const x1 = Math.max(a.x, b.x);
+        const y0 = Math.min(a.y, b.y);
+        const y1p = Math.max(a.y, b.y);
+        const dx = depth;
+        const dy = -depth;
+        out.push({ kind: "path", points: [{ x: x0, y: y0 }, { x: x0 + dx, y: y0 + dy }, { x: x1 + dx, y: y0 + dy }, { x: x1, y: y0 }], closed: true, fill: shadeCss(color, 0.8), stroke: null });
+        out.push({ kind: "path", points: [{ x: x1, y: y0 }, { x: x1 + dx, y: y0 + dy }, { x: x1 + dx, y: y1p + dy }, { x: x1, y: y1p }], closed: true, fill: shadeCss(color, 0.55), stroke: null });
       }
+      if (valueLabelFor(q.series)) {
+        const tip = pt(p + offset + w / 2, base + v, q.series.axis);
+        const text = formatValue(v, axisFormat(q.series));
+        if (o.horizontal) out.push(plainText(text, tip.x + valueLabelSize * 0.3, tip.y + valueLabelSize * 0.35, valueLabelSize, classicColor(1), "start"));
+        else out.push(plainText(text, tip.x, tip.y - valueLabelSize * 0.4, valueLabelSize, classicColor(1), "middle"));
+      }
+    }
+  });
+  return out;
+}
+
+/** Line, trend, curve and point series, with markers and value labels. */
+function drawLines(g: GraphLayout): SceneElement[] {
+  const { o, n, prepared, labelSize, plot, pt, enh, valueLabelFor, valueLabelSize, axisFormat } = g;
+  const out: SceneElement[] = [];
+  // Lines, trends, curves and points.
+  for (const q of prepared.filter((m) => m.series.type !== "bar" && m.series.type !== "area")) {
+    const s = q.series;
+    const color = classicColor(s.color);
+    const strokeWidth = strokeWidthOf(s.lineStyle);
+    const points: (Point | null)[] = q.values.map((v, p) => (v === null ? null : pt(p + 0.5, q.base[p] + v, s.axis)));
+    if (s.type === "trend") {
+      const xs: number[] = [];
+      const ys: number[] = [];
+      q.values.forEach((v, p) => {
+        if (v !== null) {
+          xs.push(p);
+          ys.push(v);
+        }
+      });
+      if (xs.length >= 2) {
+        const mx = xs.reduce((a, b) => a + b, 0) / xs.length;
+        const my = ys.reduce((a, b) => a + b, 0) / ys.length;
+        const sxx = xs.reduce((a, x) => a + (x - mx) ** 2, 0);
+        const slope = sxx > 0 ? xs.reduce((a, x, k) => a + (x - mx) * (ys[k] - my), 0) / sxx : 0;
+        const at = (x: number) => my + slope * (x - mx);
+        out.push({ kind: "path", points: [pt(0.5, at(0), s.axis), pt(n - 0.5, at(n - 1), s.axis)], closed: false, fill: null, stroke: color, strokeWidth });
+      }
+    } else if (s.type !== "point") {
+      let run: Point[] = [];
+      const flush = () => {
+        if (run.length >= 2) {
+          if (enh === "area") {
+            const base = run.map((p) => (o.horizontal ? { x: plot.left, y: p.y } : { x: p.x, y: plot.bottom }));
+            out.push({ kind: "path", points: [...run, ...base.reverse()], closed: true, fill: shadeCss(color, 0.6), stroke: null });
+          }
+          out.push({ kind: "path", points: run, closed: false, smooth: s.type === "curve", fill: null, stroke: color, strokeWidth });
+        }
+        run = [];
+      };
+      for (const p of points) {
+        if (p) run.push(p);
+        else flush();
+      }
+      flush();
+    }
+    if (s.type !== "trend" && (s.type === "point" || s.marker > 0)) {
+      for (const p of points) if (p) out.push(marker(s.marker || s.index, p, labelSize * 0.6, color));
+    }
+    if (valueLabelFor(s)) {
+      q.values.forEach((v, p) => {
+        const at = points[p];
+        if (v === null || !at) return;
+        out.push(plainText(formatValue(v, axisFormat(s)), at.x, at.y - valueLabelSize * 0.6, valueLabelSize, classicColor(1), "middle"));
+      });
     }
   }
+  return out;
+}
 
-  // Area series (stacked polygons through the category centres).
-  if (!isHlc) {
-    for (const q of prepared.filter((m) => m.series.type === "area")) {
-      const color = classicColor(q.series.color);
-      const top: Point[] = [];
-      const bottom: Point[] = [];
-      for (let p = 0; p < n; p++) {
-        const v = q.values[p] ?? 0;
-        top.push(pt(p + 0.5, q.base[p] + v, q.series.axis));
-        bottom.push(pt(p + 0.5, q.base[p], q.series.axis));
-      }
-      if (n === 1) {
-        top.unshift(pt(0, q.base[0] + (q.values[0] ?? 0), q.series.axis));
-        bottom.unshift(pt(0, q.base[0], q.series.axis));
-      }
-      out.push({ kind: "path", points: [...top, ...bottom.reverse()], closed: true, fill: color, stroke: null });
-    }
-
-    // Bars.
-    const bars = prepared.filter((m) => m.series.type === "bar");
-    const nb = bars.length;
-    const widthFraction = o.barWidth !== null && o.barWidth > 0 && o.barWidth <= 1 ? o.barWidth : o.barStyle === "step" ? 1 : 0.7;
-    const groupWidth = widthFraction * n > 0 ? widthFraction : 0.7;
-    bars.forEach((q, k) => {
-      const color = classicColor(q.series.color);
-      let w: number;
-      let offset: number;
-      if (stackBars || nb === 0) {
-        w = groupWidth;
-        offset = (1 - w) / 2;
-      } else if (o.barStyle === "overlap") {
-        const ov = Math.max(0, Math.min(0.9, o.overlap));
-        w = groupWidth / (1 + (nb - 1) * (1 - ov));
-        offset = (1 - groupWidth) / 2 + k * w * (1 - ov);
-      } else {
-        w = groupWidth / nb;
-        offset = (1 - groupWidth) / 2 + k * w;
-      }
-      for (let p = 0; p < n; p++) {
-        const v = q.values[p];
-        if (v === null) continue;
-        const base = q.base[p];
-        const scale = scaleOf(q.series.axis);
-        const a = pt(p + offset, scale.log ? Math.max(base, scale.min) : base, q.series.axis);
-        const b = pt(p + offset + w, base + v, q.series.axis);
-        if (enh === "shadow") {
-          const d = catWidth * w * 0.15;
-          out.push(rectFrom({ x: a.x + d, y: a.y + d }, { x: b.x + d, y: b.y + d }, classicColor(15)));
-        }
-        out.push(rectFrom(a, b, color));
-        if (depth > 0) {
-          const x0 = Math.min(a.x, b.x);
-          const x1 = Math.max(a.x, b.x);
-          const y0 = Math.min(a.y, b.y);
-          const y1p = Math.max(a.y, b.y);
-          const dx = depth;
-          const dy = -depth;
-          out.push({ kind: "path", points: [{ x: x0, y: y0 }, { x: x0 + dx, y: y0 + dy }, { x: x1 + dx, y: y0 + dy }, { x: x1, y: y0 }], closed: true, fill: shadeCss(color, 0.8), stroke: null });
-          out.push({ kind: "path", points: [{ x: x1, y: y0 }, { x: x1 + dx, y: y0 + dy }, { x: x1 + dx, y: y1p + dy }, { x: x1, y: y1p }], closed: true, fill: shadeCss(color, 0.55), stroke: null });
-        }
-        if (valueLabelFor(q.series)) {
-          const tip = pt(p + offset + w / 2, base + v, q.series.axis);
-          const text = formatValue(v, axisFormat(q.series));
-          if (o.horizontal) out.push(plainText(text, tip.x + valueLabelSize * 0.3, tip.y + valueLabelSize * 0.35, valueLabelSize, classicColor(1), "start"));
-          else out.push(plainText(text, tip.x, tip.y - valueLabelSize * 0.4, valueLabelSize, classicColor(1), "middle"));
-        }
-      }
-    });
-
-    // Lines, trends, curves and points.
-    for (const q of prepared.filter((m) => m.series.type !== "bar" && m.series.type !== "area")) {
-      const s = q.series;
-      const color = classicColor(s.color);
-      const strokeWidth = strokeWidthOf(s.lineStyle);
-      const points: (Point | null)[] = q.values.map((v, p) => (v === null ? null : pt(p + 0.5, q.base[p] + v, s.axis)));
-      if (s.type === "trend") {
-        const xs: number[] = [];
-        const ys: number[] = [];
-        q.values.forEach((v, p) => {
-          if (v !== null) {
-            xs.push(p);
-            ys.push(v);
-          }
-        });
-        if (xs.length >= 2) {
-          const mx = xs.reduce((a, b) => a + b, 0) / xs.length;
-          const my = ys.reduce((a, b) => a + b, 0) / ys.length;
-          const sxx = xs.reduce((a, x) => a + (x - mx) ** 2, 0);
-          const slope = sxx > 0 ? xs.reduce((a, x, k) => a + (x - mx) * (ys[k] - my), 0) / sxx : 0;
-          const at = (x: number) => my + slope * (x - mx);
-          out.push({ kind: "path", points: [pt(0.5, at(0), s.axis), pt(n - 0.5, at(n - 1), s.axis)], closed: false, fill: null, stroke: color, strokeWidth });
-        }
-      } else if (s.type !== "point") {
-        let run: Point[] = [];
-        const flush = () => {
-          if (run.length >= 2) {
-            if (enh === "area") {
-              const base = run.map((p) => (o.horizontal ? { x: plot.left, y: p.y } : { x: p.x, y: plot.bottom }));
-              out.push({ kind: "path", points: [...run, ...base.reverse()], closed: true, fill: shadeCss(color, 0.6), stroke: null });
-            }
-            out.push({ kind: "path", points: run, closed: false, smooth: s.type === "curve", fill: null, stroke: color, strokeWidth });
-          }
-          run = [];
-        };
-        for (const p of points) {
-          if (p) run.push(p);
-          else flush();
-        }
-        flush();
-      }
-      if (s.type !== "trend" && (s.type === "point" || s.marker > 0)) {
-        for (const p of points) if (p) out.push(marker(s.marker || s.index, p, labelSize * 0.6, color));
-      }
-      if (valueLabelFor(s)) {
-        q.values.forEach((v, p) => {
-          const at = points[p];
-          if (v === null || !at) return;
-          out.push(plainText(formatValue(v, axisFormat(s)), at.x, at.y - valueLabelSize * 0.6, valueLabelSize, classicColor(1), "middle"));
-        });
-      }
-    }
-  }
-
+/** The frame, drawn over the data as an axis would be. */
+function drawFrame(g: GraphLayout): SceneElement[] {
+  const { o, plot, plotW, plotH } = g;
+  const out: SceneElement[] = [];
   // Frame (drawn over the data, as an axis would be).
   const frameColor = classicColor(o.frameColor);
   const corners = {
@@ -467,7 +521,13 @@ export function drawGraph(chart: ClassicChart, graph: GraphData, area: Box, warn
   if (o.frame === "full") out.push({ kind: "rect", x: plot.left, y: plot.top, width: plotW, height: plotH, fill: null, stroke: frameColor, strokeWidth: LINE_WIDTH });
   else if (o.frame === "half") out.push({ kind: "path", points: [corners.tl, corners.bl, corners.br], closed: false, fill: null, stroke: frameColor, strokeWidth: LINE_WIDTH });
   else if (o.frame === "quarter") out.push(line(o.horizontal ? corners.tl : corners.bl, o.horizontal ? corners.bl : corners.br, frameColor));
+  return out;
+}
 
+/** The data table under the chart. */
+function drawTable(g: GraphLayout): SceneElement[] {
+  const { o, n, prepared, y1, labelSize, plot, maxChars, catLabels, verticalCat, tableSeries, tableRowH, tableNameWidth, pt } = g;
+  const out: SceneElement[] = [];
   // Data table.
   if (tableSeries.length > 0) {
     const top = plot.bottom + (catLabels.length > 0 ? (verticalCat ? textWidth("M".repeat(maxChars(catLabels)), labelSize) + labelSize : labelSize * 1.8) : 0);
@@ -489,7 +549,13 @@ export function drawGraph(chart: ClassicChart, graph: GraphData, area: Box, warn
       for (let p = 0; p <= n; p++) out.push(line(pt(p, y1.min, 1), { x: pt(p, y1.min, 1).x, y: top + height }, classicColor(1), 20));
     }
   }
+  return out;
+}
 
+/** The axis titles. */
+function drawAxisTitles(g: GraphLayout): SceneElement[] {
+  const { area, o, legendSize, plot, legendColumnWidth, legend, xTitleSize, y1TitleSize, y2TitleSize, catTitle, valTitle, val2Title, plotW, plotH } = g;
+  const out: SceneElement[] = [];
   // Axis titles.
   const midX = (plot.left + plot.right) / 2;
   const midY = (plot.top + plot.bottom) / 2;
@@ -508,7 +574,13 @@ export function drawGraph(chart: ClassicChart, graph: GraphData, area: Box, warn
     if (valTitle) horizontalTitle(valTitle, y1TitleSize, bottomEdge - y1TitleSize * 0.4);
     if (val2Title) horizontalTitle(val2Title, y2TitleSize, topEdge + y2TitleSize);
   }
+  return out;
+}
 
+/** The legend. */
+function drawLegend(g: GraphLayout): SceneElement[] {
+  const { area, o, legendSize, plot, legendEntries, swatch, entryWidth, legendRowWidth, legendColumnWidth, legend } = g;
+  const out: SceneElement[] = [];
   // Legend.
   if (legend !== "none") {
     const entry = (s: ClassicSeries, x: number, baseline: number): SceneElement[] => {
@@ -562,6 +634,26 @@ export function drawGraph(chart: ClassicChart, graph: GraphData, area: Box, warn
     out.push(...items);
   }
   return out;
+}
+
+/**
+ * Draws a graph chart into `area` (the space left after titles and
+ * footnotes). Returns the elements.
+ */
+export function drawGraph(chart: ClassicChart, graph: GraphData, area: Box, warnings: string[]): SceneElement[] {
+  const g = layoutGraph(chart, graph, area, warnings);
+  if (!g) return [plainText("(no data)", (area.left + area.right) / 2, (area.top + area.bottom) / 2, sizeToUnits(4), classicColor(8), "middle")];
+  const series = g.isHlc ? drawHighLow(g) : [...drawAreas(g), ...drawBars(g), ...drawLines(g)];
+  return [
+    ...drawPlotBackground(g),
+    ...drawValueAxes(g),
+    ...drawCategoryLabels(g),
+    ...series,
+    ...drawFrame(g),
+    ...drawTable(g),
+    ...drawAxisTitles(g),
+    ...drawLegend(g),
+  ];
 }
 
 export type { TextAnchor };
