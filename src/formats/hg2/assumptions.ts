@@ -83,8 +83,8 @@ export function shade(css: string, factor: number): string {
   return `#${part(m[1])}${part(m[2])}${part(m[3])}`;
 }
 
-/** [I] CSS stand-in for the program's own fonts, which are not decoded. */
+/** [I] CSS stand-in for the program's own fonts (not decoded), used until the clone faces load (text.ts). */
 export const FONT_FAMILY = "Helvetica, Arial, sans-serif";
 
-/** [I] Average character width as a fraction of the text size, for laying text out without font metrics. */
+/** [I] Average character width as a fraction of the text size, for CSS text (no font metrics). */
 export const CHAR_WIDTH = 0.6;

@@ -51,7 +51,7 @@
  * 13c): its scene is drawn inside the group, mapped by the group's 616.
  */
 import type { GlyphsElement, GroupElement, ImageElement, Matrix, Point, RectElement, SceneElement, TextAnchor, TextElement } from "../../../model/scene";
-import { EM_UNITS, type GlyphSource, layoutGlyphLine } from "../../../fonts/glyphRun";
+import { EM_UNITS, type GlyphSource, glyphLineElement as drawGlyphLine } from "../../../fonts/glyphRun";
 import { type PcxImage, decodePcx, indexPixels } from "../../pcx/pcx";
 import { pcxToDataUrl } from "../../pcx/toDataUrl";
 import {
@@ -734,11 +734,10 @@ export function advanceRounder(size: number, pixel: number): ((advance: number) 
 }
 
 /**
- * A text line drawn with glyphs (task 7f): one path laid out from the byte
- * codes, its start moved left by the full or half advance for right and
- * centred lines, scaled by size / EM_UNITS. Outline fonts fill with the
- * text colour; stroke fonts stroke with it. `pixel` (same units as `size`)
- * rounds each advance to screen pixels (advanceRounder).
+ * A text line drawn with glyphs (task 7f; fonts/glyphRun.ts
+ * glyphLineElement) with this format's rules: `pixel` (same units as
+ * `size`) rounds each advance to screen pixels (advanceRounder), and
+ * stroke fonts without a pen width use STROKE_FONT_DEFAULT_PEN_EM.
  */
 export function glyphLineElement(
   glyphs: GlyphSource,
@@ -751,22 +750,10 @@ export function glyphLineElement(
   size: number,
   pixel = 0,
 ): GlyphsElement {
-  const line = layoutGlyphLine(glyphs, codes, advanceRounder(size, pixel));
-  const s = size / EM_UNITS;
-  const shift = anchor === "middle" ? line.advance / 2 : anchor === "end" ? line.advance : 0;
-  const paint =
-    glyphs.paint === "fill"
-      ? { fill: color, stroke: null }
-      : { fill: null, stroke: color, strokeWidth: glyphs.strokeWidth ?? STROKE_FONT_DEFAULT_PEN_EM * EM_UNITS };
-  return {
-    kind: "glyphs",
-    d: line.d,
-    transform: [s, 0, 0, s, x - shift * s, y],
-    text,
-    advance: line.advance,
-    em: EM_UNITS,
-    ...paint,
-  };
+  return drawGlyphLine(glyphs, text, codes, color, anchor, x, y, size, {
+    roundAdvance: advanceRounder(size, pixel),
+    defaultPen: STROKE_FONT_DEFAULT_PEN_EM * EM_UNITS,
+  });
 }
 
 function drawText(ctx: ChartSceneContext, shape: TextBlockShape, m: Readonly<Transform>): SceneElement[] {

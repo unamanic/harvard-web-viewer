@@ -14,6 +14,8 @@
  * source and byte code.
  */
 
+import type { GlyphsElement, TextAnchor } from "../model/scene";
+
 /** Units per em of everything a GlyphSource returns. */
 export const EM_UNITS = 1000;
 
@@ -80,6 +82,42 @@ export function measureGlyphLine(source: GlyphSource, codes: ArrayLike<number>):
   let pen = 0;
   for (let i = 0; i < codes.length; i++) pen += source.glyph(codes[i]!)?.advance ?? 0;
   return pen;
+}
+
+/**
+ * A text line drawn with glyphs: one path laid out from the byte codes,
+ * its start moved left by the full or half advance for right and centred
+ * lines, scaled by size / EM_UNITS. Outline fonts fill with the text
+ * colour; stroke fonts stroke with it (`defaultPen`, em units, when the
+ * source sets no pen width). `roundAdvance` as for layoutGlyphLine.
+ */
+export function glyphLineElement(
+  glyphs: GlyphSource,
+  text: string,
+  codes: ArrayLike<number>,
+  color: string,
+  anchor: TextAnchor,
+  x: number,
+  y: number,
+  size: number,
+  options: { roundAdvance?: (advance: number) => number; defaultPen?: number } = {},
+): GlyphsElement {
+  const line = layoutGlyphLine(glyphs, codes, options.roundAdvance);
+  const s = size / EM_UNITS;
+  const shift = anchor === "middle" ? line.advance / 2 : anchor === "end" ? line.advance : 0;
+  const paint =
+    glyphs.paint === "fill"
+      ? { fill: color, stroke: null }
+      : { fill: null, stroke: color, strokeWidth: glyphs.strokeWidth ?? options.defaultPen ?? 0 };
+  return {
+    kind: "glyphs",
+    d: line.d,
+    transform: [s, 0, 0, s, x - shift * s, y],
+    text,
+    advance: line.advance,
+    em: EM_UNITS,
+    ...paint,
+  };
 }
 
 // ---------------------------------------------------------------------------

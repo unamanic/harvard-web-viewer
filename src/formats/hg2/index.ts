@@ -17,6 +17,7 @@ import { NotClassicChartError, isClassicChart, readClassicChart } from "./read";
 import { classicShowToPresentation } from "./presentation";
 import { chartToScene } from "./scene";
 import { isClassicShow, readClassicShow } from "./show";
+import { loadTextFaces } from "./text";
 
 const EXTENSION_ONLY_CONFIDENCE = 0.2;
 
@@ -60,5 +61,10 @@ export const hg2Parser: FormatParser = {
       scenes: [scene],
       warnings: [...new Set(warnings)],
     };
+  },
+
+  /** Loads the clone faces 1.x/2.x text is drawn with (text.ts). */
+  async prepare(): Promise<void> {
+    await loadTextFaces();
   },
 };
