@@ -15,7 +15,7 @@ export interface Box {
   bottom: number;
 }
 
-interface Scale {
+export interface Scale {
   min: number;
   max: number;
   step: number;
@@ -23,7 +23,7 @@ interface Scale {
 }
 
 /** A 1-2-5 step giving about `ticks` intervals. */
-function niceStep(range: number, ticks: number): number {
+export function niceStep(range: number, ticks: number): number {
   if (!(range > 0)) return 1;
   const raw = range / ticks;
   const mag = 10 ** Math.floor(Math.log10(raw));
@@ -31,7 +31,8 @@ function niceStep(range: number, ticks: number): number {
   return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * mag;
 }
 
-function makeScale(values: number[], axis: AxisScale, includeZero: boolean): Scale {
+/** A value axis over the values (and 0 when asked), with the chart's set minimum, maximum and step where given. */
+export function makeScale(values: number[], axis: AxisScale, includeZero: boolean): Scale {
   const finite = values.filter((v) => Number.isFinite(v));
   if (axis.log) {
     const pos = finite.filter((v) => v > 0);
@@ -53,7 +54,8 @@ function makeScale(values: number[], axis: AxisScale, includeZero: boolean): Sca
   return { min, max, step, log: false };
 }
 
-function ticksOf(s: Scale): number[] {
+/** Tick values: every step, or each decade on a log axis. */
+export function ticksOf(s: Scale): number[] {
   const out: number[] = [];
   if (s.log) {
     for (let v = s.min; v <= s.max * 1.0001 && out.length < 40; v *= 10) out.push(v);
