@@ -123,11 +123,12 @@ export function OpenButton({ onFiles }: { onFiles: OnFiles }) {
 
 /** What the viewer opens, by kind (the empty state and the help panel). */
 export const SUPPORTED_FILES: readonly { kind: string; extensions: string[] }[] = [
-  { kind: "charts", extensions: [".CH3"] },
+  { kind: "charts", extensions: [".CH3", ".CHT"] },
   { kind: "shows", extensions: [".SH3"] },
   { kind: "palettes", extensions: [".PL3", ".PC3"] },
   { kind: "fonts", extensions: [".SPD", ".FN3"] },
   { kind: "bitmaps", extensions: [".PCX", ".PCC"] },
+  { kind: "sounds", extensions: [".WAV"] },
   { kind: "archives", extensions: [".ZIP"] },
 ];
 
@@ -139,7 +140,7 @@ export function SupportedFilesHelp() {
     <details ref={ref} className="menu help">
       <summary className="header-link">Supported files</summary>
       <div className="menu-panel help-panel">
-        <p>Harvard Graphics 3 for DOS files:</p>
+        <p>Harvard Graphics for DOS files:</p>
         <ul>
           <li>
             <strong>.SH3</strong> slide shows play with their transitions, keys and buttons.
@@ -148,8 +149,12 @@ export function SupportedFilesHelp() {
             <strong>.CH3</strong> charts are drawn on their own.
           </li>
           <li>
+            <strong>.CHT</strong> charts from Harvard Graphics 1.0 and 2.x are laid out from their data.
+          </li>
+          <li>
             <strong>.PL3</strong> and <strong>.PC3</strong> palettes, <strong>.SPD</strong> and <strong>.FN3</strong>{" "}
-            fonts and <strong>.PCX</strong> / <strong>.PCC</strong> bitmaps are used by the charts that name them.
+            fonts and <strong>.PCX</strong> / <strong>.PCC</strong> bitmaps are used by the charts that name them;{" "}
+            <strong>.WAV</strong> sounds by the shows that play them.
           </li>
         </ul>
         <p className="muted">

@@ -36,7 +36,7 @@ describe("App", () => {
     const html = renderToStaticMarkup(<App />);
     expect(html).toContain("Harvard Web Viewer");
     expect(html).toContain("Open a chart<br/>from 1991.");
-    for (const ext of [".SH3", ".CH3", ".PL3", ".PC3", ".SPD", ".FN3", ".PCX", ".PCC"]) expect(html).toContain(ext);
+    for (const ext of [".SH3", ".CH3", ".CHT", ".PL3", ".PC3", ".SPD", ".FN3", ".PCX", ".PCC", ".WAV", ".ZIP"]) expect(html).toContain(ext);
     expect(html).toContain("whole folder");
     expect(html).toContain("Nothing is uploaded.");
     expect(html).toContain("Choose files…");
