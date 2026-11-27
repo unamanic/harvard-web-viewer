@@ -3,6 +3,7 @@
  * container (docs/SPEC-HG1-HG2.md §3, §4). Offsets below are relative to a
  * record's data.
  */
+import { ORG_SUBTITLE_SIZE, ORG_TITLE_SIZE } from "./assumptions";
 import { Bytes } from "./bytes";
 import {
   type BarStyle,
@@ -405,8 +406,12 @@ export function readFalc(data: Uint8Array, warnings: string[]): ClassicChart {
         break;
       case FalcTag.Org:
         chart.org = readOrgBody(b, ORG_NODE_BASE, ORG_NODES, ORG_TAIL);
+        // Title at 0 and subtitle at 62 (each a length byte, 40 characters and their attributes).
         if (!chart.title[0] || chart.title[0].text === "") {
-          chart.title[0] = { text: b.pstring(0, 40), size: 8, place: "center", attrs: [] };
+          chart.title[0] = { text: b.pstring(0, 40), size: ORG_TITLE_SIZE, place: "center", attrs: [] };
+        }
+        if (!chart.title[1] || chart.title[1].text === "") {
+          chart.title[1] = { text: b.pstring(62, 40), size: ORG_SUBTITLE_SIZE, place: "center", attrs: [] };
         }
         break;
       case FalcTag.MultipleSlot: {

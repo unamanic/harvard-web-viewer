@@ -4,7 +4,7 @@
  */
 import type { SceneElement, TextAnchor } from "../../model/scene";
 import { DEFAULT_SIZES, MARGIN_X, MARGIN_Y, PAGE, classicColor, sizeToUnits } from "./assumptions";
-import type { ClassicChart, ClassicText } from "./model";
+import type { ClassicChart, ClassicText, ClassicVersion } from "./model";
 import { drawLine, hasText, plainText, textWidth } from "./text";
 
 const MAX_WIDTH = PAGE.width - 2 * MARGIN_X;
@@ -34,9 +34,14 @@ function present(lines: ClassicText[], first: number, last: number, fallback: nu
   return out;
 }
 
-/** Title (line 0), subtitle (1) and footnote (2) of list, bullet, column and free-form charts; returns the body's top and bottom. */
+/**
+ * Title (line 0), subtitle (1) and footnote (2) of list, bullet, column and free-form charts; returns the body's top and bottom.
+ * Measured on the A.00 and 2.3 screens: the title's baseline sits 0.88 of its size below the top of the page,
+ * each line after it a little over its own size lower, with no page margin above.
+ */
 function heading(lines: ClassicText[], out: SceneElement[]): { top: number; bottom: number } {
-  let top = PAGE.top + MARGIN_Y;
+  let top = PAGE.top;
+  let first = true;
   for (const [k, fallback] of [
     [0, DEFAULT_SIZES.title],
     [1, DEFAULT_SIZES.subtitle],
@@ -44,10 +49,12 @@ function heading(lines: ClassicText[], out: SceneElement[]): { top: number; bott
     const line = lines[k];
     if (!hasText(line)) continue;
     const size = sizeOf(line, fallback);
-    top += size;
+    top += size * (first ? 0.88 : 1);
+    first = false;
     out.push(...placed(line, top, size));
-    top += size * 0.4;
+    top += size * 0.15;
   }
+  if (first) top += MARGIN_Y;
   let bottom = PAGE.bottom - MARGIN_Y;
   const foot = lines[2];
   if (hasText(foot)) {
@@ -55,7 +62,7 @@ function heading(lines: ClassicText[], out: SceneElement[]): { top: number; bott
     out.push(...drawLine(foot, { x: PAGE.left + MARGIN_X, y: bottom, size, anchor: "start", maxWidth: MAX_WIDTH }));
     bottom -= size * 1.6;
   }
-  return { top: top + sizeToUnits(2), bottom };
+  return { top, bottom };
 }
 
 /** Lays out stacked rows between top and bottom, shrinking them all if they do not fit. */
@@ -92,24 +99,57 @@ function titleChart(lines: ClassicText[]): SceneElement[] {
   return out;
 }
 
-function listChart(lines: ClassicText[], bullets: boolean): SceneElement[] {
+/**
+ * Simple and bullet lists. Each stored line is one screen line: the program does not wrap. A line that
+ * follows another line with text continues the same item, so it gets no bullet and lines up under the
+ * text above; blank lines between items are kept as gaps. Measured on the A.00 and 2.3 screens: a text
+ * line takes 1.21 of its size, a blank line 0.78, and the body starts one text line below the heading.
+ * The block is centred on the page by its widest line, bullet included [I].
+ */
+function listChart(lines: ClassicText[], bullets: boolean, version: ClassicVersion): SceneElement[] {
   const out: SceneElement[] = [];
   const { top, bottom } = heading(lines, out);
-  const rows = present(lines, 3, lines.length - 1, DEFAULT_SIZES.body);
-  const { ys, scale } = stack(rows, top, bottom);
-  // The body is one block, centred on the page by its widest line (as the program centres a list) [I].
-  const widest = Math.max(0, ...rows.map((r) => textWidth(r.line.text.trimEnd(), r.size * scale) + (bullets ? r.size * scale * 1.2 : 0)));
-  const left = Math.max(PAGE.left + MARGIN_X, -widest / 2);
+  let last = -1;
+  for (let k = 3; k < lines.length; k++) if (hasText(lines[k])) last = k;
+  let firstText = -1;
+  for (let k = 3; k <= last; k++) if (hasText(lines[k])) { firstText = k; break; }
+  if (firstText < 0) return out;
+  const rows: { line: ClassicText; size: number; text: boolean; bullet: boolean }[] = [];
+  let size = sizeToUnits(DEFAULT_SIZES.body);
+  for (let k = firstText; k <= last; k++) {
+    const line = lines[k];
+    const text = hasText(line);
+    // A size of 0 means the default; a blank line takes the size of the text above it (blank lines can
+    // store a smaller size that the screen does not show).
+    if (text) size = sizeOf(line, DEFAULT_SIZES.body);
+    rows.push({ line, size, text, bullet: text && (k === firstText || !hasText(lines[k - 1])) });
+  }
+  const pitch = (r: (typeof rows)[number]) => r.size * (r.text ? 1.21 : 0.78);
+  const firstBaseline = rows[0].size * (1.21 + 0.88);
+  const needed = firstBaseline + rows.slice(1).reduce((h, r) => h + pitch(r), 0) + rows[rows.length - 1].size * 0.3;
+  const scale = needed > bottom - top && needed > 0 ? (bottom - top) / needed : 1;
+  // A.00 draws a small square bullet with a wide gap; 2.x a round bullet set close to the text.
+  const square = version === "1.0";
+  const bulletGap = (sz: number) => sz * (square ? 1.36 : 0.62);
+  const widest = Math.max(0, ...rows.filter((r) => r.text).map((r) => textWidth(r.line.text.trimEnd(), r.size * scale) + (bullets ? bulletGap(r.size * scale) : 0)));
+  const left = Math.max(PAGE.left + MARGIN_X / 4, -widest / 2);
+  let y = top;
   rows.forEach((r, k) => {
-    const size = r.size * scale;
+    const sz = r.size * scale;
+    y += (k === 0 ? firstBaseline : pitch(r)) * scale;
+    if (!r.text) return;
     let x = left;
     if (bullets) {
-      out.push(plainText("•", x, ys[k], size, classicColor(r.line.attrs[0] !== undefined ? (r.line.attrs[0] >> 4) + 1 : 1), "start"));
-      x += size * 1.2;
+      const color = classicColor(r.line.attrs[0] !== undefined ? (r.line.attrs[0] >> 4) + 1 : 1);
+      if (r.bullet) {
+        if (square) out.push({ kind: "rect", x, y: y - sz * 0.62, width: sz * 0.2, height: sz * 0.3, fill: color, stroke: null });
+        else out.push(plainText("\u2022", x, y, sz, color, "start"));
+      }
+      x += bulletGap(sz);
     }
     if (r.line.place === "left" || bullets) {
-      out.push(...drawLine(r.line, { x, y: ys[k], size, anchor: "start", maxWidth: PAGE.right - MARGIN_X - x }));
-    } else out.push(...placed(r.line, ys[k], size));
+      out.push(...drawLine(r.line, { x, y, size: sz, anchor: "start", maxWidth: PAGE.right - MARGIN_X / 4 - x }));
+    } else out.push(...placed(r.line, y, sz));
   });
   return out;
 }
@@ -168,9 +208,9 @@ export function drawTextChart(chart: ClassicChart): SceneElement[] {
     case "title":
       return titleChart(lines);
     case "list":
-      return listChart(lines, false);
+      return listChart(lines, false, chart.version);
     case "bullet":
-      return listChart(lines, true);
+      return listChart(lines, true, chart.version);
     case "columns":
       return columnChart(lines, chart.subtype === 4 ? 3 : 2);
     default:

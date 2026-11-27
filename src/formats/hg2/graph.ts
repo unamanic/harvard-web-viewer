@@ -5,7 +5,7 @@
 import type { Point, SceneElement, TextAnchor } from "../../model/scene";
 import { shadeCss } from "../../model/color";
 import { DEFAULT_SIZES, classicColor, sizeToUnits } from "./assumptions";
-import type { AxisScale, ClassicChart, ClassicSeries, ClassicText, GraphData, GridStyle, LabelFormat } from "./model";
+import type { AxisScale, ClassicChart, ClassicSeries, ClassicVersion, ClassicText, GraphData, GridStyle, LabelFormat } from "./model";
 import { drawLine, hasText, plainText, textWidth } from "./text";
 
 export interface Box {
@@ -31,8 +31,14 @@ export function niceStep(range: number, ticks: number): number {
   return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * mag;
 }
 
-/** A value axis over the values (and 0 when asked), with the chart's set minimum, maximum and step where given. */
-export function makeScale(values: number[], axis: AxisScale, includeZero: boolean): Scale {
+/**
+ * A value axis over the values (and 0 when asked), with the chart's set minimum, maximum and step where given.
+ *
+ * Both programs pick an automatic step that gives about eight intervals. 2.x then ends the axis at the
+ * first step at or above the data; 1.0 (A.00) always draws exactly eight steps from the minimum. A.00
+ * also ignores a stored range that does not hold the data (its own story charts save 0 to 8 and draw 0 to 16).
+ */
+export function makeScale(values: number[], axis: AxisScale, includeZero: boolean, version: ClassicVersion = "2.30"): Scale {
   const finite = values.filter((v) => Number.isFinite(v));
   if (axis.log) {
     const pos = finite.filter((v) => v > 0);
@@ -47,9 +53,12 @@ export function makeScale(values: number[], axis: AxisScale, includeZero: boolea
     hi = 1;
   }
   if (lo === hi) hi = lo + 1;
-  const step = axis.increment && axis.increment > 0 ? axis.increment : niceStep(hi - lo, 5);
+  if (version === "1.0" && axis.max !== null && axis.max !== undefined && axis.max < hi) {
+    axis = { ...axis, min: null, max: null, increment: null };
+  }
+  const step = axis.increment && axis.increment > 0 ? axis.increment : niceStep(hi - lo, 8);
   const min = axis.min ?? Math.floor(lo / step) * step;
-  let max = axis.max ?? Math.ceil(hi / step) * step;
+  let max = axis.max ?? (version === "1.0" ? min + 8 * step : Math.ceil(hi / step) * step);
   if (max <= min) max = min + step;
   return { min, max, step, log: false };
 }
@@ -74,7 +83,7 @@ function fraction(s: Scale, v: number): number {
 
 export function formatValue(v: number, format: LabelFormat): string {
   if (format === "none") return "";
-  const text = Math.abs(v) >= 1e9 || (Math.abs(v) < 1e-3 && v !== 0) ? v.toPrecision(3) : v.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  const text = Math.abs(v) >= 1e9 || (Math.abs(v) < 1e-3 && v !== 0) ? v.toPrecision(3) : String(Math.round(v * 100) / 100);
   return format === "currency" ? `$${text}` : format === "percent" ? `${text}%` : text;
 }
 
@@ -195,8 +204,8 @@ function layoutGraph(chart: ClassicChart, graph: GraphData, area: Box, warnings:
     return vals;
   };
   const includeZero = !isHlc && prepared.some((q) => q.series.type === "bar" || q.series.type === "area");
-  const y1 = makeScale(collect(1), o.y1, includeZero);
-  const y2 = usesY2 ? makeScale(collect(2), o.y2, includeZero) : y1;
+  const y1 = makeScale(collect(1), o.y1, includeZero, chart.version);
+  const y2 = usesY2 ? makeScale(collect(2), o.y2, includeZero, chart.version) : y1;
   const scaleOf = (axis: number) => (axis === 2 ? y2 : y1);
 
   // Space for the legend, axis titles and labels.
@@ -240,7 +249,8 @@ function layoutGraph(chart: ClassicChart, graph: GraphData, area: Box, warnings:
       plot.left = Math.max(plot.left, area.left + tableNameWidth + (valTitle ? y1TitleSize * 1.6 : 0));
     }
     if (catTitle) plot.bottom -= xTitleSize * 1.6;
-    if (valTitle) plot.left += y1TitleSize * 1.6;
+    // 1.0 and 2.x set the Y1 title flat over the top of the value axis, not turned up the side.
+    if (valTitle) plot.top += y1TitleSize * 1.4;
     if (val2Title) plot.right -= y2TitleSize * 1.6;
     if (catLabels.length > 0) plot.bottom -= verticalCat ? textWidth("M".repeat(maxChars(catLabels)), labelSize) + labelSize : labelSize * 1.8;
     plot.left += textWidth("M".repeat(maxChars(y1Labels)), labelSize) + labelSize * 0.6;
@@ -569,7 +579,7 @@ function drawAxisTitles(g: GraphLayout): SceneElement[] {
   const verticalTitle = (t: ClassicText, size: number, x: number) => out.push(rotated(drawLine(t, { x: 0, y: 0, size, anchor: "middle", maxWidth: plotH }), x, midY));
   if (!o.horizontal) {
     if (catTitle) horizontalTitle(catTitle, xTitleSize, bottomEdge - xTitleSize * 0.4);
-    if (valTitle) verticalTitle(valTitle, y1TitleSize, leftEdge + y1TitleSize);
+    if (valTitle) out.push(...drawLine(valTitle, { x: plot.left, y: plot.top - g.labelSize * 0.7, size: y1TitleSize, anchor: "start", maxWidth: plotW }));
     if (val2Title) verticalTitle(val2Title, y2TitleSize, rightEdge - y2TitleSize * 0.3);
   } else {
     if (catTitle) verticalTitle(catTitle, xTitleSize, leftEdge + xTitleSize);

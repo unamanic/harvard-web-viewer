@@ -2,6 +2,7 @@
  * Harvard Presentation Graphics A.00 ("1.0") charts: the fixed 4716-byte
  * PCOK layout (docs/SPEC-HG1-HG2.md §2). Offsets below are file offsets.
  */
+import { ORG_SUBTITLE_SIZE, ORG_TITLE_SIZE } from "./assumptions";
 import { Bytes } from "./bytes";
 import {
   type BarStyle,
@@ -222,7 +223,11 @@ export function readPcok(data: Uint8Array, warnings: string[]): ClassicChart {
   } else if (chartClass === 3) {
     chart.org = readOrg(b);
     // The org chart's title is the pstring at 160 [I].
-    chart.title = [{ text: b.pstring(160, 42), size: 8, place: "center", attrs: [] }];
+    // Title at 160 and subtitle at 202 (42-byte strings); the screen draws them smaller than a text chart's [I].
+    chart.title = [
+      { text: b.pstring(160, 42), size: ORG_TITLE_SIZE, place: "center", attrs: [] },
+      { text: b.pstring(202, 42), size: ORG_SUBTITLE_SIZE, place: "center", attrs: [] },
+    ];
   } else {
     warnings.push(`Unknown chart class ${chartClass} (subtype ${subtype}).`);
   }

@@ -25,6 +25,10 @@ export function sizeToUnits(size: number): number {
   return (size * PAGE.height) / 100;
 }
 
+/** [I] Org chart titles: neither format stores a size; the A.00 and 2.3 screens draw them about this size. */
+export const ORG_TITLE_SIZE = 6;
+export const ORG_SUBTITLE_SIZE = 3.5;
+
 /** Default sizes (percent of page height) when a field holds 0. */
 export const DEFAULT_SIZES = {
   title: 8,

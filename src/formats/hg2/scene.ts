@@ -25,16 +25,21 @@ const MAX_WIDTH = PAGE.width - 2 * MARGIN_X;
 
 /** Title and subtitles at the top, footnotes at the bottom; returns the space left between. */
 function titleBlock(chart: ClassicChart, out: SceneElement[]): Box {
-  let top = PAGE.top + MARGIN_Y;
+  // Measured on the A.00 and 2.3 screens: the title hangs from the top of the page with no margin
+  // (baseline about 0.95 of its size down), each later line a little over its size below.
+  let top = PAGE.top;
+  let first = true;
   chart.title.forEach((line, k) => {
     if (!hasText(line)) return;
     const size = sizeToUnits(line.size > 0 ? line.size : k === 0 ? DEFAULT_SIZES.title : DEFAULT_SIZES.subtitle);
-    top += size;
+    top += size * (first ? 0.95 : 1);
+    first = false;
     const x = line.place === "left" ? PAGE.left + MARGIN_X : line.place === "right" ? PAGE.right - MARGIN_X : 0;
     const anchor = line.place === "left" ? "start" : line.place === "right" ? "end" : "middle";
     out.push(...drawLine(line, { x, y: top, size, anchor, maxWidth: MAX_WIDTH }));
-    top += size * 0.4;
+    top += size * 0.15;
   });
+  if (first) top += MARGIN_Y;
   let bottom = PAGE.bottom - MARGIN_Y;
   const feet = chart.footnote.filter(hasText);
   for (let k = feet.length - 1; k >= 0; k--) {
@@ -141,7 +146,7 @@ export function chartToScene(chart: ClassicChart, warnings: string[], options: S
     }
     case "org": {
       const area = titleBlock(chart, elements);
-      if (chart.org) elements.push(...drawOrg(chart.org, area));
+      if (chart.org) elements.push(...drawOrg(chart.org, area, { version: chart.version }));
       break;
     }
     case "multiple":
