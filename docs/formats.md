@@ -6,7 +6,7 @@ been **verified against real sample files**, and cite the file you checked.
 Keep this file in sync with the code: any change that confirms, corrects or
 adds to what we know about a format updates this file in the same commit.
 
-## Harvard Graphics 1.0 and 2.x (DOS)
+## Harvard Presentation Graphics A.00 and Harvard Graphics 2.x (DOS)
 
 The clean-room specification is [SPEC-HG1-HG2.md](SPEC-HG1-HG2.md); the
 reader and layout code is `src/formats/hg2/`, and the test charts are
@@ -16,18 +16,18 @@ reader and layout code is `src/formats/hg2/`, and the test charts are
 
 | Area | Spec section | Implemented | Verified against samples |
 | --- | --- | --- | --- |
-| 1.0 charts (`PCOK`, fixed 4716 bytes) | §2 | Read and laid out from data: text, bar/line, pie, org | All 50 1.0 test charts read and draw with no unexpected warnings |
+| A.00 charts (`PCOK`, fixed 4716 bytes) | §2 | Read and laid out from data: text, bar/line, pie, org | All 50 A.00 test charts read and draw with no unexpected warnings |
 | 2.x charts (`Falc` records) | §3, §4 | Read and laid out from data: title, list, bullet, column, free form, bar/line, area, high/low/close, pie, org, multiple | All 201 2.x test charts read and draw; 2.10 and 2.12 resaves read the same as their 2.30 originals |
-| Text | none (fonts not decoded) | Drawn with our HWV Sans clone faces (regular, bold, italic, bold italic by the character attributes), measured from their advances; CSS Helvetica/Arial with a 0.6 em width estimate until the faces load | Not against the programs: there are no reference renders of 1.x/2.x screens |
-| Annotations (1.0 trailer, 2.x tag 300) | §2.6, §3.1 | Not decoded; a warning says so | No test chart has any |
-| 1.0 and 2.x slide shows (`.SHW`) | §5 | Read and played: play order, times, default row, draw/erase effects (Weave and Rain drawn as Blinds and Fade), HyperShow keys, nested shows, PCX slides; a missing file shows as a note | The eight one-setting 2.30 test shows in `samples/hg1-hg2/shows/` (`src/formats/hg2/show.test.ts`); the 1.0 and 2.30 story shows play as 20 slides |
+| Text | none (fonts not decoded) | Drawn with our HWV Sans clone faces (regular, bold, italic, bold italic by the character attributes), measured from their advances; CSS Helvetica/Arial with a 0.6 em width estimate until the faces load | Not against the programs: there are no reference renders of A.00/2.x screens |
+| Annotations (A.00 trailer, 2.x tag 300) | §2.6, §3.1 | Not decoded; a warning says so | No test chart has any |
+| A.00 and 2.x slide shows (`.SHW`) | §5 | Read and played: play order, times, default row, draw/erase effects (Weave and Rain drawn as Blinds and Fade), HyperShow keys, nested shows, PCX slides; a missing file shows as a note | The eight one-setting 2.30 test shows in `samples/hg1-hg2/shows/` (`src/formats/hg2/show.test.ts`); the A.00 and 2.30 story shows play as 20 slides |
 | `HG.DIR` / `HPG.DIR` | §5 | No (not needed: charts carry their own class) | No |
 
 ### Verified findings
 
 - 2.x tag 121 holds the axis minimums at 4/8/12 (X/Y1/Y2), maximums at 16/20 and increments at 28/32 for X/Y1, one field later than the first version of the spec said (BXMIN, BXMAX, BXINC, BY1MIN, BY1MAX, BY1INC, BY2MIN).
 - 2.x tag 120 byte 45 is the data table (1 normal, 2 framed, 3 none) and byte 14 the plot background colour; both are drawn (BDT1, BDT2, BFRB).
-- The org chart options tail bytes +22/+23 limit the text lines in each box (OB2); +4 is the number of levels shown (1.0 O1).
+- The org chart options tail bytes +22/+23 limit the text lines in each box (OB2); +4 is the number of levels shown (A.00 O1).
 
 ### Assumptions [I]
 

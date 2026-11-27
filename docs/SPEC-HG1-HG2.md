@@ -1,12 +1,12 @@
-# Harvard Graphics 1.0 and 2.x File Format Spec (clean room)
+# Harvard Presentation Graphics A.00 and Harvard Graphics 2.x File Format Spec (clean room)
 
 Nov 25, 2026 · @William Witt
 
 ## 1. Scope and method
 
-This spec covers chart files (.CHT) and slide show files (.SHW, §5) from four DOS releases: Harvard Presentation Graphics **A.00** (shown as "Version A 27 Feb 1986", called 1.0 here), Harvard Graphics **2.10**, **2.12** and **2.30** (2.301). Version 1.0 uses a fixed 4716-byte layout with the signature `PCOK`; all 2.x versions use a tagged record container with the signature `Falc`. Neither is the 3.05 format (`HGB3`), which has its own spec.
+This spec covers chart files (.CHT) and slide show files (.SHW, §5) from four DOS releases: Harvard Presentation Graphics **A.00** (shown as "Version A 27 Feb 1986", called A.00 here), Harvard Graphics **2.10**, **2.12** and **2.30** (2.301). Version A.00 uses a fixed 4716-byte layout with the signature `PCOK`; all 2.x versions use a tagged record container with the signature `Falc`. Neither is the 3.05 format (`HGB3`), which has its own spec.
 
-Method (clean room): every field here comes from files the programs saved and what their screens show. Each program was installed from William's disks and run in an emulator (DOSBox-X for 2.x; PCE with GLaBIOS and FreeDOS for 1.0, run from its original copy-protected floppy, protection untouched). For each option a base chart was saved, one setting changed, the chart saved again, and the two files diffed. No program code was disassembled or read. The 2.10 manual PDF was used as background for option names only.
+Method (clean room): every field here comes from files the programs saved and what their screens show. Each program was installed from William's disks and run in an emulator (DOSBox-X for 2.x; PCE with GLaBIOS and FreeDOS for A.00, run from its original copy-protected floppy, protection untouched). For each option a base chart was saved, one setting changed, the chart saved again, and the two files diffed. No program code was disassembled or read. The 2.10 manual PDF was used as background for option names only.
 
 Confidence marks:
 
@@ -14,11 +14,11 @@ Confidence marks:
 - **[I]** inferred from samples, defaults or a pattern (not individually tested).
 - **[?]** seen but not understood.
 
-Conventions: offsets are decimal bytes from the start of the file (1.0) or the start of a record's data (2.x). All integers are little-endian. `u8`/`u16` are unsigned; `f32` is an IEEE single. A **pstring** is a length byte followed by that many characters (code page 437) inside a fixed-size field; bytes after the length are leftover memory and must be ignored. The value **1e30** (bytes `ca f2 49 71`) means missing data or "auto" for an axis setting, in every version.
+Conventions: offsets are decimal bytes from the start of the file (A.00) or the start of a record's data (2.x). All integers are little-endian. `u8`/`u16` are unsigned; `f32` is an IEEE single. A **pstring** is a length byte followed by that many characters (code page 437) inside a fixed-size field; bytes after the length are leftover memory and must be ignored. The value **1e30** (bytes `ca f2 49 71`) means missing data or "auto" for an axis setting, in every version.
 
-## 2. Version 1.0 (HPG A.00): the PCOK layout
+## 2. Version A.00: the PCOK layout
 
-A 1.0 chart is a fixed 4716-byte block, optionally followed by an annotation trailer. Every chart type uses the same header; the body layout depends on the class. Test files: 50 charts in `hg2x/v100/`, plus the 5 samples on the A.00 utility disk.
+An A.00 chart is a fixed 4716-byte block, optionally followed by an annotation trailer. Every chart type uses the same header; the body layout depends on the class. Test files: 50 charts in `hg2x/v100/`, plus the 5 samples on the A.00 utility disk.
 
 ### 2.1 Header
 
@@ -146,7 +146,7 @@ A 2.x chart is the 4-byte signature `Falc` followed by records of `u16 tag, u16 
 | Tag | Length | Meaning | Mark |
 | --- | --- | --- | --- |
 | 0 | 4 | Version: `00 02 vv 01`, vv = 2 from 2.30, 0 from 2.10 and 2.12 | C |
-| 30 | 4 | u16 class (1 text, 2 graph, 3 org, 4 multiple), u16 subtype (as 1.0; multiple: 1 = "Two" layout, others I) | C |
+| 30 | 4 | u16 class (1 text, 2 graph, 3 org, 4 multiple), u16 subtype (as A.00; multiple: 1 = "Two" layout, others I) | C |
 | 2 | var | Description pstring | C |
 | 10 | 21 | Unknown settings block (`00 01 01 01 00 01 ... 10 27 ...`) | ? |
 | 316 | 30 | Written only by 2.30; holds the pstring `hg23` (palette name?) | C (presence), ? (meaning) |
@@ -294,7 +294,7 @@ Tag 62 is a 10826-byte block. It starts with the title pstring (other text befor
 | 116 | u16 | Number of children | C |
 | 126 | u16 | Depth (root 0) | C |
 
-The options tail starts at 10770 in tag 62 (4570 in a 1.0 file); offsets below are relative to it:
+The options tail starts at 10770 in tag 62 (4570 in an A.00 file); offsets below are relative to it:
 
 | Offset | Meaning | Values | Mark |
 | --- | --- | --- | --- |
@@ -321,9 +321,9 @@ Six tag 90 records, one per slot: u16 slot number (1 to 6), four u16 values that
 
 ## 5. Show and directory files
 
-Shows were decoded from one-setting saves in 2.30 (`samples/hg1-hg2/shows/`, see its README), checked against the shipped samples of 1.0, 2.10, 2.12 and 2.30. Values marked [I] are inferred; the rest were confirmed by a test save.
+Shows were decoded from one-setting saves in 2.30 (`samples/hg1-hg2/shows/`, see its README), checked against the shipped samples of A.00, 2.10, 2.12 and 2.30. Values marked [I] are inferred; the rest were confirmed by a test save.
 
-**Directory file (HPG.DIR in 1.0, HG.DIR in 2.x).** The program keeps one per data directory to list charts with their descriptions. 1024 bytes: `pdir`, a u8 1, then 60-byte entries from offset 5. Both versions use the same entry: [0] u8 flag (0, 3 or `S` seen), [1] u8 1, [2] u8 class, [3] u8 subtype, [4] u8 unknown, [5] 13-byte pstring 8.3 filename, [18] description pstring. Class and subtype match the chart's own header, which a viewer should prefer.
+**Directory file (HPG.DIR in A.00, HG.DIR in 2.x).** The program keeps one per data directory to list charts with their descriptions. 1024 bytes: `pdir`, a u8 1, then 60-byte entries from offset 5. Both versions use the same entry: [0] u8 flag (0, 3 or `S` seen), [1] u8 1, [2] u8 class, [3] u8 subtype, [4] u8 unknown, [5] 13-byte pstring 8.3 filename, [18] description pstring. Class and subtype match the chart's own header, which a viewer should prefer.
 
 ### 5.1 How a show keeps its charts together
 
@@ -378,9 +378,9 @@ Times are minutes and seconds in two bytes (0:05 is `00 05`, 1:30 is `01 1e`). T
 
 A slot can name another show (`.SHW`, class 0/1), which plays in place, or a PCX bitmap (class 0/3); the 2.30 samples ANIMATOR.SHW and WPICK.SHW use both. WPICK.SHW's HyperShow menu binds keys 1 to 9 and H to Go To positions 3 to 12.
 
-### 5.3 1.0 layout (`show`)
+### 5.3 A.00 layout (`show`)
 
-Decoded from the 1.0 sample (5120 bytes) and the 1.0 story show (23552 bytes, 20 slides); no one-setting tests, so [I] throughout.
+Decoded from the A.00 sample (5120 bytes) and the A.00 story show (23552 bytes, 20 slides); no one-setting tests, so [I] throughout.
 
 | Offset | Size | Field |
 | --- | --- | --- |
@@ -389,17 +389,17 @@ Decoded from the 1.0 sample (5120 bytes) and the 1.0 story show (23552 bytes, 20
 | 6 | u16 x 49 | Play order; read as 1-based slot numbers like 2.x (both samples are in slot order, so this is untested) |
 | 104 | 60 x 49 | Slots: slot n at 104 + 60 x (n - 1) |
 
-Slot (60 bytes): [0] 13-byte pstring file name, [13] leftover byte (0x51 seen), [14] class, [15] subtype, [16] description pstring to 56, [57] leftover byte, [58] u16 that equals 2 x n + 4 for slot n, used or not, and 0 in the last slot (a chain of some kind [?]). There are no times, effects or keys: a 1.0 show waits for a key on every slide.
+Slot (60 bytes): [0] 13-byte pstring file name, [13] leftover byte (0x51 seen), [14] class, [15] subtype, [16] description pstring to 56, [57] leftover byte, [58] u16 that equals 2 x n + 4 for slot n, used or not, and 0 in the last slot (a chain of some kind [?]). There are no times, effects or keys: an A.00 show waits for a key on every slide.
 
 ### 5.4 How the viewer plays a show
 
 Slide 0 is a placeholder and slides 1 to n are the play positions, so HyperShow Go To numbers index the slides directly. Charts are found beside the show, case-insensitively, also inside a `.zip`. A missing file shows a note naming it (the program itself skips it). Weave and Rain have no equivalent in the viewer and are drawn as Blinds and Fade [I]. A letter key is matched in either case [I].
 
-## 6. How 1.0 and 2.x compare with 3.05
+## 6. How A.00 and 2.x compare with 3.05
 
 The three generations share their option values and attribute bits but not their containers, so a viewer needs three readers that feed one chart model.
 
-| Topic | 1.0 (A.00) | 2.10 / 2.12 / 2.30 | 3.05 |
+| Topic | A.00 | 2.10 / 2.12 / 2.30 | 3.05 |
 | --- | --- | --- | --- |
 | Signature | `PCOK` | `Falc` | `HGB3` (charts), others for shows |
 | Container | Fixed 4716-byte block + annotation trailer | u16 tag, u16 length records, ends 31 then 1 | Tag/length records with different tag numbers (1304, 1306, 1310...) |
@@ -412,21 +412,21 @@ The three generations share their option values and attribute bits but not their
 | Org chart | 32 nodes x 130 B | 80 nodes x 130 B, identical node and options layout | Different structure |
 | Annotations | Trailer after 4716 (partly decoded) | Tag 300 (not decoded) | Drawing records (in 3.05 spec) |
 
-One trap when porting values: 1.0 stores many yes/no options as 1/0, while 2.x stores 1/2 (display, cumulative, cut slices). Graph option codes otherwise carry over from 1.0 to 2.x unchanged where both have the option.
+One trap when porting values: A.00 stores many yes/no options as 1/0, while 2.x stores 1/2 (display, cumulative, cut slices). Graph option codes otherwise carry over from A.00 to 2.x unchanged where both have the option.
 
 ## 7. Open questions, test files and sources
 
 Open questions, most useful first for a viewer:
 
-1. **2.x annotations (tag 300)** and **1.0 annotation objects** beyond one polyline or polygon: text, arrows and several objects per chart need Draw/Annotate test pairs.
-2. **Shows**: 1.0 play order with slides out of slot order, the 1.0 slot word at 58, the 2.x u16 at 6, and whether the program applies the Default row in playback exactly as the viewer does.
-3. **X data types** other than Name (days, months, numbers) and tags 201 and 207 in 2.x, and the X type field at 1304 in 1.0.
-4. Unknown bytes: 1.0 graph options 4659 to 4663 and 4665 to 4667; 2.x tag 120 bytes 5 to 7, 24, 39 to 44, 46 to 54 (including where the Y2 scale lives); tags 10 and 15; org tail 18 to 21 and 44.
-5. 1.0 text byte 4598, and 1.0 subtypes 1, 3 and 4 (numbering assumed from 2.x and the directory file).
+1. **2.x annotations (tag 300)** and **A.00 annotation objects** beyond one polyline or polygon: text, arrows and several objects per chart need Draw/Annotate test pairs.
+2. **Shows**: A.00 play order with slides out of slot order, the A.00 slot word at 58, the 2.x u16 at 6, and whether the program applies the Default row in playback exactly as the viewer does.
+3. **X data types** other than Name (days, months, numbers) and tags 201 and 207 in 2.x, and the X type field at 1304 in A.00.
+4. Unknown bytes: A.00 graph options 4659 to 4663 and 4665 to 4667; 2.x tag 120 bytes 5 to 7, 24, 39 to 44, 46 to 54 (including where the Y2 scale lives); tags 10 and 15; org tail 18 to 21 and 44.
+5. A.00 text byte 4598, and A.00 subtypes 1, 3 and 4 (numbering assumed from 2.x and the directory file).
 6. Multiple-chart slot geometry in tag 90.
 
-No disk set had problems: all four installed and ran, and version 1.0 ran from its original floppy with the copy protection untouched.
+No disk set had problems: all four installed and ran, and version A.00 ran from its original floppy with the copy protection untouched.
 
-**Test files** are in the project folder under `harvard-graphics/hg2x/`: `v100/` (50 charts from 1.0), `v230/` (160 from 2.30), `v210/` and `v212/` (resaves from 2.10 and 2.12), and `tools/` (the record parser and diff scripts used). Names say what changed, for example `B3` = one bar option changed from `BBASE`.
+**Test files** are in the project folder under `harvard-graphics/hg2x/`: `v100/` (50 charts from A.00), `v230/` (160 from 2.30), `v210/` and `v212/` (resaves from 2.10 and 2.12), and `tools/` (the record parser and diff scripts used). Names say what changed, for example `B3` = one bar option changed from `BBASE`.
 
 **Sources:** the four disk sets William supplied; the 2.10 manual PDF for option names only; PCE emulator built from jsdf/pce commit b2e4b44; GLaBIOS 0.4.0 ROM from the 86Box/roms repository (commit de5a7d21); a FreeDOS 1.4 720K boot floppy; DOSBox-X for 2.x. Companion spec: [Harvard Graphics 3.05 spec](SPEC.md).

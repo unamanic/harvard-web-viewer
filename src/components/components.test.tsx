@@ -38,7 +38,7 @@ describe("App", () => {
     expect(html).toContain("Harvard Web Viewer");
     expect(html).toContain("Open a chart<br/>from 1986 to 1992.");
     expect(html).toContain("Harvard Graphics 3 (checked against 3.05)");
-    expect(html).toContain("Harvard Presentation Graphics 1.0 and Harvard Graphics 2.10, 2.12 and 2.30");
+    expect(html).toContain("Harvard Presentation Graphics A.00 and Harvard Graphics 2.10, 2.12 and 2.30");
     for (const ext of [".SH3", ".CH3", ".CHT", ".PL3", ".PC3", ".SPD", ".FN3", ".PCX", ".PCC", ".WAV", ".ZIP"]) expect(html).toContain(ext);
     expect(html).toContain("whole folder");
     expect(html).toContain("Nothing is uploaded.");

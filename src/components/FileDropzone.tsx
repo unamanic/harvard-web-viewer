@@ -147,7 +147,7 @@ export function SupportedFilesHelp() {
             keys and buttons, and <strong>.CH3</strong> charts are drawn on their own.
           </li>
           <li>
-            Harvard Presentation Graphics 1.0 and Harvard Graphics 2.10, 2.12 and 2.30: <strong>.SHW</strong> slide
+            Harvard Presentation Graphics A.00 and Harvard Graphics 2.10, 2.12 and 2.30: <strong>.SHW</strong> slide
             shows play in order with their timing and effects, and <strong>.CHT</strong> charts are laid out from their
             data.
           </li>
@@ -187,7 +187,7 @@ export function EmptyState({ onFiles, over = false, status }: { onFiles: OnFiles
           here and see it again.
         </p>
         <p className="empty-versions">
-          Opens charts and shows from Harvard Graphics 3 (checked against 3.05), Harvard Presentation Graphics 1.0 and
+          Opens charts and shows from Harvard Graphics 3 (checked against 3.05), Harvard Presentation Graphics A.00 and
           Harvard Graphics 2.10, 2.12 and 2.30.
         </p>
         <div className="empty-buttons">

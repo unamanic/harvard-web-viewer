@@ -19,11 +19,11 @@ design.
 
 | # | Issue | Priority | Size | Status |
 | --- | --- | --- | --- | --- |
-| 1 | The 1.x/2.x code is a second, separate implementation | High | L | Partly done; the rest reconsidered (see below) |
+| 1 | The A.00/2.x code is a second, separate implementation | High | L | Partly done; the rest reconsidered (see below) |
 | 2 | Nothing checks a change before it reaches `main` | High | S | Not done: not wanted for now |
 | 3 | Several modules depend on each other in both directions | High | M | Done |
 | 4 | A few very large files and functions | Medium | L | Done for the layout code and the dialog; `assumptions.ts` kept whole |
-| 5 | The 1.x/2.x code has no unit tests | Medium | M | Done |
+| 5 | The A.00/2.x code has no unit tests | Medium | M | Done |
 | 6 | Small helpers are copied between modules | Medium | M | Done |
 | 7 | `App` holds all loading and settings state | Medium | M | Done |
 | 8 | `tools/` and `scripts/` are not type-checked | Medium | S | Done |
@@ -35,7 +35,7 @@ design.
 The fixes are on the `code-quality` branch. Every step that moved drawing
 code was checked by hashing the scene of every sample and test chart
 (1,482 scenes: 3.x laid out from data and from the drawn copy, and every
-1.x/2.x chart) before and after; they were identical. The "Outcome" note
+A.00/2.x chart) before and after; they were identical. The "Outcome" note
 under each item says what was done.
 
 ## What is in good shape
@@ -44,7 +44,7 @@ These are worth protecting when fixing the items below.
 
 - **One-way pipeline.** `render/`, `player/` and `video/` import only the
   shared types from `formats/types.ts`, never a specific format. Adding the
-  1.x/2.x parser needed no change to any of them.
+  A.00/2.x parser needed no change to any of them.
 - **Parser registry.** `formats/registry.ts` is the only place that lists
   formats, and each parser has the same `detect` / `parse` shape.
 - **Guesses are kept apart from facts.** Each format has an
@@ -61,12 +61,12 @@ These are worth protecting when fixing the items below.
 
 ## High priority
 
-### 1. The 1.x/2.x code is a second, separate implementation
+### 1. The A.00/2.x code is a second, separate implementation
 
 `src/formats/hg2/` imports nothing from `src/formats/hg3/` or `src/fonts/`.
 It solves the same problems again, differently:
 
-| Concern | 3.x | 1.x/2.x |
+| Concern | 3.x | A.00/2.x |
 | --- | --- | --- |
 | Reading bytes | `hg3/ByteReader.ts` (used by 10 files) | its own `hg2/bytes.ts` `Bytes` class |
 | Text | Glyph outlines from the Speedo fonts or the clone fonts, measured exactly (`scene/data/text.ts`) | Browser font "Helvetica, Arial", width guessed as 0.6 × size per character (`hg2/text.ts`) |
@@ -79,13 +79,13 @@ It solves the same problems again, differently:
 Why it matters:
 
 - Every chart fix has to be made twice, or the two versions drift apart.
-- 1.x/2.x text looks different from 3.x text and depends on the fonts
+- A.00/2.x text looks different from 3.x text and depends on the fonts
   installed on the viewer's computer. The 3.x code avoids this on purpose.
 
 Suggested fix, in order:
 
 1. Move `ByteReader` to `src/formats/` and use it in `hg2/`. (S)
-2. Draw 1.x/2.x text through the glyph pipeline, with a clone face in
+2. Draw A.00/2.x text through the glyph pipeline, with a clone face in
    place of the browser font. This removes the 0.6 guess. (M)
 3. Pull the parts both chart builders need into a shared module: axis
    scale, tick steps, number formatting, legend rows. Keep the two layouts
@@ -95,7 +95,7 @@ Step 3 is the big one and can wait; steps 1 and 2 give most of the value.
 
 **Outcome:**
 
-- Step 2 done (`fa51766`): 1.x/2.x text is drawn with the HWV Sans clone
+- Step 2 done (`fa51766`): A.00/2.x text is drawn with the HWV Sans clone
   faces in each run's weight and slant, and every width is measured from
   them. The parser's `prepare()` loads the faces; until then it falls back
   to CSS text. The generic glyph-line element moved to `fonts/glyphRun.ts`
@@ -103,7 +103,7 @@ Step 3 is the big one and can wait; steps 1 and 2 give most of the value.
 - Step 3 done where the code really was the same (`ca4bf0c`): colour
   building (`rgbToCss`, `shadeCss`) is shared in `model/color.ts`. The axis
   scales, tick steps and number formats were left separate: 3.x rounds its
-  tick step geometrically (fitted to the 3.05 samples), 1.x/2.x rounds up,
+  tick step geometrically (fitted to the 3.05 samples), A.00/2.x rounds up,
   and each formats numbers by its own options. Sharing them would change one
   format's output with no evidence for it.
 - Step 1 reconsidered, not done: `hg2/bytes.ts` and `ByteReader` have
@@ -231,7 +231,7 @@ Suggested fix:
 - `objectLayer.ts` and `objects.ts` (about 1,100 lines each) were listed
   but had no fix suggested; they are unchanged.
 
-### 5. The 1.x/2.x code has no unit tests
+### 5. The A.00/2.x code has no unit tests
 
 `src/formats/hg2/` has 14 source files and one test file,
 `hg2.samples.test.tsx`, which runs over the committed sample charts. That
@@ -248,7 +248,7 @@ helpers in `graph.ts` (`niceStep`, `makeScale`, `formatValue`). (M)
 
 **Outcome:** done (`50d0956`, plus the text and graph tests): the byte
 reader, CP437, the 2.x record splitter, 2.x text, series, values and X
-labels, unknown records, 1.0 blocks, the text drawing, and the value axes
+labels, unknown records, A.00 blocks, the text drawing, and the value axes
 and number format of `graph.ts`.
 
 ### 6. Small helpers are copied between modules
@@ -273,8 +273,8 @@ for the byte helpers once it is shared (item 1). (M in total)
 identical to both copies), one `ui/settings.ts` for everything stored in
 the browser (render/ and player/ no longer touch `localStorage`), one WAV
 chunk walker, and shared colour building. Left alone on purpose: the two
-`hex` helpers print different formats in warnings; the 1.0 and 2.x series
-type tables differ because 1.0 has no area series; the PCX reader's
+`hex` helpers print different formats in warnings; the A.00 and 2.x series
+type tables differ because A.00 has no area series; the PCX reader's
 two-line `u16`.
 
 ### 7. `App` holds all loading and settings state
@@ -394,7 +394,7 @@ the "Outcome" notes.
 2. **Untangle the imports** (item 3) and the shared helpers (item 6).
    These are moves with no behaviour change, so the existing tests cover
    them.
-3. **1.x/2.x onto the shared byte reader and text pipeline** (item 1,
+3. **A.00/2.x onto the shared byte reader and text pipeline** (item 1,
    steps 1 and 2), with unit tests (item 5).
 4. **Split the large files** (item 4) and the `App` hooks (item 7).
 5. **Shared chart helpers** (item 1, step 3), when the next round of

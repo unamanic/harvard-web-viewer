@@ -6,7 +6,7 @@ A browser-only viewer for **Harvard Graphics for DOS** files.
 | --- | --- |
 | Harvard Graphics 3 (checked against 3.05, 1992) | Charts (`.CH3`), screen shows (`.SH3`) and palettes (`.PL3`, `.PC3`), with the fonts, bitmaps and sounds they name |
 | Harvard Graphics 2.10, 2.12 and 2.30 | Charts (`.CHT`) and slide shows (`.SHW`), with the bitmaps they name |
-| Harvard Presentation Graphics 1.0 (1986) | Charts (`.CHT`) and slide shows (`.SHW`) |
+| Harvard Presentation Graphics A.00 (1986) | Charts (`.CHT`) and slide shows (`.SHW`) |
 
 Harvard Graphics for Windows is not supported.
 
@@ -19,7 +19,7 @@ Harvard Graphics was one of the leading charting and presentation programs of th
 1. **Open the viewer** at <https://unamanic.github.io/harvard-web-viewer/>. It runs entirely in your browser; there is nothing to install and no account.
 2. **Open your files.** Click **Open a file** (or **Choose files…** on the start page), drag files onto the page, or paste them with Ctrl+V. To open a whole folder, use **Choose a folder…** on the start page or the ▾ next to **Open a file** (**Open a folder…**), or drag the folder in. A `.zip` works too: open or drop one archive that holds a show or chart and the files it names, and the viewer unpacks it in the browser. If the archive holds several shows (or several charts and no show), it asks which one to open; the others stay in the file switcher.
    - Open the **whole folder** a chart or show came from when you can. Charts name their palette (`.PL3`), fonts (`.SPD`), bitmaps (`.PCX`) and other charts in separate files, and shows name their slides; the viewer finds them in the files you opened, whatever their case. Anything it can't find is listed under **About this file**, and **Add missing files…** lets you add it without starting over.
-   - Supported files: charts `.CH3` (and 1.x/2.x `.CHT`), shows `.SH3` (and 1.x/2.x `.SHW`), palettes `.PL3`/`.PC3`, fonts `.SPD`, bitmaps `.PCX`/`.PCC`, sounds `.WAV` and `.MID`, and `.zip` archives of any of these.
+   - Supported files: charts `.CH3` (and A.00/2.x `.CHT`), shows `.SH3` (and A.00/2.x `.SHW`), palettes `.PL3`/`.PC3`, fonts `.SPD`, bitmaps `.PCX`/`.PCC`, sounds `.WAV` and `.MID`, and `.zip` archives of any of these.
 3. **Look and move around.**
    - The **Slides** column on the left lists the slides of a show (or the chart you opened); click one to jump to it. When you opened several files, a file switcher at the top of that column picks the chart or show to view.
    - In a show, use → / ← (or Enter, Space, Page Down / Page Up), the show's own keys (for example F1–F10 in the gallery shows) and its on-screen buttons. Slides with a display time move on by themselves; **Pause auto-advance** (or the Pause key) holds them.
@@ -36,7 +36,7 @@ Harvard Graphics was one of the leading charting and presentation programs of th
 ## What it can do
 
 - **Charts (`.CH3`).** Draws the copy of the chart stored in the file (the drawn object layer, embedded charts included). When a chart has no stored copy, lays it out from its data: XY (bar, line, area, high/low, point), pie, title, bullet, organisation and table charts.
-- **1.x and 2.x charts (`.CHT`).** Harvard Presentation Graphics 1.0 and Harvard Graphics 2.10, 2.12 and 2.30 charts store their data and options, not a drawing, so the viewer lays them out itself: title, list, bullet, column and free-form text charts; bar/line, area and high/low/close charts (stacked, 100%, overlap, horizontal, 3-D, second Y axis, value labels, data table); pies and columns; organisation charts; and multiple charts, which draw the charts they name when you open them together. Slide shows (`.SHW`) play their charts in show order with their times, transitions and HyperShow keys; open the show with its folder or a `.zip` of it so the charts are found, and a missing chart shows as a note naming it. See [docs/SPEC-HG1-HG2.md](docs/SPEC-HG1-HG2.md).
+- **A.00 and 2.x charts (`.CHT`).** Harvard Presentation Graphics A.00 and Harvard Graphics 2.10, 2.12 and 2.30 charts store their data and options, not a drawing, so the viewer lays them out itself: title, list, bullet, column and free-form text charts; bar/line, area and high/low/close charts (stacked, 100%, overlap, horizontal, 3-D, second Y axis, value labels, data table); pies and columns; organisation charts; and multiple charts, which draw the charts they name when you open them together. Slide shows (`.SHW`) play their charts in show order with their times, transitions and HyperShow keys; open the show with its folder or a `.zip` of it so the charts are found, and a missing chart shows as a note naming it. See [docs/SPEC-HG1-HG2.md](docs/SPEC-HG1-HG2.md).
 - **Shows (`.SH3`).** Plays shows like the original Projector:
   - HyperShow keys and clickable buttons, including nested shows
   - transitions decoded from the file (erase, then draw, with direction and speed), plus timed slides; auto-advance can be paused (button, or the Pause key)
@@ -59,7 +59,7 @@ The open items are tracked in [docs/formats.md](docs/formats.md). The main ones:
 
 - The Harvard Graphics stroke fonts (`.FN3`) are not decoded yet. Text in those fonts is always drawn with the Hershey-based clones.
 - A few drawing details still differ from the original, for example bitmap tiling, bitmap patterns in the EGA and Hercules modes, and some 3-D shapes.
-- 1.x/2.x charts: drawn annotations (text and shapes added on top of a chart), fill patterns and the program's own fonts are not drawn yet (text uses our HWV Sans clone faces), and the colours are an assumed EGA set (see `src/formats/hg2/assumptions.ts`). In 1.x/2.x shows, the Weave and Rain transitions are drawn as Blinds and Fade, and `.TPL` template slides are not drawn.
+- A.00/2.x charts: drawn annotations (text and shapes added on top of a chart), fill patterns and the program's own fonts are not drawn yet (text uses our HWV Sans clone faces), and the colours are an assumed EGA set (see `src/formats/hg2/assumptions.ts`). In A.00/2.x shows, the Weave and Rain transitions are drawn as Blinds and Fade, and `.TPL` template slides are not drawn.
 - Harvard Graphics for Windows and the editor's own file types (such as `.SY3` symbol libraries) are out of scope for now.
 
 ## Clean-room approach
@@ -75,7 +75,7 @@ The file formats are documented in [docs/SPEC.md](docs/SPEC.md). The spec was wr
 | `src/model/` | The scene, show and document model every layer shares: what parsers produce and the renderer, player and video export draw |
 | `src/formats/` | The parser interface and registry, the byte reader and the character sets shared by the formats |
 | `src/formats/hg3/` | Harvard Graphics 3 parsers (records, charts, shows, palettes, font index) and the scene builder |
-| `src/formats/hg2/` | Harvard Graphics 1.0 and 2.x chart and show readers, and their layout from data |
+| `src/formats/hg2/` | Harvard Presentation Graphics A.00 and Harvard Graphics 2.x chart and show readers, and their layout from data |
 | `src/formats/speedo/`, `src/formats/pcx/` | Bitstream Speedo font reader, PCX bitmap decoder |
 | `src/fonts/` | Text drawing, plus the bundled outline clones (`outline/`) and stroke clones (`stroke/`) |
 | `src/render/` | SVG scene renderer and the display modes (VGA ScreenShow, EGA, Hercules) |
@@ -114,7 +114,7 @@ flowchart TB
     files["files/<br/>file set, ZIP archives,<br/>loading"]
     registry["formats/<br/>parser registry, byte reader,<br/>character sets"]
     hg3["formats/hg3/<br/>Harvard Graphics 3"]
-    hg2["formats/hg2/<br/>Harvard Graphics 1.0 and 2.x"]
+    hg2["formats/hg2/<br/>Harvard Presentation Graphics A.00 and Harvard Graphics 2.x"]
     fonts["fonts/<br/>glyphs, clone fonts"]
     decoders["formats/speedo/, formats/pcx/<br/>Speedo fonts, PCX bitmaps"]
   end
