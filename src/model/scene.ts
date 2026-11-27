@@ -311,6 +311,15 @@ export interface Scene {
    * replaced); absent means the standard set.
    */
   screenColors?: string[];
+  /**
+   * Set by Harvard Graphics 1.0/2.x scenes: each colour is a standard screen
+   * slot chosen by the chart's colour number (slot 0 the background; see
+   * src/formats/hg2/screen.ts), with screenColors saying what each slot shows.
+   * Lets the CGA display mode give each colour number its CGA colour: "cga4"
+   * for charts the program shows in the CGA's four-colour mode, "cga2" for
+   * A.00 text and org charts, which it shows in the two-colour mode.
+   */
+  classicSlots?: "cga4" | "cga2";
 }
 
 /**

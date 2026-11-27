@@ -21,6 +21,10 @@
  *   colours, on the 640 × 350 grid (pixels 1.37 times taller than wide).
  *   It replaces a nearest-colour rule (each colour to the nearest of the
  *   64, at most 16 at once), which drew no dithers.
+ * - CGA ("cga4"): the CGA screen of Harvard Graphics 1.0 (A.00) and 2.3
+ *   (cga.ts): 320 × 200 in palette 0 on blue, each colour number solid in
+ *   its CGA colour; A.00 text and org charts in 640 × 200 white on black.
+ *   The id is not "cga", which older stored settings use for Mono.
  * - Mono: the Harvard Graphics 3.05 Hercules driver (HERC.SC3, 720 × 348,
  *   one bit per pixel), as its reference renders show it (hercules.ts,
  *   through the dithering engine): fills, text and the background become
@@ -48,6 +52,7 @@
 import type { Scene, SceneElement } from "../model/scene";
 import { type RGB, formatCssColor, parseCssColor } from "./color";
 import { applyScreen, ditherAverage, normalizeDither } from "./dither";
+import { cgaScreen } from "./cga";
 import { egaScreen } from "./ega";
 import { HERCULES_LEVELS, herculesLevel, herculesScreen } from "./hercules";
 import { SCREENSHOW_DAC, changedScreenColors, screenIntent, screenShowDither, vgaScreenShow } from "./vgaScreenShow";
@@ -55,7 +60,7 @@ import { SCREENSHOW_DAC, changedScreenColors, screenIntent, screenShowDither, vg
 export { EGA_COLORS } from "./ega";
 export { type RGB, colorDistance, formatCssColor, luma, nearestColor, parseCssColor, vgaChannel } from "./color";
 
-export type DisplayMode = "vga" | "ega" | "mono" | "modern";
+export type DisplayMode = "vga" | "ega" | "cga4" | "mono" | "modern";
 
 export const DEFAULT_DISPLAY_MODE: DisplayMode = "vga";
 
@@ -63,6 +68,7 @@ export const DEFAULT_DISPLAY_MODE: DisplayMode = "vga";
 export const DISPLAY_MODES: readonly { mode: DisplayMode; label: string }[] = [
   { mode: "vga", label: "VGA ScreenShow (16 colours, dithered)" },
   { mode: "ega", label: "EGA (640×350, 16 of 64 colours, dithered)" },
+  { mode: "cga4", label: "CGA (320×200, 4 colours; Harvard Graphics 1.0 and 2.x)" },
   { mode: "mono", label: "Hercules monochrome (720×348)" },
   { mode: "modern", label: "Modern (24-bit, as stored)" },
 ];
@@ -90,6 +96,11 @@ export function toScreenColor(rgb: RGB, mode: DisplayMode): RGB {
       const screen = egaScreen();
       const avg = ditherAverage(normalizeDither(screen.dither(rgb)), screen.colors.map((c) => parseCssColor(c) ?? [0, 0, 0]));
       return [Math.round(avg[0]), Math.round(avg[1]), Math.round(avg[2])];
+    }
+    case "cga4": {
+      const screen = cgaScreen();
+      const c = parseCssColor(screen.colors[normalizeDither(screen.dither(rgb))[0]?.color ?? 0]!) ?? [0, 0, 0];
+      return [c[0], c[1], c[2]];
     }
     case "mono": {
       const v = Math.round((255 * herculesLevel(rgb)) / HERCULES_LEVELS);
@@ -163,7 +174,9 @@ export function applyScreenIntent(scene: Scene): Scene {
  */
 export function applyDisplayMode(scene: Scene, mode: DisplayMode): Scene {
   if (mode === "vga") return applyScreen(scene, vgaScreenShow(scene.screenColors));
-  if (mode === "mono") return applyScreen(scene, herculesScreen());
+  // A 1.0/2.x chart's colours are screen slots (Scene.classicSlots); Hercules shows what they stand for.
+  if (mode === "mono") return applyScreen(scene.classicSlots ? applyScreenIntent(scene) : scene, herculesScreen());
   if (mode === "ega") return applyScreen(scene, egaScreen(scene.screenColors));
+  if (mode === "cga4") return applyScreen(scene, cgaScreen(scene.classicSlots));
   return applyScreenIntent(scene); // modern
 }

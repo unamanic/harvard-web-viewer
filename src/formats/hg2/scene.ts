@@ -10,6 +10,7 @@ import { BACKGROUND, DEFAULT_SIZES, MARGIN_X, MARGIN_Y, PAGE, classicColor, size
 import { type Box, drawGraph } from "./graph";
 import type { ClassicChart, MultipleSlot } from "./model";
 import { drawOrg } from "./orgChart";
+import { toClassicScreen } from "./screen";
 import { drawPies } from "./pie";
 import { readClassicChart } from "./read";
 import { drawLine, hasText, plainText } from "./text";
@@ -19,6 +20,8 @@ export interface SceneOptions {
   context?: ParseContext;
   /** Charts already being drawn (upper-cased names), to stop a multiple chart naming itself. */
   open?: Set<string>;
+  /** Leave the colours as drawn (CLASSIC_PALETTE), for a chart drawn inside another. */
+  raw?: boolean;
 }
 
 const MAX_WIDTH = PAGE.width - 2 * MARGIN_X;
@@ -112,7 +115,7 @@ function slotScene(slot: MultipleSlot, warnings: string[], options: SceneOptions
   const innerWarnings: string[] = [];
   try {
     const chart = readClassicChart(file.bytes, innerWarnings);
-    const scene = chartToScene(chart, innerWarnings, { context: options.context, open: new Set([...open, name]) });
+    const scene = chartToScene(chart, innerWarnings, { context: options.context, open: new Set([...open, name]), raw: true });
     for (const w of innerWarnings) warnings.push(`${slot.fileName}: ${w}`);
     return scene;
   } catch (e) {
@@ -156,5 +159,7 @@ export function chartToScene(chart: ClassicChart, warnings: string[], options: S
       elements.push(plainText(`Chart class ${chart.chartClass}, type ${chart.subtype} is not drawn.`, 0, 0, sizeToUnits(4), classicColor(8), "middle"));
   }
   if (chart.hasAnnotations) warnings.push("The chart has drawn annotations (added text and shapes), which are not shown yet.");
-  return { viewBox: LANDSCAPE_VIEW_BOX, background: BACKGROUND, elements };
+  const scene: Scene = { viewBox: LANDSCAPE_VIEW_BOX, background: BACKGROUND, elements };
+  // Charts inside a multiple chart are mapped once, with the whole page.
+  return options.raw ? scene : toClassicScreen(scene, chart.version, chart.kind);
 }
