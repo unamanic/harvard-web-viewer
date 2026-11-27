@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { LANDSCAPE_VIEW_BOX, centredViewBox, type Scene, type SceneElement } from "../model/scene";
-import { type RGB, luma } from "./color";
+import { type RGB, formatCssColor as rgbToCss, luma } from "./color";
+import { vgaScreenShow } from "./vgaScreenShow";
 import {
   BAYER_4X4,
   BAYER_8X8,
   type Dither,
   type Screen,
   applyScreen,
+  blendPatterns,
+  patternAverage,
   colorAtThreshold,
   ditherAverage,
   ditherRows,
@@ -247,5 +250,36 @@ describe("applyScreen with gradients", () => {
     const out = applyScreen(s, mono);
     expect(out.background).toBe("gradient:m-g0");
     expect(out.gradients?.["m-g0"]?.bands?.[0]?.paint).toBe("#000000");
+  });
+});
+
+describe("blendPatterns", () => {
+  const tile = { pixelWidth: 1, pixelHeight: 1 };
+
+  it("averages a tile's pixels", () => {
+    expect(patternAverage({ ...tile, rows: ["10", "00"], ink: "#ffffff", paper: "#000000" })).toBe(rgbToCss([64, 64, 64]));
+    expect(patternAverage({ ...tile, rows: ["01", "22"], ink: "", paper: "", colors: ["#ff0000", "#0000ff", "#000000"] })).toBe(
+      rgbToCss([64, 0, 64]),
+    );
+    expect(patternAverage({ ...tile, rows: ["1"], ink: "red", paper: "#000" })).toBeNull();
+  });
+
+  it("replaces every pattern paint of a dithered scene with its average", () => {
+    const text = { kind: "text", x: 0, y: 0, text: "Hi", size: 10, fill: "#0000aa", fontFamily: "serif", fontWeight: 400, italic: false, anchor: "start" } as SceneElement;
+    const scene: Scene = {
+      viewBox: LANDSCAPE_VIEW_BOX,
+      background: "#0000aa",
+      elements: [
+        { kind: "rect", x: 0, y: 0, width: 100, height: 100, fill: "#0000aa", stroke: null },
+        { kind: "group", children: [text] },
+      ],
+    };
+    const shown = applyScreen(scene, vgaScreenShow());
+    expect(shown.background.startsWith("pattern:")).toBe(true);
+    const blended = blendPatterns(shown);
+    expect(JSON.stringify({ ...blended, patterns: undefined })).not.toContain("pattern:");
+    // Navy on the VGA ScreenShow: 43/64 blue on black (8 × 8 dither) for the background.
+    expect(blended.background).toBe(rgbToCss([0, 0, Math.round((43 * 255) / 64)]));
+    expect(blendPatterns(scene)).toBe(scene);
   });
 });

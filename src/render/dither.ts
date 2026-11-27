@@ -429,3 +429,77 @@ export function tilePattern(
   if (transform) pattern.transform = transform;
   return pattern;
 }
+
+/** The colour a fill pattern's tile averages to (CSS), or null when its colours are not #rgb/#rrggbb/rgb(). */
+export function patternAverage(p: FillPattern): string | null {
+  const sum = [0, 0, 0];
+  let n = 0;
+  const cache = new Map<string, RGB | null>();
+  const rgbOf = (css: string) => {
+    if (!cache.has(css)) cache.set(css, parseCssColor(css));
+    return cache.get(css) ?? null;
+  };
+  for (const row of p.rows) {
+    for (const ch of row) {
+      const css = p.colors ? p.colors[parseInt(ch, 16)] : ch === "1" ? p.ink : p.paper;
+      const rgb = css === undefined ? null : rgbOf(css);
+      if (!rgb) return null;
+      for (let k = 0; k < 3; k++) sum[k] += rgb[k];
+      n++;
+    }
+  }
+  if (n === 0) return null;
+  return formatCssColor([Math.round(sum[0] / n), Math.round(sum[1] / n), Math.round(sum[2] / n)]);
+}
+
+/**
+ * The scene with every fill pattern ("pattern:<id>" paints, e.g. the
+ * dithers of `applyScreen`) replaced by the solid colour its tile averages
+ * to: what a dither looks like from a distance. For small pictures
+ * (thumbnails), where one screen pixel is a fraction of a device pixel and
+ * the browser cannot draw the tile faithfully (it aliases to the wrong
+ * colour). Pure: the input is not modified. Images are left as they are
+ * (the browser scales them down by averaging already).
+ */
+export function blendPatterns(scene: Scene): Scene {
+  const patterns = scene.patterns;
+  if (!patterns) return scene;
+  const solid = new Map<string, string>();
+  const paint = (css: string): string => {
+    if (!css.startsWith(PATTERN_FILL_PREFIX)) return css;
+    let out = solid.get(css);
+    if (out === undefined) {
+      const id = css.slice(PATTERN_FILL_PREFIX.length);
+      const p = Object.hasOwn(patterns, id) ? patterns[id] : undefined;
+      out = (p && patternAverage(p)) ?? css;
+      solid.set(css, out);
+    }
+    return out;
+  };
+  const mapEl = (el: SceneElement): SceneElement => {
+    switch (el.kind) {
+      case "group":
+        return { ...el, children: el.children.map(mapEl) };
+      case "image":
+        return el;
+      case "text":
+        return { ...el, fill: paint(el.fill) };
+      default:
+        return {
+          ...el,
+          fill: el.fill === null ? null : paint(el.fill),
+          stroke: el.stroke === null ? null : paint(el.stroke),
+        };
+    }
+  };
+  const out: Scene = { ...scene, background: paint(scene.background), elements: scene.elements.map(mapEl) };
+  if (scene.gradients) {
+    out.gradients = Object.fromEntries(
+      Object.entries(scene.gradients).map(([id, g]) => [
+        id,
+        g.bands ? { ...g, bands: g.bands.map((b) => ({ ...b, paint: paint(b.paint) })) } : g,
+      ]),
+    );
+  }
+  return out;
+}

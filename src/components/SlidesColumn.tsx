@@ -2,6 +2,7 @@ import { memo, type ReactNode, type Ref, type RefObject, useEffect, useMemo, use
 import type { Presentation, PresentationSlide } from "../model/presentation";
 import type { Scene } from "../model/scene";
 import { type DisplayMode, applyDisplayMode } from "../render/displayMode";
+import { blendPatterns } from "../render/dither";
 import { SceneRenderer } from "../render/SceneRenderer";
 import { useSeenOnce } from "../ui/hooks";
 
@@ -130,6 +131,9 @@ interface SlideCardProps {
 
 /** One card: navy, thumbnail on top, serif title under it; the current one outlined in the accent colour. */
 function SlideCard({ itemRef, current, label, onSelect, nested, scene, note, title, sub }: SlideCardProps) {
+  // Dithers drawn as the colour they blend to: at this size a screen pixel is a fraction of a device pixel,
+  // and the browser draws a tile that small in the wrong colour (dither.ts, blendPatterns).
+  const thumb = useMemo(() => scene && blendPatterns(scene), [scene]);
   // Keep the current card in view inside the list (without scrolling the page).
   const own = useRef<HTMLLIElement | null>(null);
   useEffect(() => {
@@ -166,7 +170,7 @@ function SlideCard({ itemRef, current, label, onSelect, nested, scene, note, tit
         title={label}
       >
         <span className="slide-card-picture" aria-hidden="true">
-          {scene ? <SceneRenderer scene={scene} /> : <span className="slide-card-note">{note ?? ""}</span>}
+          {thumb ? <SceneRenderer scene={thumb} /> : <span className="slide-card-note">{note ?? ""}</span>}
         </span>
         <span className="slide-card-title" aria-hidden="true">
           {title}
