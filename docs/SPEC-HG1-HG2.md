@@ -119,7 +119,7 @@ Pie 1 takes its values from series A and its labels from the X labels. [C] Pie 2
 
 ### 2.5 Org charts (class 3)
 
-The chart title is the pstring at 160 [I]. 32 nodes of 130 bytes start at 410 + 130(n-1), node numbers counting from 1. The node record and the options tail have exactly the same layout as 2.x (section 4.6); only the node count and base offsets differ. The options tail starts at 4570 (2.x: 10770 inside tag 62). [C]
+The chart title is the pstring at 160 and the subtitle the pstring at 202 (42-byte fields) [C: the story show's org charts, A.00 screen]. 32 nodes of 130 bytes start at 410 + 130(n-1), node numbers counting from 1. The node record and the options tail have exactly the same layout as 2.x (section 4.6); only the node count and base offsets differ. The options tail starts at 4570 (2.x: 10770 inside tag 62). [C]
 
 ### 2.6 Annotation trailer
 
@@ -279,7 +279,7 @@ All lines are tag 33 group 0 (lines 0 to 50) with tag 50 for the layout. Bullet,
 
 ### 4.6 Org charts (class 3, tag 62)
 
-Tag 62 is a 10826-byte block. It starts with the title pstring (other text before 370 is I). 80 nodes of 130 bytes follow at 370 + 130(n-1), node numbers from 1; unused bytes hold leftover memory. [C]
+Tag 62 is a 10826-byte block. It starts with the title pstring at 0 and the subtitle pstring at 62 (40-byte fields; other text before 370 is I). [C: the story show's org charts, 2.3 screen] 80 nodes of 130 bytes follow at 370 + 130(n-1), node numbers from 1; unused bytes hold leftover memory. [C]
 
 | Node offset | Type | Meaning | Mark |
 | --- | --- | --- | --- |
@@ -413,6 +413,23 @@ The three generations share their option values and attribute bits but not their
 | Annotations | Trailer after 4716 (partly decoded) | Tag 300 (not decoded) | Drawing records (in 3.05 spec) |
 
 One trap when porting values: A.00 stores many yes/no options as 1/0, while 2.x stores 1/2 (display, cumulative, cut slices). Graph option codes otherwise carry over from A.00 to 2.x unchanged where both have the option.
+
+
+### 6.1 How A.00 and 2.3 draw a chart on screen
+
+Measured on the real-program screens of the Harvard Web Viewer story show (project folder `harvard-graphics/story-v2`, `v100/` and `v230/`), and used by the viewer. Sizes are percent of the page height; *size* is a line's stored size. [C] unless marked.
+
+- **Value axis, automatic.** Step = 1, 2 or 5 times a power of ten that splits the data range into at most 8 steps. 2.3 ends the axis at the first step at or above the largest value (story disk chart: 0 to 14 in 2s). A.00 always draws 8 steps from the minimum (same chart: 0 to 16), and ignores a stored range when the data runs past its maximum (the chart stores 0 to 8). Labels have no thousands separators.
+- **Y axis title.** Drawn flat (not turned), left-aligned above the top of the axis.
+- **Headings.** The title's baseline is 0.88 x size below the top of the page, with no margin; each further heading line steps down by its own size plus 0.15 x size.
+- **Bullet lists.** A row with text steps 1.21 x size, a blank row 0.78 x size; the first baseline sits (1.21 + 0.88) x size below the headings. A line that follows a line with text carries on the item before it: no bullet, and its text lines up with that item's text. A.00 draws a small filled square (text 1.36 x size after it); 2.3 a round bullet (0.62 x size). The block is centred on its widest line.
+- **Org charts.** The chart hangs from just under the headings. Every box on a level is the same size: as wide as the widest text on that level, never narrower than the level below. Boxes are 1.25 box widths apart; the gap above and below the bus is about 0.37 x box height. All box text is drawn at the name size; when the chart does not fit, everything shrinks together. 2.3 with three lines per box splits a name at its first space ("Harvard" / "Web Viewer"); A.00 does not. Boxes are filled with the background. Title size 6, subtitle 3.5. [I]
+- **Colours.** Charts store colour numbers 1 to 16, never colours.
+  - 2.3 (VGA and EGA alike): background navy (0, 0, 85); colours 1 to 6 white, teal (0, 170, 170), blue (0, 85, 170), light blue (85, 170, 255), pale cyan (170, 255, 255), pale yellow (255, 255, 170). Colours 7 to 16 were on no captured chart. [I]
+  - A.00 graph and pie charts: CGA 320 x 200, palette 0 on blue. Colour n shows as CGA colour ((n - 1) mod 4 + 1) mod 4: 1 green, 2 red, 3 brown, 4 the background. 2.3 on a CGA uses the same rule.
+  - A.00 text and org charts: CGA 640 x 200, white on black.
+
+Not yet measured: the programs' own fonts and pie label placement, 2.3's Hercules and monochrome hatch patterns per colour number, and the pie direction and clustered-bar overlap in 2.3.
 
 ## 7. Open questions, test files and sources
 

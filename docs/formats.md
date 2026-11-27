@@ -18,7 +18,7 @@ reader and layout code is `src/formats/hg2/`, and the test charts are
 | --- | --- | --- | --- |
 | A.00 charts (`PCOK`, fixed 4716 bytes) | §2 | Read and laid out from data: text, bar/line, pie, org | All 50 A.00 test charts read and draw with no unexpected warnings |
 | 2.x charts (`Falc` records) | §3, §4 | Read and laid out from data: title, list, bullet, column, free form, bar/line, area, high/low/close, pie, org, multiple | All 201 2.x test charts read and draw; 2.10 and 2.12 resaves read the same as their 2.30 originals |
-| Text | none (fonts not decoded) | Drawn with our HWV Sans clone faces (regular, bold, italic, bold italic by the character attributes), measured from their advances; CSS Helvetica/Arial with a 0.6 em width estimate until the faces load | Not against the programs: there are no reference renders of A.00/2.x screens |
+| Text | none (fonts not decoded) | Drawn with our HWV Sans clone faces (regular, bold, italic, bold italic by the character attributes), measured from their advances; CSS Helvetica/Arial with a 0.6 em width estimate until the faces load | Layout checked against the A.00 and 2.3 screens of the story show (SPEC §6.1, `story.test.ts`); the programs' own fonts are not decoded |
 | Annotations (A.00 trailer, 2.x tag 300) | §2.6, §3.1 | Not decoded; a warning says so | No test chart has any |
 | A.00 and 2.x slide shows (`.SHW`) | §5 | Read and played: play order, times, default row, draw/erase effects (Weave and Rain drawn as Blinds and Fade), HyperShow keys, nested shows, PCX slides; a missing file shows as a note | The eight one-setting 2.30 test shows in `samples/hg1-hg2/shows/` (`src/formats/hg2/show.test.ts`); the A.00 and 2.30 story shows play as 20 slides |
 | `HG.DIR` / `HPG.DIR` | §5 | No (not needed: charts carry their own class) | No |
@@ -28,11 +28,14 @@ reader and layout code is `src/formats/hg2/`, and the test charts are
 - 2.x tag 121 holds the axis minimums at 4/8/12 (X/Y1/Y2), maximums at 16/20 and increments at 28/32 for X/Y1, one field later than the first version of the spec said (BXMIN, BXMAX, BXINC, BY1MIN, BY1MAX, BY1INC, BY2MIN).
 - 2.x tag 120 byte 45 is the data table (1 normal, 2 framed, 3 none) and byte 14 the plot background colour; both are drawn (BDT1, BDT2, BFRB).
 - The org chart options tail bytes +22/+23 limit the text lines in each box (OB2); +4 is the number of levels shown (A.00 O1).
+- Screen layout and colours, from the real A.00 and 2.3 screens of the story show (`samples/hg1-hg2/story`, SPEC §6.1): automatic axes in up to 8 steps (A.00 always 8, ignoring a stored range the data runs past), flat Y titles, list lines that carry on an item, heading and list spacing, org chart box sizes and spacing, org subtitles (A.00 at 202, 2.x at 62), and each program's screen colours. A CGA display mode shows what A.00 and 2.3 show on a CGA: four colours on blue for graphs and pies, white on black for A.00 text and org charts.
 
 ### Assumptions [I]
 
 Listed in `src/formats/hg2/assumptions.ts`: the colour set (no file stores
-colours), text size as percent of page height, the black screen, the
+colours; `screen.ts` turns colour numbers into each program's screen
+colours, with 2.x colours 7 to 16 not yet seen), text size as percent of
+page height, the
 average character width used for layout, the pie direction
 (counter-clockwise from the start angle), column-chart cells read row by
 row, and multiple-chart slot boxes as (x, width, y, height) with y up.
