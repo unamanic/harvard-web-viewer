@@ -128,7 +128,7 @@ export const SUPPORTED_FILES: readonly { kind: string; extensions: string[] }[] 
   { kind: "palettes", extensions: [".PL3", ".PC3"] },
   { kind: "fonts", extensions: [".SPD", ".FN3"] },
   { kind: "bitmaps", extensions: [".PCX", ".PCC"] },
-  { kind: "sounds", extensions: [".WAV"] },
+  { kind: "sounds", extensions: [".WAV", ".MID"] },
   { kind: "archives", extensions: [".ZIP"] },
 ];
 
@@ -154,7 +154,8 @@ export function SupportedFilesHelp() {
           <li>
             <strong>.PL3</strong> and <strong>.PC3</strong> palettes, <strong>.SPD</strong> and <strong>.FN3</strong>{" "}
             fonts and <strong>.PCX</strong> / <strong>.PCC</strong> bitmaps are used by the charts that name them;{" "}
-            <strong>.WAV</strong> sounds by the shows that play them.
+            <strong>.WAV</strong> sounds and <strong>.MID</strong> music (played as an FM sound card of the time
+            would) by the shows that play them.
           </li>
         </ul>
         <p className="muted">

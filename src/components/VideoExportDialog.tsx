@@ -107,7 +107,6 @@ export function VideoExportDialog({ presentation, fileName, displayMode, transit
   const onKeyDown = useDialogKeys(ref, close, (before) => before?.closest("details")?.querySelector<HTMLElement>("summary") ?? before);
 
   const notes: string[] = [];
-  if (est.midi.length) notes.push(`MIDI music (${est.midi.join(", ")}) is skipped: the viewer has no MIDI synthesizer.`);
   if (est.missing.length) notes.push(`Missing sound: ${est.missing.join(", ")}.`);
   if (options.sound && soundCount > 0 && formatSupport && !formatSupport.audio)
     notes.push(`This browser cannot encode sound for ${options.format === "mp4" ? "MP4" : "WebM"}: the video will have no sound.`);

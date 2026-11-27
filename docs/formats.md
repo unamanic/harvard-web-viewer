@@ -51,7 +51,7 @@ viewer's own code has verified so far.
 | Palettes (.PL3, .PC3) | §6.2 | Yes (task 6) | Yes: all 36 sample palettes parse with no warnings |
 | Font index (HG3.FGF) | §2 | Yes (task 7); text drawn with the original fonts or our clones (task 7f) | Yes: the sample HG3.FGF parses with no warnings |
 | Charts (.CH3) | §5 | Parsed and drawn from the object layer, embedded charts included (tasks 9, 10, 12, 13, 13b, 13c); laid out from data when they have no drawn copy (tasks 14 to 19; XY task 17) | All 238 sample charts parse and render; visually checked by type |
-| Shows (.SH3) | §4 | Parsed and played (tasks 21, 22); transitions decoded and drawn from the file (erase then draw, directions, speeds, timed slides); WAV sound plays, MIDI not (24); button charts drawn and clickable (20) | Yes: all 13 sample shows play to the end |
+| Shows (.SH3) | §4 | Parsed and played (tasks 21, 22); transitions decoded and drawn from the file (erase then draw, directions, speeds, timed slides); WAV sound plays; MIDI plays through an FM synthesizer, base-level channels 13-16 of dual-format files (24); button charts drawn and clickable (20) | Yes: all 13 sample shows play to the end |
 | PCX bitmaps | §6.3 | Yes (task 8) | Yes: all 69 sample .PCX/.PCC decode with no warnings |
 | Speedo fonts (.SPD) | §2 | Reader (task 7b); draws chart text when loaded (task 7f) | Yes: all 15 sample fonts decode with no warnings |
 | FN3 stroke fonts | §7.2 item 8 | Not yet documented | No |
@@ -203,7 +203,14 @@ Add entries as `- finding (sample file checked, task number)`.
   6 MIDI). RIMSHOT.WAV is RIFF/WAVE PCM, mono, 11025 Hz, 8-bit; the MIDI
   files start with "MThd". Its menu jumps past all 7 sound slides and off
   the end of the show, so sounds must keep playing after the show ends.
-  (PLAY_ALL.SH3, task 24)
+  The MIDI files are standard MIDI format 1, 192 ticks per quarter,
+  "Copyright (C) 1992 Voyetra Technologies", and are in Microsoft's dual
+  format: each part twice, an extended-level arrangement on channels 1-10
+  (drums on 10) and a base-level one on channels 13-16 (drums on 16),
+  track names marked "X" and "B"; EMPTY.MID has no notes. HG 3.05's drivers
+  were for FM cards (Sound Blaster class, Pro AudioSpectrum Plus and 16,
+  READ.ME), which played the base level; the viewer plays that level
+  through an FM synthesizer (src/audio/synth.ts). (PLAY_ALL.SH3, task 24)
 - Button charts: 199 sample charts name one (GALBUTN1 or GALBUTN2); both
   are full-page drawings with no palette, placed without a transform.
   GALBUTN1's nine squares frame GALA1's nine pictures exactly. In GALLERY

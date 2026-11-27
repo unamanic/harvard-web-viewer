@@ -28,6 +28,8 @@ const MIDI = new Uint8Array([0x4d, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, 0, 
 
 class FakeAudio implements AudioLike {
   src = "";
+  /** MIDI bytes, for a MIDI player. */
+  midi: Uint8Array | null = null;
   muted = false;
   paused = true;
   plays = 0;
@@ -65,6 +67,13 @@ function setup(files: Record<string, Uint8Array>, options: { muted?: boolean; ou
     resolveFile: (name) => files[name.toUpperCase()] ?? null,
     createAudio: () => {
       const a = new FakeAudio();
+      if (options.outcome) a.outcome = options.outcome;
+      audios.push(a);
+      return a;
+    },
+    createMidiAudio: (bytes) => {
+      const a = new FakeAudio();
+      a.midi = bytes;
       if (options.outcome) a.outcome = options.outcome;
       audios.push(a);
       return a;
@@ -137,14 +146,15 @@ describe("SoundController", () => {
     expect(t.controller.status.playing).toBeNull();
   });
 
-  it("starts only the last playable sound of one move; MIDI does not stop a WAV", () => {
+  it("starts only the last playable sound of one move, WAV or MIDI", () => {
     const t = setup({ "A.WAV": wav(), "B.WAV": wav(), "M.MID": MIDI });
-    t.controller.playSlides([slide("A.WAV"), slide("B.WAV"), slide("M.MID")]);
+    t.controller.playSlides([slide("A.WAV"), slide("M.MID"), slide("B.WAV")]);
     expect(t.audios).toHaveLength(1);
     expect(t.controller.status.playing).toBe("B.WAV");
-    t.controller.playSlides([slide("M.MID")]);
-    expect(t.audios[0].paused).toBe(false);
-    expect(t.controller.status.playing).toBe("B.WAV");
+    t.controller.playSlides([slide("B.WAV"), slide("M.MID")]);
+    expect(t.audios).toHaveLength(2);
+    expect(t.audios[0].paused).toBe(true);
+    expect(t.controller.status.playing).toBe("M.MID");
   });
 
   it("mutes and unmutes the playing sound and new ones", () => {
@@ -183,21 +193,25 @@ describe("SoundController", () => {
     expect(t.notes).toEqual(["A.WAV could not be played"]);
   });
 
-  it("does not play MIDI: a note, and one warning per file", () => {
-    const t = setup({ "SPFAIRY.MID": MIDI, "IMAGE2.MID": MIDI });
+  it("plays MIDI through the MIDI player, with no blob URL", async () => {
+    const t = setup({ "SPFAIRY.MID": MIDI, "A.WAV": wav() });
     t.controller.playSlides([slide("SPFAIRY.MID")]);
-    t.controller.playSlides([slide("SPFAIRY.MID")]);
-    t.controller.playSlides([slide("SPFAIRY.MID"), slide("IMAGE2.MID")]);
-    expect(t.audios).toHaveLength(0);
-    expect(t.notes).toEqual([
-      "MIDI music (SPFAIRY.MID) is not played",
-      "MIDI music (SPFAIRY.MID) is not played",
-      "MIDI music (SPFAIRY.MID, IMAGE2.MID) is not played",
-    ]);
-    expect(t.warnings).toEqual([
-      "MIDI music (SPFAIRY.MID) is not played: the viewer has no MIDI synthesizer.",
-      "MIDI music (IMAGE2.MID) is not played: the viewer has no MIDI synthesizer.",
-    ]);
+    expect(t.audios).toHaveLength(1);
+    const [m] = t.audios;
+    expect(m.midi).toBe(MIDI);
+    expect(m.src).toBe("");
+    expect(m.plays).toBe(1);
+    expect(t.urls.size).toBe(0);
+    expect(t.controller.status.playing).toBe("SPFAIRY.MID");
+    // A WAV stops it (one sound at a time); nothing to revoke for the MIDI.
+    t.controller.playSlides([slide("A.WAV")]);
+    expect(m.paused).toBe(true);
+    expect(t.revoked).toEqual([]);
+    await flush();
+    t.audios[1].end();
+    expect(t.revoked).toEqual(["blob:1"]);
+    expect(t.notes).toEqual([]);
+    expect(t.warnings).toEqual([]);
   });
 
   it("notes a missing or unplayable file and carries on", () => {

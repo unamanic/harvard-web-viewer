@@ -33,7 +33,7 @@ describe("planAudio", () => {
   };
   const resolve = (name: string) => files[name] ?? null;
 
-  it("plays the last WAV of each move and reports MIDI, missing and unplayable files", () => {
+  it("plays the last sound (WAV or MIDI) of each move and reports missing and unplayable files", () => {
     const t = buildTimeline(
       show("A", [
         { label: "s1", kind: "sound", fileName: "BELL.WAV" },
@@ -49,11 +49,11 @@ describe("planAudio", () => {
       { waitSeconds: 2, transitionMode: "off" },
     );
     const plan = planAudio(t.cues, resolve);
-    expect(plan.sounds.map((s) => [s.name, s.atMs])).toEqual([
-      ["BUZZ.WAV", 0],
-      ["BELL.WAV", 4000],
+    expect(plan.sounds.map((s) => [s.name, s.atMs, s.midi])).toEqual([
+      ["BUZZ.WAV", 0, false],
+      ["TUNE.MID", 2000, true],
+      ["BELL.WAV", 4000, false],
     ]);
-    expect(plan.midi).toEqual(["TUNE.MID"]);
     expect(plan.missing).toEqual(["GONE.WAV"]);
     expect(plan.unplayable).toEqual(["JUNK.WAV"]);
   });

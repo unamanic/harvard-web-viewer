@@ -56,10 +56,8 @@ export interface VideoEstimate {
   /** Picture slides shown. */
   slides: number;
   frames: number;
-  /** WAV sounds the video plays. */
+  /** Sounds (WAV or MIDI) the video plays. */
   sounds: number;
-  /** MIDI files skipped. */
-  midi: string[];
   missing: string[];
   unplayable: string[];
 }
@@ -71,7 +69,6 @@ export function estimate(timeline: Timeline, resolveFile: ResolveFile | undefine
     slides: timeline.pictures.length,
     frames: frameCount(timeline.durationMs, FPS),
     sounds: plan.sounds.length,
-    midi: plan.midi,
     missing: plan.missing,
     unplayable: plan.unplayable,
   };

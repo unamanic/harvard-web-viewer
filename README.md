@@ -19,7 +19,7 @@ Harvard Graphics was one of the leading charting and presentation programs of th
 1. **Open the viewer** at <https://unamanic.github.io/harvard-web-viewer/>. It runs entirely in your browser; there is nothing to install and no account.
 2. **Open your files.** Click **Open a file** (or **Choose files…** on the start page), drag files onto the page, or paste them with Ctrl+V. To open a whole folder, use **Choose a folder…** on the start page or the ▾ next to **Open a file** (**Open a folder…**), or drag the folder in. A `.zip` works too: open or drop one archive that holds a show or chart and the files it names, and the viewer unpacks it in the browser. If the archive holds several shows (or several charts and no show), it asks which one to open; the others stay in the file switcher.
    - Open the **whole folder** a chart or show came from when you can. Charts name their palette (`.PL3`), fonts (`.SPD`), bitmaps (`.PCX`) and other charts in separate files, and shows name their slides; the viewer finds them in the files you opened, whatever their case. Anything it can't find is listed under **About this file**, and **Add missing files…** lets you add it without starting over.
-   - Supported files: charts `.CH3` (and 1.x/2.x `.CHT`), shows `.SH3` (and 1.x/2.x `.SHW`), palettes `.PL3`/`.PC3`, fonts `.SPD`, bitmaps `.PCX`/`.PCC`, sounds `.WAV`, and `.zip` archives of any of these.
+   - Supported files: charts `.CH3` (and 1.x/2.x `.CHT`), shows `.SH3` (and 1.x/2.x `.SHW`), palettes `.PL3`/`.PC3`, fonts `.SPD`, bitmaps `.PCX`/`.PCC`, sounds `.WAV` and `.MID`, and `.zip` archives of any of these.
 3. **Look and move around.**
    - The **Slides** column on the left lists the slides of a show (or the chart you opened); click one to jump to it. When you opened several files, a file switcher at the top of that column picks the chart or show to view.
    - In a show, use → / ← (or Enter, Space, Page Down / Page Up), the show's own keys (for example F1–F10 in the gallery shows) and its on-screen buttons. Slides with a display time move on by themselves; **Pause auto-advance** (or the Pause key) holds them.
@@ -40,7 +40,7 @@ Harvard Graphics was one of the leading charting and presentation programs of th
 - **Shows (`.SH3`).** Plays shows like the original Projector:
   - HyperShow keys and clickable buttons, including nested shows
   - transitions decoded from the file (erase, then draw, with direction and speed), plus timed slides; auto-advance can be paused (button, or the Pause key)
-  - WAV sound slides
+  - WAV sound slides, and MIDI music played as an FM sound card of the time would (see below)
   - a slide strip and a full-screen presentation mode
 - **Fonts.** Uses the original Bitstream Speedo fonts (`BX*.SPD`) when your files include them. Otherwise it uses the project's own clone fonts, which are fitted to the originals' measured metrics.
 - **Display modes**, matched to the original screen drivers using reference renders from the real program:
@@ -49,7 +49,7 @@ Harvard Graphics was one of the leading charting and presentation programs of th
   - **Hercules monochrome**: 720×348
   - **Modern**: 24-bit colour, exactly as stored
 - **Greyscale palettes.** Redraw any chart with the program's MONOCHRB or MONOCHRW palette, as an original user could.
-- **Export** the current slide as PNG or SVG, or a whole show as a video (WebM, or MP4 where the browser can encode it). The video plays the show as if nobody pressed a key, with the show's transitions, timing and WAV sound, in the display mode you've chosen; slides that wait for a key are held for a time you set. It is made in your browser tab; browsers with WebCodecs encode faster than real time, others record in real time.
+- **Export** the current slide as PNG or SVG, or a whole show as a video (WebM, or MP4 where the browser can encode it). The video plays the show as if nobody pressed a key, with the show's transitions, timing and sound (WAV and MIDI), in the display mode you've chosen; slides that wait for a key are held for a time you set. It is made in your browser tab; browsers with WebCodecs encode faster than real time, others record in real time.
 - **Whole folders and ZIP archives.** Drop a folder (or choose one), or open a `.zip` of it, and the viewer finds the palettes, fonts, bitmaps (`.PCX`/`.PCC`), sounds and nested shows that a chart or show names, case-insensitively. Archives are unpacked in the browser (stored and deflated entries, ZIP64 included; encrypted entries are skipped with a note).
 - **Inspection tools.** A record tree, a hex inspector and a diagnostics panel that lists warnings, missing files and where each font came from.
 
@@ -58,7 +58,6 @@ Harvard Graphics was one of the leading charting and presentation programs of th
 The open items are tracked in [docs/formats.md](docs/formats.md). The main ones:
 
 - The Harvard Graphics stroke fonts (`.FN3`) are not decoded yet. Text in those fonts is always drawn with the Hershey-based clones.
-- MIDI sound slides are skipped.
 - A few drawing details still differ from the original, for example bitmap tiling, bitmap patterns in the EGA and Hercules modes, and some 3-D shapes.
 - 1.x/2.x charts: drawn annotations (text and shapes added on top of a chart), fill patterns and the program's own fonts are not drawn yet (text uses our HWV Sans clone faces), and the colours are an assumed EGA set (see `src/formats/hg2/assumptions.ts`). In 1.x/2.x shows, the Weave and Rain transitions are drawn as Blinds and Fade, and `.TPL` template slides are not drawn.
 - Harvard Graphics for Windows and the editor's own file types (such as `.SY3` symbol libraries) are out of scope for now.
@@ -81,6 +80,7 @@ The file formats are documented in [docs/SPEC.md](docs/SPEC.md). The spec was wr
 | `src/fonts/` | Text drawing, plus the bundled outline clones (`outline/`) and stroke clones (`stroke/`) |
 | `src/render/` | SVG scene renderer and the display modes (VGA ScreenShow, EGA, Hercules) |
 | `src/player/` | Show playing (state machine), transitions and sound |
+| `src/audio/` | MIDI files and the FM synthesizer that plays them (run in a Web Worker), PCM and WAV helpers |
 | `src/video/` | Video export: timeline, frame drawing, encoders and WebM/MP4 muxers |
 | `src/files/` | The set of files you opened, with name resolution, ZIP archives and loading |
 | `src/components/` | React components only |
@@ -107,6 +107,7 @@ flowchart TB
     render["render/<br/>SVG renderer,<br/>display modes"]
     player["player/<br/>show state, transitions,<br/>sound"]
     video["video/<br/>video export"]
+    audio["audio/<br/>MIDI, FM synthesizer"]
   end
 
   subgraph reading["Reading files"]
@@ -133,6 +134,8 @@ flowchart TB
   ui -. "About this file,<br/>record tree" .-> hg3
   video --> player
   video --> render
+  video --> audio
+  player --> audio
   render --> decoders
   files --> registry
   registry --> hg3
@@ -191,6 +194,7 @@ Unit tests use synthetic bytes, so they need no samples. The sample regression s
 - **Interface fonts:** Newsreader and Inter, under the SIL Open Font License (`src/assets/fonts/`).
 - **Outline clone fonts** (HWV Sans, Serif, Slab and Mono) stand in for the Bitstream Speedo faces. Their outlines are modified from Liberation (OFL), Roboto (Apache 2.0) and Rokkitt (OFL), and are scaled to metrics measured from the originals. No outline is taken from the original fonts. See [src/fonts/outline/README.md](src/fonts/outline/README.md) and `src/fonts/outline/licenses/`.
 - **Stroke clone fonts** come only from the public-domain Hershey fonts. See [src/fonts/stroke/README.md](src/fonts/stroke/README.md).
+- **FM instrument bank** for MIDI music: Freedoom's GENMIDI instruments (BSD-3-Clause, © Contributors to the Freedoom project), converted by `tools/fmbank/build.mjs` into `src/audio/fm/bank.ts`. See `src/audio/fm/licenses/`. The instruments Harvard Graphics' own sound drivers used are not known; nothing is taken from them.
 - **Built-in data from the original disks:** copies of a few palettes (HG3.PL3, MONOCHRB, MONOCHRW) and the font catalogue (the 22 entries of HG3.FGF). They let charts display correctly when those files are missing.
 
 ## Contributing sample files

@@ -7,6 +7,7 @@ import type { Presentation } from "../model/presentation";
 import type { DisplayMode } from "../render/displayMode";
 import type { ResolveFile } from "../player/sound/controller";
 import type { TransitionMode } from "../player/transitions/mode";
+import { renderMidiOffThread } from "../audio/renderInWorker";
 import { type DecodedSound, type Pcm, isSilent, mixSounds, planAudio, readWav } from "./audio";
 import { type Progress, type VideoSink, runExport } from "./encode";
 import {
@@ -48,8 +49,15 @@ export async function detectSupport(width: number, height: number): Promise<Supp
   return { webm: await one("webm"), mp4: await one("mp4") };
 }
 
-/** Decode a WAV: the built-in reader, else the browser's decoder (ADPCM and other codecs). */
-async function decodeSound(bytes: Uint8Array): Promise<Pcm | null> {
+/** Decode a sound: MIDI through the synthesizer; a WAV with the built-in reader, else the browser's decoder (ADPCM and other codecs). */
+async function decodeSound(bytes: Uint8Array, midi: boolean): Promise<Pcm | null> {
+  if (midi) {
+    try {
+      return await renderMidiOffThread(bytes);
+    } catch {
+      return null;
+    }
+  }
   const own = readWav(bytes);
   if (own) return own;
   if (typeof OfflineAudioContext === "undefined") return null;
@@ -102,7 +110,6 @@ export async function exportVideo(req: VideoExportRequest): Promise<VideoExportR
   let audioCodec: string | null = null;
   if (options.sound) {
     const plan = planAudio(timeline.cues, req.resolveFile);
-    if (plan.midi.length) notes.push(`MIDI music (${plan.midi.join(", ")}) is not included: the viewer has no MIDI synthesizer.`);
     if (plan.missing.length) notes.push(`Sound file ${plan.missing.join(", ")} is missing; left out.`);
     const canAudio = method === "webcodecs" ? await audioSupported(AUDIO_CODEC[format]).catch(() => false) : recorderMimeType(format, true) !== null;
     if (plan.sounds.length && !canAudio) {
@@ -110,7 +117,7 @@ export async function exportVideo(req: VideoExportRequest): Promise<VideoExportR
     } else if (plan.sounds.length) {
       const decoded: DecodedSound[] = [];
       for (const s of plan.sounds) {
-        const pcm = await decodeSound(s.bytes);
+        const pcm = await decodeSound(s.bytes, s.midi);
         if (pcm) decoded.push({ atMs: s.atMs, pcm });
         else notes.push(`${s.name} could not be decoded; left out.`);
       }

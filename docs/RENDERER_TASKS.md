@@ -505,6 +505,13 @@ which the player's "Guessed" mode reads. Default mode is Off.
 Play WAV through an `<audio>` element and continue at once; skip MIDI with a
 warning, or add a MIDI synth later.
 
+**Done.** WAV plays through an audio element. MIDI plays through an FM
+synthesizer in the manner of the OPL2/OPL3 cards HG 3.05 supported
+(src/audio: fm/opl.ts, synth.ts, with Freedoom's BSD-licensed GENMIDI
+bank), rendered in a Web Worker and streamed while it plays; only the
+base-level channels 13-16 of dual-format files play, as on an FM card.
+Video export mixes MIDI into the sound track the same way.
+
 ---
 
 ## Phase 5: Viewer and verification

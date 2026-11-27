@@ -9,6 +9,9 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { OPL_RATE } from "../audio/fm/opl";
+import { readMidi } from "../audio/midiFile";
+import { channelPlan, renderMidi } from "../audio/synth";
 import type { FileEntry, FileSet } from "../files/FileSet";
 import { NO_GLYPH, parseFgf } from "../formats/hg3/fgf";
 import { readContainer } from "../formats/hg3/container";
@@ -281,6 +284,19 @@ describe.skipIf(!hasSamples)("sample regression suite (samples-private/)", () =>
       if (!state.ended) problems.push(`${e.path}: not ended after ${limit} steps`);
     }
     expectNoProblems(problems, "show playback problems");
+  }, TIMEOUT);
+
+  it("every .MID reads; the six songs are dual-format (base level on channels 13-16) and the shortest renders", () => {
+    const midis = samplesWithExtension(files!, ".mid");
+    expect(midis).toHaveLength(7);
+    const songs = midis.map((e) => ({ name: e.name, song: readMidi(e.bytes) }));
+    const withNotes = songs.filter((s) => s.song.events.some((ev) => ev.type === 0x90 && ev.b > 0));
+    expect(withNotes).toHaveLength(6); // EMPTY.MID has none
+    expect(withNotes.every((s) => channelPlan(s.song).level === "base")).toBe(true);
+    const shortest = withNotes.reduce((a, b) => (b.song.duration < a.song.duration ? b : a));
+    const pcm = renderMidi(shortest.song).channels[0];
+    expect(pcm.length / OPL_RATE).toBeGreaterThan(shortest.song.duration);
+    expect(pcm.some((v) => Math.abs(v) > 0.1)).toBe(true);
   }, TIMEOUT);
 
   it("sample counts match docs/formats.md", () => {

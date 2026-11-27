@@ -309,7 +309,7 @@ A destination byte in a key or button table means: \[I for all rows\]
    - Empty slide: skip it.
    - Chart: erase the previous slide with that slide's Erase effect (4.5), then draw this one (section 5) with its Draw effect. Wait for its display time in seconds (702 offset 14), or for a key or click if it is blank (0xFFFF).
    - Nested show: play that show from its slide 1, then continue with the next slide of this show. Destinations inside the nested show refer to its own slides.
-   - Sound or MIDI: start playing and continue at once to the next slide. \[I\]
+   - Sound or MIDI: start playing and continue at once to the next slide. \[I\] The sample MIDI files are standard MIDI files in Microsoft's dual format (each part on channels 1-10 and again, arranged for FM cards, on channels 13-16); the FM sound cards HG 3.05 supported played channels 13-16 only, with 16 as the drum channel. \[I\]
 3. Keys and clicks: first check the slide's button table (for clicks) and key table, then the show-wide key table. If nothing matches, Enter, Space, right arrow or Page Down go to the next slide; Backspace, left arrow or Page Up go back; Esc ends the show. \[I: common Projector controls, not checked\]
 4. After the last slide, end the show, or loop to slide 1 if the show is set to loop (where that setting lives is not yet known).
 

@@ -1,31 +1,28 @@
 /**
  * The video's sound track (pure): which sound slides play (as the player:
- * WAV only, the last playable one of a move, one sound at a time so a new
- * one cuts the one before), WAV files decoded to float samples, and all of
- * them mixed into one PCM track at their timeline offsets, resampled to
- * the output rate.
+ * WAV or MIDI, the last playable one of a move, one sound at a time so a
+ * new one cuts the one before), WAV files decoded to float samples (MIDI is
+ * rendered by the synthesizer, src/audio), and all of them mixed into one
+ * PCM track at their timeline offsets, resampled to the output rate.
  */
+import type { Pcm } from "../audio/pcm";
 import { describeWav, soundFormat, wavChunks } from "../player/sound/format";
 import type { ResolveFile } from "../player/sound/controller";
 import type { AudioCue } from "./timeline";
 
-/** Decoded sound: one Float32Array per channel, samples in -1..1. */
-export interface Pcm {
-  sampleRate: number;
-  channels: Float32Array[];
-}
+export type { Pcm } from "../audio/pcm";
 
 /** A sound placed on the timeline. */
 export interface PlacedSound {
   atMs: number;
   name: string;
   bytes: Uint8Array;
+  /** A MIDI file (rendered by the synthesizer), else a WAV. */
+  midi: boolean;
 }
 
 export interface AudioPlan {
   sounds: PlacedSound[];
-  /** MIDI files passed (not played: no synthesizer). */
-  midi: string[];
   missing: string[];
   unplayable: string[];
 }
@@ -35,13 +32,13 @@ export interface AudioPlan {
  * is read here (cheap enough for the dialog's estimate); decoding comes later.
  */
 export function planAudio(cues: readonly AudioCue[], resolveFile: ResolveFile | undefined): AudioPlan {
-  const plan: AudioPlan = { sounds: [], midi: [], missing: [], unplayable: [] };
+  const plan: AudioPlan = { sounds: [], missing: [], unplayable: [] };
   const addOnce = (list: string[], name: string) => {
     if (!list.includes(name)) list.push(name);
   };
   let i = 0;
   while (i < cues.length) {
-    // One move's cues: only the last playable WAV starts (each would stop the one before).
+    // One move's cues: only the last playable sound starts (each would stop the one before).
     let last: PlacedSound | null = null;
     const move = cues[i].move;
     for (; i < cues.length && cues[i].move === move; i++) {
@@ -53,8 +50,8 @@ export function planAudio(cues: readonly AudioCue[], resolveFile: ResolveFile | 
         continue;
       }
       const format = soundFormat(name, bytes);
-      if (format === "midi") addOnce(plan.midi, name);
-      else if (format === "wav" && describeWav(bytes)) last = { atMs, name, bytes };
+      if (format === "midi") last = { atMs, name, bytes, midi: true };
+      else if (format === "wav" && describeWav(bytes)) last = { atMs, name, bytes, midi: false };
       else addOnce(plan.unplayable, name);
     }
     if (last) plan.sounds.push(last);

@@ -6,15 +6,15 @@
  *
  * - WAV plays through an audio element from a blob URL, revoked when the
  *   sound stops or ends. One sound at a time: a new one stops the previous.
- * - MIDI is not played (browsers cannot play .MID and we add no synth): a
- *   note says so and one warning per file is logged. A MIDI slide does not
- *   stop a WAV already playing.
- *   TODO: a small WebAudio MIDI synthesizer could play these later.
+ * - MIDI plays through the FM synthesizer (src/audio/synth.ts), streamed by
+ *   an AudioLike of its own (midiAudio.ts). Like a WAV, it stops the sound
+ *   before it, and a later sound stops it [I: one sound at a time].
  * - A missing or unplayable file gives a note and a warning; the show goes on.
  * - Browsers block playing without a user gesture: a rejected play() is
  *   reported as `blocked` and `enable()` (from a click) tries again.
  */
 import { describeWav, soundFormat } from "./format";
+import { MidiAudio } from "./midiAudio";
 
 /** The part of HTMLAudioElement the controller uses. */
 export interface AudioLike {
@@ -30,6 +30,8 @@ export type ResolveFile = (name: string) => Uint8Array | null;
 export interface SoundEnv {
   resolveFile: ResolveFile;
   createAudio(): AudioLike;
+  /** A player for MIDI file bytes (it ignores `src`). */
+  createMidiAudio(bytes: Uint8Array): AudioLike;
   createObjectUrl(bytes: Uint8Array, type: string): string;
   revokeObjectUrl(url: string): void;
   warn(message: string): void;
@@ -58,7 +60,8 @@ export interface SoundSlide {
 interface Current {
   name: string;
   audio: AudioLike;
-  url: string;
+  /** Blob URL of a WAV (revoked when it stops); null for MIDI. */
+  url: string | null;
 }
 
 function listNames(names: string[]): string {
@@ -87,14 +90,14 @@ export class SoundController {
 
   /**
    * Start the sounds of the slides one move passed over, in order. Each
-   * playable sound would stop the one before, so only the last playable WAV
-   * is started; every MIDI or missing file is mentioned in one note.
+   * playable sound would stop the one before, so only the last playable one
+   * (WAV or MIDI) is started; every missing or unplayable file is mentioned
+   * in one note.
    */
   playSlides(slides: readonly SoundSlide[]): void {
-    const midi: string[] = [];
     const missing: string[] = [];
     const unplayable: string[] = [];
-    let wav: { name: string; bytes: Uint8Array } | null = null;
+    let last: { name: string; bytes: Uint8Array; midi: boolean } | null = null;
     for (const slide of slides) {
       const name = slide.fileName ?? slide.label;
       const bytes = slide.fileName ? this.env.resolveFile(slide.fileName) : null;
@@ -105,21 +108,19 @@ export class SoundController {
       }
       const format = soundFormat(name, bytes);
       if (format === "midi") {
-        midi.push(name);
-        this.warnOnce(`midi:${name}`, `MIDI music (${name}) is not played: the viewer has no MIDI synthesizer.`);
+        last = { name, bytes, midi: true };
       } else if (format === "wav" && describeWav(bytes)) {
-        wav = { name, bytes };
+        last = { name, bytes, midi: false };
       } else {
         unplayable.push(name);
         this.warnOnce(`bad:${name}`, `${name} is not a WAV or MIDI file; not played.`);
       }
     }
     const notes: string[] = [];
-    if (midi.length) notes.push(`MIDI music (${listNames(midi)}) is not played`);
     if (missing.length) notes.push(`Sound file ${listNames(missing)} is missing`);
     if (unplayable.length) notes.push(`${listNames(unplayable)} cannot be played`);
     if (notes.length) this.listener.onNote?.(notes.join(". "));
-    if (wav) this.start(wav.name, wav.bytes);
+    if (last) this.start(last.name, last.bytes, last.midi);
   }
 
   /** Stop the sound playing, if any. */
@@ -140,12 +141,12 @@ export class SoundController {
     if (this.current && this.blocked) this.tryPlay(this.current);
   }
 
-  private start(name: string, bytes: Uint8Array): void {
+  private start(name: string, bytes: Uint8Array, midi: boolean): void {
     this.release();
-    const url = this.env.createObjectUrl(bytes, "audio/wav");
-    const audio = this.env.createAudio();
+    const url = midi ? null : this.env.createObjectUrl(bytes, "audio/wav");
+    const audio = midi ? this.env.createMidiAudio(bytes) : this.env.createAudio();
     audio.muted = this.muted;
-    audio.src = url;
+    if (url) audio.src = url;
     const current: Current = { name, audio, url };
     audio.onended = () => {
       if (this.current === current) this.stop();
@@ -195,7 +196,7 @@ export class SoundController {
     if (!current) return false;
     current.audio.onended = null;
     current.audio.pause();
-    this.env.revokeObjectUrl(current.url);
+    if (current.url) this.env.revokeObjectUrl(current.url);
     return true;
   }
 
@@ -210,11 +211,12 @@ export class SoundController {
   }
 }
 
-/** The real environment: HTMLAudioElement, blob URLs and console warnings. */
+/** The real environment: HTMLAudioElement, the MIDI synthesizer, blob URLs and console warnings. */
 export function browserSoundEnv(resolveFile: ResolveFile): SoundEnv {
   return {
     resolveFile,
     createAudio: () => new Audio(),
+    createMidiAudio: (bytes) => new MidiAudio(bytes),
     // slice() gives a copy backed by a plain ArrayBuffer, as Blob wants.
     createObjectUrl: (bytes, type) => URL.createObjectURL(new Blob([bytes.slice()], { type })),
     revokeObjectUrl: (url) => URL.revokeObjectURL(url),
